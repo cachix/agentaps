@@ -36,8 +36,8 @@ jobs:
       CARGO_TERM_COLOR: always
       CARGO_INCREMENTAL: 0
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: '3.12'
       - name: Install Linux libraries
@@ -64,7 +64,7 @@ jobs:
       - name: Package candidate
         shell: bash
         run: python scripts/release/package.py --target "${{ matrix.target }}"
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v6
         with:
           name: desktop-${{ matrix.target }}
           path: dist/desktop/*

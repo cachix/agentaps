@@ -37,9 +37,9 @@ tempfile = "3"
 
 [patch.crates-io]
 # Component fixes pending in gpui-ce/gpui-component PRs 1 and 2.
-gpui_ce_components = { git = "https://github.com/domenkozar/gpui-kit", rev = "0622a5332bb1da6e115ba5a8b8afecf4cddbd8b1" }
-gpui_ce_components_base = { git = "https://github.com/domenkozar/gpui-kit", rev = "0622a5332bb1da6e115ba5a8b8afecf4cddbd8b1" }
-gpui_ce_components_assets = { git = "https://github.com/domenkozar/gpui-kit", rev = "0622a5332bb1da6e115ba5a8b8afecf4cddbd8b1" }
+gpui_ce_components = { git = "https://github.com/domenkozar/gpui-kit", rev = "d0d8a570b24a5ef66a629eee8be83cc2bf1c0f27" }
+gpui_ce_components_base = { git = "https://github.com/domenkozar/gpui-kit", rev = "d0d8a570b24a5ef66a629eee8be83cc2bf1c0f27" }
+gpui_ce_components_assets = { git = "https://github.com/domenkozar/gpui-kit", rev = "d0d8a570b24a5ef66a629eee8be83cc2bf1c0f27" }
 gpui-ce = { git = "https://github.com/gpui-ce/gpui-ce", rev = "17d9c8e8fdb30a329d817ca06bff424e8e848f1a" }
 gpui_ce_apple = { git = "https://github.com/gpui-ce/gpui-ce", rev = "17d9c8e8fdb30a329d817ca06bff424e8e848f1a" }
 gpui_ce_collections = { git = "https://github.com/gpui-ce/gpui-ce", rev = "17d9c8e8fdb30a329d817ca06bff424e8e848f1a" }
