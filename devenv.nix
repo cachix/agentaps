@@ -4,6 +4,7 @@
     nodejs
     clang
     trunk
+    python312
     fontconfig
     freetype
     xorg.libxcb
