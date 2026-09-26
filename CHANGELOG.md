@@ -13,7 +13,7 @@ Notable changes to Agentaps are recorded here.
 
 ### Added
 
-- The website can be built by Cloudflare Pages from the Git repository.
+- Website updates on GitHub `main` deploy through Cloudflare Pages.
 - The website now has a landing page with desktop download availability and an entry point to Web Connect.
 - Desktop mobile pairing lists linked browsers and lets you revoke each new pairing individually; older shared-token pairings can be revoked together.
 - Agent replies offer a fork icon at the top right of each reply that starts a separate session from that point and carries the active conversation into its first prompt.

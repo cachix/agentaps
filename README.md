@@ -50,13 +50,13 @@ The development environment includes the `wasm32-unknown-unknown` Rust target, T
 devenv shell -- bash web/build.sh
 ```
 
-The `agentaps` Cloudflare Pages project serves `agentaps.pages.dev`. With Wrangler signed in to its Cloudflare account, build and publish the production site with:
+The `agentaps-site` Cloudflare Pages project builds and publishes the website from GitHub `main` using `web/cloudflare-build.sh`. Its build output is `web/dist/`. Each push to `main` triggers a production deployment. With Wrangler signed in to the same Cloudflare account, you can also build and publish manually with:
 
 ```sh
 devenv shell -- bash web/deploy.sh
 ```
 
-In Cloudflare Pages, attach `agentaps.dev` as a custom domain. Its Cloudflare DNS zone needs a proxied CNAME record named `@` that points to `agentaps.pages.dev`. Wait for Cloudflare to mark the domain active and verify that both `https://agentaps.dev/` and `https://agentaps.dev/connect/` load before sharing pairing links.
+In Cloudflare Pages, attach `agentaps.dev` as a custom domain. Its Cloudflare DNS zone needs a proxied CNAME record named `@` that points to `agentaps-site.pages.dev`. Wait for Cloudflare to mark the domain active and verify that both `https://agentaps.dev/` and `https://agentaps.dev/connect/` load before sharing pairing links.
 
 The desktop pairing link points to `https://agentaps.dev/` by default. The landing page forwards pairing links to `/connect/` without sending the secret to the server. The landing page shows desktop downloads from public GitHub release assets when they exist; no binaries have been published yet. Set `AGENTAPS_WEB_URL` to another site URL if you host it elsewhere, or to `http://localhost:8080/` when testing with `python3 -m http.server 8080 --directory web/dist` on the same computer. Select the phone icon next to Archive in the desktop sidebar to start Iroh access. Agentaps shows a QR code and linked browsers in the main window; press Escape or click **Close** when done. On your phone, visit the site, select **Web Connect**, and allow camera access to scan the desktop QR code. You can also open the copied pairing link directly. The site in the QR code must match the site open on your phone.
 
