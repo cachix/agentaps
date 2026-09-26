@@ -216,7 +216,7 @@ mod tests {
         fs::write(&batch, "@echo off\r\nexit /b 0\r\n").unwrap();
 
         let found = find_executable(command.to_str().unwrap()).unwrap();
-        assert_eq!(found, batch);
+        assert_eq!(found.canonicalize().unwrap(), batch.canonicalize().unwrap());
         assert!(
             std::process::Command::new(found)
                 .status()

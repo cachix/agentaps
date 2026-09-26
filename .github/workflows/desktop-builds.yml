@@ -64,7 +64,7 @@ jobs:
       - name: Test Windows agent discovery
         if: runner.os == 'Windows'
         shell: bash
-        run: cargo test --locked --target "${{ matrix.target }}" discovery::tests::finds_and_runs_batch_commands_without_an_extension
+        run: cargo test --release --locked --target "${{ matrix.target }}" discovery::tests::finds_and_runs_batch_commands_without_an_extension
       - name: Package candidate
         shell: bash
         run: python scripts/release/package.py --target "${{ matrix.target }}"

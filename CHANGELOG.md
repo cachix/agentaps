@@ -16,6 +16,7 @@ Notable changes to Agentaps are recorded here.
 
 - Website updates on GitHub `main` deploy through Cloudflare Pages.
 - Candidate desktop builds for Linux, macOS, and Windows can be downloaded from GitHub Actions before a release, and the development environment includes their packaging tool.
+- Windows candidate builds validate that installed batch commands can be launched.
 - The website now has a landing page with desktop download availability and an entry point to Web Connect.
 - Desktop mobile pairing lists linked browsers and lets you revoke each new pairing individually; older shared-token pairings can be revoked together.
 - Agent replies offer a fork icon at the top right of each reply that starts a separate session from that point and carries the active conversation into its first prompt.
