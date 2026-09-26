@@ -50,7 +50,7 @@ The development environment includes the `wasm32-unknown-unknown` Rust target, T
 devenv shell -- bash web/build.sh
 ```
 
-The `agentaps-site` Cloudflare Pages project builds and publishes the website from GitHub `main` using `web/cloudflare-build.sh`. Its build output is `web/dist/`. Authorize the Cloudflare Workers & Pages GitHub app for `domenkozar/agentaps` so each push to `main` triggers a production deployment. Build results appear under the project's Deployments tab. With Wrangler signed in to the same Cloudflare account, you can also build and publish manually with:
+The `agentaps-site` Cloudflare Pages project builds and publishes the website from GitHub `main` using `web/cloudflare-build.sh`. Its build output is `web/dist/`. The Cloudflare Workers & Pages GitHub app has access to `domenkozar/agentaps` so each push to `main` triggers a production deployment. Build results appear under the project's Deployments tab. With Wrangler signed in to the same Cloudflare account, you can also build and publish manually with:
 
 ```sh
 devenv shell -- bash web/deploy.sh

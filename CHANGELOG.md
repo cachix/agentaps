@@ -6,7 +6,7 @@ Notable changes to Agentaps are recorded here.
 
 ### Documentation
 
-- Documented the GitHub app access needed for automatic Cloudflare Pages deployments.
+- Documented the GitHub app connection and build results for Cloudflare Pages deployments.
 - Documented the production site deployment and custom domain setup.
 - Updated the README and website tagline to explain local and SSH harness use through ACP and secure web access.
 - Updated the README screenshot to show the current session interface.
