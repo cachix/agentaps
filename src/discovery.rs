@@ -29,15 +29,34 @@ pub fn find_executable(name: &str) -> Option<PathBuf> {
             true
         }
     }
+    fn find_at(path: &Path) -> Option<PathBuf> {
+        if is_executable(path) {
+            return Some(path.to_path_buf());
+        }
+        #[cfg(windows)]
+        if path.extension().is_none() {
+            let extensions = env::var("PATHEXT").unwrap_or_else(|_| ".COM;.EXE;.BAT;.CMD".into());
+            for extension in extensions
+                .split(';')
+                .filter(|extension| !extension.is_empty())
+            {
+                let candidate = path.with_extension(extension.trim_start_matches('.'));
+                if is_executable(&candidate) {
+                    return Some(candidate);
+                }
+            }
+        }
+        None
+    }
     let path = Path::new(name);
     if path.components().count() > 1 {
-        return is_executable(path).then(|| path.to_path_buf());
+        return find_at(path);
     }
     env::var_os("PATH")
         .into_iter()
         .flat_map(|paths| env::split_paths(&paths).collect::<Vec<_>>())
         .map(|directory| directory.join(name))
-        .find(|path| is_executable(path))
+        .find_map(|path| find_at(&path))
 }
 
 fn executable(name: &str) -> bool {
@@ -47,11 +66,19 @@ fn executable(name: &str) -> bool {
 pub fn installed_agents() -> Vec<AgentChoice> {
     let mut agents = Vec::new();
     let mut add = |name: &str, detail: &str, command: &[&str]| {
-        if executable(command[0]) {
+        if let Some(executable) = find_executable(command[0]) {
+            let program = if cfg!(windows) {
+                executable.to_string_lossy().into_owned()
+            } else {
+                command[0].to_owned()
+            };
+            let command = std::iter::once(program)
+                .chain(command[1..].iter().map(|part| (*part).into()))
+                .collect();
             agents.push(AgentChoice {
                 name: name.into(),
                 detail: detail.into(),
-                command: command.iter().map(|part| (*part).into()).collect(),
+                command,
             });
         }
     };
@@ -60,13 +87,18 @@ pub fn installed_agents() -> Vec<AgentChoice> {
     add("Claude", "Installed ACP adapter", &["claude-code-acp"]);
     add("Gemini CLI", "Native ACP mode", &["gemini", "--acp"]);
     add("OpenCode", "Native ACP mode", &["opencode", "acp"]);
-    if executable("npx") {
+    if let Some(npx_path) = find_executable("npx") {
+        let npx = if cfg!(windows) {
+            npx_path.to_string_lossy().into_owned()
+        } else {
+            "npx".to_owned()
+        };
         if executable("codex") && !agents.iter().any(|agent| agent.name == "Codex") {
             agents.push(AgentChoice {
                 name: "Codex".into(),
                 detail: "Installed CLI · adapter downloaded with npx on first launch".into(),
                 command: vec![
-                    "npx".into(),
+                    npx.clone(),
                     "-y".into(),
                     "--prefer-offline".into(),
                     "@agentclientprotocol/codex-acp".into(),
@@ -78,7 +110,7 @@ pub fn installed_agents() -> Vec<AgentChoice> {
                 name: "Claude".into(),
                 detail: "Installed CLI · adapter downloaded with npx on first launch".into(),
                 command: vec![
-                    "npx".into(),
+                    npx,
                     "-y".into(),
                     "--prefer-offline".into(),
                     "@agentclientprotocol/claude-agent-acp".into(),
@@ -174,6 +206,24 @@ pub fn discover_folders() -> Vec<PathBuf> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[cfg(windows)]
+    #[test]
+    fn finds_and_runs_batch_commands_without_an_extension() {
+        let directory = tempfile::tempdir().unwrap();
+        let command = directory.path().join("agentaps-probe");
+        let batch = command.with_extension("cmd");
+        fs::write(&batch, "@echo off\r\nexit /b 0\r\n").unwrap();
+
+        let found = find_executable(command.to_str().unwrap()).unwrap();
+        assert_eq!(found, batch);
+        assert!(
+            std::process::Command::new(found)
+                .status()
+                .unwrap()
+                .success()
+        );
+    }
 
     #[test]
     fn fuzzy_match_accepts_subsequences() {

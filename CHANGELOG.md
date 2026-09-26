@@ -58,6 +58,7 @@ Notable changes to Agentaps are recorded here.
 ### Fixed
 
 - Cloudflare Pages can build the website without system package installation privileges.
+- Windows desktop builds find and launch installed agent commands with executable extensions.
 - Native macOS and Windows builds use the current GPUI asset registry for menu icons.
 - The visible saved session connects before other sessions on startup, and connection replies are handled sooner.
 - Desktop and browser use current GPUI CE, including WebGL2 fallback and mobile input support.
