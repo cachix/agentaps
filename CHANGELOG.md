@@ -6,6 +6,7 @@ Notable changes to Agentaps are recorded here.
 
 ### Documentation
 
+- Documented the production site deployment and custom domain setup.
 - Updated the README and website tagline to explain local and SSH harness use through ACP and secure web access.
 - Updated the README screenshot to show the current session interface.
 - Added a tagline that captures Agentaps' direction across work environments.
@@ -31,6 +32,7 @@ Notable changes to Agentaps are recorded here.
 
 ### Changed
 
+- The development environment can build the browser site, and a command publishes it to Cloudflare Pages.
 - `@` completion includes folders and shows a folder icon beside them.
 - Desktop platform downloads now appear in the opening section, with availability shown there instead of in a separate section.
 - New sessions accept a first message while connecting and send it when the agent is ready. Cached npx adapters can start without a package freshness check.

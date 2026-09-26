@@ -2,6 +2,8 @@
   packages = with pkgs; [
     pkg-config
     nodejs
+    clang
+    trunk
     fontconfig
     freetype
     xorg.libxcb
@@ -14,6 +16,7 @@
     enable = true;
     channel = "stable";
     version = "1.97.1";
+    targets = [ "wasm32-unknown-unknown" ];
   };
 
   env.LD_LIBRARY_PATH = pkgs.lib.makeLibraryPath [
@@ -24,4 +27,6 @@
     pkgs.wayland
     pkgs.vulkan-loader
   ];
+
+  env.CC_wasm32_unknown_unknown = "${pkgs.llvmPackages.clang-unwrapped}/bin/clang";
 }

@@ -44,14 +44,21 @@ The website and browser UI are a static build in `web/`. The site landing page i
 
 The browser preview uses WebGPU when available and falls back to WebGL2 if WebGPU cannot initialize.
 
-Install the `wasm32-unknown-unknown` Rust target, Trunk, and Clang, then build the static site:
+The development environment includes the `wasm32-unknown-unknown` Rust target, Trunk, and Clang. Build the static site with:
 
 ```sh
-cd web
-CC_wasm32_unknown_unknown=clang ./build.sh
+devenv shell -- bash web/build.sh
 ```
 
-Publish `web/dist/` at `https://agentaps.dev/`. The desktop pairing link points there by default. The landing page forwards pairing links to `/connect/` without sending the secret to the server. The landing page shows desktop downloads from public GitHub release assets when they exist; no binaries have been published yet. Set `AGENTAPS_WEB_URL` to another site URL if you host it elsewhere, or to `http://localhost:8080/` when testing with `python3 -m http.server 8080 --directory web/dist` on the same computer. Select the phone icon next to Archive in the desktop sidebar to start Iroh access. Agentaps shows a QR code and linked browsers in the main window; press Escape or click **Close** when done. On your phone, visit the site, select **Web Connect**, and allow camera access to scan the desktop QR code. You can also open the copied pairing link directly. The site in the QR code must match the site open on your phone.
+The `agentaps` Cloudflare Pages project serves `agentaps.pages.dev`. With Wrangler signed in to its Cloudflare account, build and publish the production site with:
+
+```sh
+devenv shell -- bash web/deploy.sh
+```
+
+In Cloudflare Pages, attach `agentaps.dev` as a custom domain. Its Cloudflare DNS zone needs a proxied CNAME record named `@` that points to `agentaps.pages.dev`. Wait for Cloudflare to mark the domain active and verify that both `https://agentaps.dev/` and `https://agentaps.dev/connect/` load before sharing pairing links.
+
+The desktop pairing link points to `https://agentaps.dev/` by default. The landing page forwards pairing links to `/connect/` without sending the secret to the server. The landing page shows desktop downloads from public GitHub release assets when they exist; no binaries have been published yet. Set `AGENTAPS_WEB_URL` to another site URL if you host it elsewhere, or to `http://localhost:8080/` when testing with `python3 -m http.server 8080 --directory web/dist` on the same computer. Select the phone icon next to Archive in the desktop sidebar to start Iroh access. Agentaps shows a QR code and linked browsers in the main window; press Escape or click **Close** when done. On your phone, visit the site, select **Web Connect**, and allow camera access to scan the desktop QR code. You can also open the copied pairing link directly. The site in the QR code must match the site open on your phone.
 
 The pairing link contains a one time enrollment secret that grants access until it is used. Keep unused links private. The desktop app stores its Iroh identity and linked browser credentials through your user-global SecretSpec provider. Configure a provider that supports reading and writing with `secretspec config global init`. If that default is missing or fails, Agentaps shows the configuration path it checked and lets you choose a provider for this run. You can choose the system keyring, 1Password, or enter another SecretSpec provider name or URI. This choice is not saved as a new default; select the same provider on the next launch to keep existing phone pairings. The stored value is UTF-8 JSON, so text-based providers can hold it.
 
