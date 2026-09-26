@@ -38,9 +38,9 @@ devenv shell cargo run --release
 
 The development environment provides Rust, the native libraries GPUI needs, and Node for optional ACP adapters.
 
-Candidate desktop builds for Linux, macOS, and Windows are available from GitHub
-Actions. See the [desktop build guide](docs/releasing.md). They are not
-published as releases yet.
+Candidate desktop builds for Linux, Apple Silicon macOS, and Windows are
+available from GitHub Actions. See the [desktop build guide](docs/releasing.md).
+They are not published as releases yet.
 
 ## Mobile browser preview
 

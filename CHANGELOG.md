@@ -15,7 +15,7 @@ Notable changes to Agentaps are recorded here.
 ### Added
 
 - Website updates on GitHub `main` deploy through Cloudflare Pages.
-- Candidate desktop builds for Linux, macOS, and Windows can be downloaded from GitHub Actions before a release, and the development environment includes their packaging tool.
+- Candidate desktop builds for Linux, Apple Silicon macOS, and Windows can be downloaded from GitHub Actions before a release, and the development environment includes their packaging tool.
 - Version tags prepare a draft release with verified desktop archives for review before publishing.
 - Windows candidate builds validate that installed batch commands can be launched.
 - The website now has a landing page with desktop download availability and an entry point to Web Connect.
@@ -37,6 +37,7 @@ Notable changes to Agentaps are recorded here.
 
 ### Changed
 
+- Desktop downloads are limited to Apple Silicon Macs; Intel Mac builds are not offered.
 - The development environment can build the browser site, and a command publishes it to Cloudflare Pages.
 - `@` completion includes folders and shows a folder icon beside them.
 - Desktop platform downloads now appear in the opening section, with availability shown there instead of in a separate section.

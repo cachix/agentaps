@@ -17,7 +17,6 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 TARGETS = {
     "x86_64-unknown-linux-gnu": ("linux-x86_64", "tar.gz"),
-    "x86_64-apple-darwin": ("macos-x86_64", "dmg"),
     "aarch64-apple-darwin": ("macos-aarch64", "dmg"),
     "x86_64-pc-windows-msvc": ("windows-x86_64", "zip"),
 }

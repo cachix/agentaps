@@ -1,8 +1,8 @@
 # Desktop build candidates
 
 The `Desktop build candidates` workflow compiles the desktop app on Linux x64,
-Windows x64, macOS Intel, and macOS Apple Silicon. Every pull request that
-changes the desktop build or packaging runs it. You can also start it manually
+Windows x64, and macOS Apple Silicon. Every pull request that changes the
+desktop build or packaging runs it. You can also start it manually
 from GitHub Actions. Each successful job uploads an archive and its SHA-256
 checksum as workflow artifacts. The website only links to assets on the latest
 published GitHub release, so candidate artifacts do not appear there. Pushing a
@@ -23,7 +23,7 @@ Mac app launched from Finder can find the user's installed agent commands.
    leave `Unreleased` ready for future changes.
 2. Merge that release preparation and push a `vX.Y.Z` tag. The workflow rejects
    a tag that does not match the Cargo version and creates a draft release with
-   all four archives and checksums after the builds pass.
+   all three archives and checksums after the builds pass.
 3. Smoke test the exact files on supported systems. Sign and notarize the macOS
    build and sign the Windows build, or decide to distribute unsigned builds.
    If signed files replace draft assets, replace their checksums too. Publish
