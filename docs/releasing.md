@@ -5,7 +5,9 @@ Windows x64, macOS Intel, and macOS Apple Silicon. Every pull request that
 changes the desktop build or packaging runs it. You can also start it manually
 from GitHub Actions. Each successful job uploads an archive and its SHA-256
 checksum as workflow artifacts. The website only links to assets on the latest
-published GitHub release, so candidate artifacts do not appear there.
+published GitHub release, so candidate artifacts do not appear there. Pushing a
+version tag runs the same builds, verifies their checksums, and attaches them to
+a draft GitHub release. Drafts do not appear on the website.
 
 The current candidates are a Linux tarball, a portable Windows ZIP, and a macOS
 DMG containing an app bundle. The macOS app has an ad hoc signature for local
@@ -19,17 +21,13 @@ Mac app launched from Finder can find the user's installed agent commands.
 1. Update the version in `Cargo.toml` and `Cargo.lock`. Move the relevant
    `CHANGELOG.md` entries from `Unreleased` to a dated version heading, then
    leave `Unreleased` ready for future changes.
-2. Merge that release preparation and tag the resulting commit as `vX.Y.Z`.
-   The packaging script rejects a tag that does not match the Cargo version.
-3. Run `Desktop build candidates` on that tag. Download all four artifacts
-   from the successful workflow run and check each `.sha256` file against its
-   archive.
-4. Sign and notarize the macOS build and sign the Windows build, or explicitly
-   decide to distribute unsigned builds. Smoke test the exact files you intend
-   to publish on supported systems.
-5. Create the GitHub release and attach the tested archives. Confirm the site
-   presents the expected platform links. No release is created by the candidate
-   workflow.
+2. Merge that release preparation and push a `vX.Y.Z` tag. The workflow rejects
+   a tag that does not match the Cargo version and creates a draft release with
+   all four archives and checksums after the builds pass.
+3. Smoke test the exact files on supported systems. Sign and notarize the macOS
+   build and sign the Windows build, or decide to distribute unsigned builds.
+   If signed files replace draft assets, replace their checksums too. Publish
+   the draft when the files are ready, then check the website download links.
 
 For a local Linux packaging check, build the desktop binary and package it:
 
