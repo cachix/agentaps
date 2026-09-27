@@ -320,6 +320,7 @@ impl Workspace {
                         index
                     } else {
                         self.projects.push(ProjectView {
+                            sync_counts: None,
                             branch: ssh_host.clone().unwrap_or_else(|| branch(&path)),
                             path: path.clone(),
                             ssh_host: ssh_host.clone(),

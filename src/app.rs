@@ -61,6 +61,11 @@ enum DiffData {
 
 type DiffLoadResult = Result<DiffData, String>;
 
+enum SyncUpdate {
+    Counts(PathBuf, Option<String>, Option<(usize, usize)>),
+    Finished,
+}
+
 fn move_sidebar_id(order: &mut Vec<u64>, dragged: u64, target: u64) -> bool {
     let Some(from) = order.iter().position(|id| *id == dragged) else {
         return false;
@@ -262,6 +267,7 @@ struct ProjectView {
     path: PathBuf,
     ssh_host: Option<String>,
     branch: String,
+    sync_counts: Option<(usize, usize)>,
     agents: Vec<AgentView>,
 }
 
@@ -421,6 +427,11 @@ struct Workspace {
     diff_watched_project: Option<usize>,
     diff_watcher: Option<notify::RecommendedWatcher>,
     diff_refresh_due: Option<Instant>,
+    sync_tx: Sender<SyncUpdate>,
+    sync_rx: Receiver<SyncUpdate>,
+    sync_loading: bool,
+    last_remote_sync: Instant,
+    last_upstream_fetch: Instant,
     diff_first_change_at: Option<Instant>,
     diff_poll_at: Option<Instant>,
     diff_loading: bool,
@@ -825,6 +836,7 @@ impl Workspace {
         let (diff_tx, diff_rx) = mpsc::channel();
         let (diff_watch_tx, diff_watch_rx) = mpsc::channel();
         let (diff_watcher_tx, diff_watcher_rx) = mpsc::channel();
+        let (sync_tx, sync_rx) = mpsc::channel();
         let (config, migrate_config, notice) = match config::load() {
             Ok((config, migrate)) => (config, migrate, None),
             Err(error) => (
@@ -855,6 +867,7 @@ impl Workspace {
                     .ssh_host
                     .clone()
                     .unwrap_or_else(|| branch(&project.path)),
+                sync_counts: None,
                 path: project.path,
                 ssh_host: project.ssh_host,
                 agents: project.agents.into_iter().map(AgentView::new).collect(),
@@ -944,6 +957,11 @@ impl Workspace {
             diff_watched_project: None,
             diff_watcher: None,
             diff_refresh_due: None,
+            sync_tx,
+            sync_rx,
+            sync_loading: false,
+            last_remote_sync: Instant::now() - Duration::from_secs(30),
+            last_upstream_fetch: Instant::now() - Duration::from_secs(300),
             diff_first_change_at: None,
             diff_poll_at: None,
             diff_loading: false,
@@ -1036,13 +1054,14 @@ impl Workspace {
         let background_executor = cx.background_executor().clone();
         cx.spawn_in(window, async move |this, cx| {
             let mut tick_interval = Duration::from_millis(25);
-            let mut last_branch_refresh = Instant::now();
+            let mut last_branch_refresh = Instant::now() - Duration::from_secs(5);
             let mut fast_poll_session = None;
             let mut fast_poll_started = Instant::now();
             loop {
                 background_executor.timer(tick_interval).await;
                 let Ok(connecting_session) = this.update_in(cx, |this, window, cx| {
                     this.poll_events(window, cx);
+                    this.poll_sync_counts(cx);
                     if let Ok(mut folders) = this.folders_rx.try_recv() {
                         folders.extend(
                             this.projects
@@ -1310,6 +1329,7 @@ impl Workspace {
         } else {
             self.projects.push(ProjectView {
                 branch: ssh_host.clone().unwrap_or_else(|| branch(&path)),
+                sync_counts: None,
                 path: path.clone(),
                 ssh_host: ssh_host.clone(),
                 agents: Vec::new(),

@@ -956,6 +956,66 @@ impl Workspace {
         if changed {
             cx.notify();
         }
+        if !self.sync_loading {
+            let fetch_upstream = self.last_upstream_fetch.elapsed() >= Duration::from_secs(300);
+            if fetch_upstream {
+                self.last_upstream_fetch = Instant::now();
+            }
+            let refresh_remote =
+                fetch_upstream || self.last_remote_sync.elapsed() >= Duration::from_secs(30);
+            if refresh_remote {
+                self.last_remote_sync = Instant::now();
+            }
+            let mut projects: Vec<_> = self
+                .projects
+                .iter()
+                .filter(|project| refresh_remote || project.ssh_host.is_none())
+                .map(|project| (project.path.clone(), project.ssh_host.clone()))
+                .collect();
+            projects.sort_by_key(|(_, host)| host.is_some());
+            self.sync_loading = true;
+            let tx = self.sync_tx.clone();
+            std::thread::spawn(move || {
+                for (path, host) in projects {
+                    let counts = host.as_ref().map_or_else(
+                        || {
+                            if fetch_upstream {
+                                crate::git_sync::fetch(&path);
+                            }
+                            crate::git_sync::counts(&path)
+                        },
+                        |host| crate::git_sync::remote_counts(host, &path, fetch_upstream),
+                    );
+                    if tx.send(SyncUpdate::Counts(path, host, counts)).is_err() {
+                        return;
+                    }
+                }
+                let _ = tx.send(SyncUpdate::Finished);
+            });
+        }
+    }
+
+    pub(super) fn poll_sync_counts(&mut self, cx: &mut Context<Self>) {
+        let mut changed = false;
+        while let Ok(update) = self.sync_rx.try_recv() {
+            match update {
+                SyncUpdate::Counts(path, host, counts) => {
+                    if let Some(project) = self
+                        .projects
+                        .iter_mut()
+                        .find(|project| project.ssh_host == host && project.path == path)
+                        && project.sync_counts != counts
+                    {
+                        project.sync_counts = counts;
+                        changed = true;
+                    }
+                }
+                SyncUpdate::Finished => self.sync_loading = false,
+            }
+        }
+        if changed {
+            cx.notify();
+        }
     }
 }
 

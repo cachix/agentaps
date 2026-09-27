@@ -40,6 +40,9 @@ impl Workspace {
                 .position(|id| *id == agent_id)
                 .unwrap_or(usize::MAX);
             let row_group = format!("agent-row-{agent_id}");
+            let sync_counts = project
+                .sync_counts
+                .filter(|(ahead, behind)| *ahead > 0 || *behind > 0);
             let row = div()
                 .id(("agent", agent_id))
                 .group(row_group.clone())
@@ -121,6 +124,33 @@ impl Workspace {
                             .text_xs()
                             .text_color(rgb(STATUS_QUESTION))
                             .child(format!("{} ?", agent.elicitations.len())),
+                    )
+                })
+                .when_some(sync_counts, |row, (ahead, behind)| {
+                    let tooltip = format!("{ahead} ahead, {behind} behind upstream");
+                    row.child(
+                        div()
+                            .id(("sync", agent_id))
+                            .flex()
+                            .flex_col()
+                            .flex_shrink_0()
+                            .items_center()
+                            .text_size(px(9.))
+                            .line_height(px(10.))
+                            .group_hover(row_group.clone(), |style| style.invisible())
+                            .child(
+                                div()
+                                    .text_color(rgb(crate::diff_view::ADDED_TEXT))
+                                    .child(format!("↑ {ahead}")),
+                            )
+                            .child(
+                                div()
+                                    .text_color(rgb(crate::diff_view::REMOVED_TEXT))
+                                    .child(format!("↓ {behind}")),
+                            )
+                            .tooltip(move |window, cx| {
+                                Tooltip::new(tooltip.clone()).build(window, cx)
+                            }),
                     )
                 })
                 .child(

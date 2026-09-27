@@ -7,6 +7,7 @@ mod discovery;
 mod file_search;
 mod folder_search;
 mod git_diff;
+mod git_sync;
 mod mobile;
 mod remote;
 mod theme;

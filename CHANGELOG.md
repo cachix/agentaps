@@ -18,6 +18,7 @@ Notable changes to Agentaps are recorded here.
 
 - The website links to the current desktop build candidates with their sign-in and expiration limits clearly labeled.
 - The website shows a larger linked GitHub stars badge beside the logo, including on phones.
+- Local and SSH agent sidebar rows show compact green up and red down commit counts at the right edge, refreshed periodically from the upstream remote.
 - Website updates on GitHub `main` deploy through Cloudflare Pages.
 - Candidate desktop builds for Linux, Apple Silicon macOS, and Windows can be downloaded from GitHub Actions before a release, and the development environment includes their packaging tool.
 - Version tags prepare a draft release with verified desktop packages for review before publishing.
