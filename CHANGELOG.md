@@ -16,6 +16,7 @@ Notable changes to Agentaps are recorded here.
 
 ### Added
 
+- The website shows a larger linked GitHub stars badge beside the logo, including on phones.
 - Website updates on GitHub `main` deploy through Cloudflare Pages.
 - Candidate desktop builds for Linux, Apple Silicon macOS, and Windows can be downloaded from GitHub Actions before a release, and the development environment includes their packaging tool.
 - Version tags prepare a draft release with verified desktop packages for review before publishing.

@@ -11,7 +11,10 @@ a:focus-visible { outline: 2px solid #8fc5ec; outline-offset: 4px; }
 .page-shell { overflow: hidden; background: radial-gradient(ellipse 70% 35% at 62% 7%, rgba(54, 104, 151, .19), transparent 75%), #10151c; }
 .site-header, main, .site-footer { width: min(100% - 64px, 1220px); margin-inline: auto; }
 .site-header { height: 88px; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid rgba(143, 197, 236, .12); }
+.brand-group { display: flex; align-items: center; gap: 16px; }
 .brand { display: inline-flex; gap: 11px; align-items: center; font: 700 24px/1 'IBM Plex Sans', sans-serif; letter-spacing: -.07em; }
+.github-stars { display: inline-flex; align-items: center; min-height: 40px; }
+.github-stars img { display: block; height: 28px; }
 .brand-dot, .phone-brand span { color: #8fc5ec; }
 .brand-mark { position: relative; display: inline-flex; flex-direction: column; align-items: start; justify-content: center; gap: 2px; width: 33px; height: 33px; padding: 5px; border: 1px solid rgba(143, 197, 236, .5); border-radius: 10px; background: #202a36; }
 .brand-mark span { width: 21px; height: 5px; border-radius: 3px; background: #8fc5ec; }
@@ -89,7 +92,6 @@ h1 span { color: #8fc5ec; }
   .site-header, main, .site-footer { width: min(100% - 36px, 1220px); }
   .site-header { height: 72px; }
   .brand { font-size: 21px; }
-  .site-header nav { gap: 0; }
   .site-header nav a:not(.nav-connect) { display: none; }
   .site-header nav .nav-connect { padding: 9px 11px; font-size: 12px; }
   .hero { min-height: 0; padding: 65px 0 76px; }
@@ -110,6 +112,8 @@ h1 span { color: #8fc5ec; }
   .site-footer > span:last-child { width: 100%; }
 }
 @media (max-width: 420px) {
+  .site-header { height: auto; min-height: 72px; flex-wrap: wrap; gap: 12px; padding: 14px 0; }
+  .site-header nav { width: 100%; justify-content: flex-end; }
   .hero-actions { display: grid; }
   .phone-window { transform: scale(.68) rotate(7deg); }
 }

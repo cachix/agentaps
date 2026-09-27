@@ -7,7 +7,7 @@
     <meta name="description" content="Use your coding harness locally or over SSH using ACP, then securely connect from the web with Agentaps.">
     <title>Agentaps | A universal UI for coding harnesses</title>
     <link rel="icon" href="/favicon.svg" type="image/svg+xml">
-    <link rel="stylesheet" href="/styles.css?v=7d5a15ed8e3d">
+    <link rel="stylesheet" href="/styles.css?v=fd54b35158f1">
     <script>
       if (/^#[^:]+:[0-9a-f]{64}$/i.test(location.hash)) {
         location.replace(`/connect/${location.hash}`);
@@ -18,10 +18,15 @@
   <body>
     <div class="page-shell">
       <header class="site-header">
-        <a class="brand" href="/" aria-label="Agentaps home">
-          <span class="brand-mark" aria-hidden="true"><span></span><span></span><span></span></span>
-          <span>agentaps<span class="brand-dot">.</span></span>
-        </a>
+        <div class="brand-group">
+          <a class="brand" href="/" aria-label="Agentaps home">
+            <span class="brand-mark" aria-hidden="true"><span></span><span></span><span></span></span>
+            <span>agentaps<span class="brand-dot">.</span></span>
+          </a>
+          <a class="github-stars" href="https://github.com/domenkozar/agentaps" aria-label="Star Agentaps on GitHub">
+            <img src="https://img.shields.io/github/stars/domenkozar/agentaps?style=flat&amp;logo=github&amp;label=Stars&amp;labelColor=202a36&amp;color=304b60" alt="GitHub stars" height="28">
+          </a>
+        </div>
         <nav aria-label="Main navigation">
           <a href="#why-agentaps">Why Agentaps</a>
           <a href="#downloads">Desktop</a>
