@@ -112,9 +112,9 @@ h1 span { color: #8fc5ec; }
 .site-footer div { display: flex; gap: 24px; }
 
 @media (max-width: 1100px) {
-  .hero { grid-template-columns: 1fr; padding-top: 65px; gap: 18px; }
-  .hero-copy { max-width: 680px; }
-  .product-visual { width: min(100%, 740px); margin: 0 auto; }
+  .hero { grid-template-columns: minmax(0, 1fr); padding-top: 65px; gap: 18px; }
+  .hero-copy { max-width: 680px; min-width: 0; }
+  .product-visual { width: min(100%, 740px); min-width: 0; margin: 0 auto; }
 }
 @media (max-width: 700px) {
   .site-header, main, .site-footer { width: min(100% - 36px, 1220px); }
@@ -145,5 +145,9 @@ h1 span { color: #8fc5ec; }
   .product-visual { height: 300px; }
   .desktop-window { transform: scale(.61); }
   .phone-window { transform: scale(.68) rotate(7deg); }
+}
+@media (max-width: 360px) {
+  .desktop-window { transform: scale(.5); }
+  .phone-window { transform: scale(.6) rotate(7deg); }
 }
 @media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } .button { transition: none; } }
