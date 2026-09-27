@@ -8,6 +8,7 @@ Notable changes to Agentaps are recorded here.
 
 - Documented the GitHub app connection and build results for Cloudflare Pages deployments.
 - Documented the production site deployment and custom domain setup.
+- Added a guide for reviewing desktop build candidates and preparing a release.
 - Updated the README and website tagline to explain local and SSH harness use through ACP and secure web access.
 - Updated the README screenshot to show the current session interface.
 - Added a tagline that captures Agentaps' direction across work environments.
@@ -15,6 +16,9 @@ Notable changes to Agentaps are recorded here.
 ### Added
 
 - Website updates on GitHub `main` deploy through Cloudflare Pages.
+- Candidate desktop builds for Linux, Apple Silicon macOS, and Windows can be downloaded from GitHub Actions before a release, and the development environment includes their packaging tool.
+- Version tags prepare a draft release with verified desktop archives for review before publishing.
+- Windows candidate builds validate that installed batch commands can be launched.
 - The website now has a landing page with desktop download availability and an entry point to Web Connect.
 - Desktop mobile pairing lists linked browsers and lets you revoke each new pairing individually; older shared-token pairings can be revoked together.
 - Agent replies offer a fork icon at the top right of each reply that starts a separate session from that point and carries the active conversation into its first prompt.
@@ -34,6 +38,7 @@ Notable changes to Agentaps are recorded here.
 
 ### Changed
 
+- Desktop downloads are limited to Apple Silicon Macs; Intel Mac builds are not offered.
 - The development environment can build the browser site, and a command publishes it to Cloudflare Pages.
 - `@` completion includes folders and shows a folder icon beside them.
 - Desktop platform downloads now appear in the opening section, with availability shown there instead of in a separate section.
@@ -58,6 +63,8 @@ Notable changes to Agentaps are recorded here.
 
 - The landing page keeps its text, desktop availability, and device preview visible on narrow phones.
 - Cloudflare Pages can build the website without system package installation privileges.
+- Windows desktop builds find and launch installed agent commands with executable extensions.
+- Native macOS and Windows builds use the current GPUI asset registry for menu icons.
 - The visible saved session connects before other sessions on startup, and connection replies are handled sooner.
 - Desktop and browser use current GPUI CE, including WebGL2 fallback and mobile input support.
 - File path completion adds a space and closes its suggestion menu.

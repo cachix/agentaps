@@ -1,4 +1,5 @@
 /target
+/dist/desktop
 /web/target
 /web/dist
 /.wrangler

@@ -38,6 +38,10 @@ devenv shell cargo run --release
 
 The development environment provides Rust, the native libraries GPUI needs, and Node for optional ACP adapters.
 
+Candidate desktop builds for Linux, Apple Silicon macOS, and Windows are
+available from GitHub Actions. See the [desktop build guide](docs/releasing.md).
+They are not published as releases yet.
+
 ## Mobile browser preview
 
 The website and browser UI are a static build in `web/`. The site landing page is at `/`, and Web Connect is at `/connect/`. The browser connects directly to the running desktop app through Iroh. Agent processes and project files stay on the desktop computer.
