@@ -48,7 +48,6 @@ h1 span { color: #8fc5ec; }
 .platform-unavailable { color: #9aaaba; }
 .platform-unavailable small { color: #8193a5; font-size: 10px; }
 .platform-link { color: #edf2f7; }
-.platform-link small { color: #8fc5ec; font-size: 10px; }
 .platform-link:hover { border-color: #8fc5ec; color: #b6dcf4; }
 .preview-note { margin: 12px 0 0; color: #8193a5; font-size: 12px; }
 .hero-note { margin: 12px 0 0; color: #8193a5; font-size: 12px; }
