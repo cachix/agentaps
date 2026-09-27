@@ -4,10 +4,12 @@ The `Desktop build candidates` workflow compiles the desktop app on Linux x64,
 Windows x64, and macOS Apple Silicon. Every pull request that changes the
 desktop build or packaging runs it. You can also start it manually
 from GitHub Actions. Each successful job uploads packages and their SHA-256
-checksum as workflow artifacts. The website only links to assets on the latest
-published GitHub release, so candidate artifacts do not appear there. Pushing a
-version tag runs the same builds, verifies their checksums, and attaches them to
-a draft GitHub release. Drafts do not appear on the website.
+checksum as workflow artifacts. The website's platform download buttons only
+link to assets on the latest published GitHub release. A separate candidate
+link points to the successful run on `main` until a release is published. Its
+artifacts require GitHub sign-in and expire. Pushing a version tag runs the
+same builds, verifies their checksums, and attaches them to a draft GitHub
+release. Drafts do not appear on the website.
 
 The current candidates are a Linux DEB and AppImage, a Windows NSIS installer,
 and a macOS DMG containing an app bundle. The macOS app has an ad hoc signature
