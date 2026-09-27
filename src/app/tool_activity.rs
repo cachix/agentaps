@@ -247,11 +247,7 @@ pub(super) fn tool_description(text: &str) -> (String, bool) {
 }
 
 pub(super) fn tool_group_heading(entries: &[ChatEntry]) -> String {
-    let has_specific_action = entries
-        .iter()
-        .any(|entry| !is_approval_review(&entry.text) && !is_generic_tool_title(&entry.text));
-    let approval_only =
-        !has_specific_action && entries.iter().all(|entry| is_approval_review(&entry.text));
+    let review_only = entries.iter().all(|entry| is_approval_review(&entry.text));
     let mut all_completed = true;
     let mut current = None;
     let mut pending = None;
@@ -275,14 +271,8 @@ pub(super) fn tool_group_heading(entries: &[ChatEntry]) -> String {
     if let Some(entry) = pending {
         return format!("Waiting · {}", group_step_description(entry));
     }
-    if all_completed && !entries.is_empty() {
-        if approval_only {
-            "Approval checks".into()
-        } else {
-            "Completed".into()
-        }
-    } else if approval_only {
-        "Approval checks".into()
+    if all_completed && !entries.is_empty() && !review_only {
+        "Completed".into()
     } else {
         "Activity".into()
     }
@@ -290,7 +280,7 @@ pub(super) fn tool_group_heading(entries: &[ChatEntry]) -> String {
 
 fn group_step_description(entry: &ChatEntry) -> String {
     if is_approval_review(&entry.text) {
-        "Approval check".into()
+        "Automatic review".into()
     } else {
         tool_description(&entry.text).0
     }
@@ -312,37 +302,4 @@ fn ongoing_tool_description(entry: &ChatEntry) -> String {
         }
     }
     description
-}
-
-pub(super) fn approval_summary(entries: &[ChatEntry]) -> Option<String> {
-    let mut total = 0;
-    let mut completed = 0;
-    let mut failed = 0;
-    let mut pending = 0;
-    for entry in entries
-        .iter()
-        .filter(|entry| is_approval_review(&entry.text))
-    {
-        total += 1;
-        match tool_title_and_status(&entry.text).1 {
-            Some("completed") => completed += 1,
-            Some("failed") => failed += 1,
-            Some("pending" | "in_progress") => pending += 1,
-            _ => {}
-        }
-    }
-    if total == 0 {
-        return None;
-    }
-    let noun = if total == 1 { "check" } else { "checks" };
-    let status = if failed > 0 {
-        format!(" · {failed} failed")
-    } else if pending > 0 {
-        format!(" · {pending} in progress")
-    } else if completed == total {
-        " · passed".into()
-    } else {
-        String::new()
-    };
-    Some(format!("{total} approval {noun}{status}"))
 }

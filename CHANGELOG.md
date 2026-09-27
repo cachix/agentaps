@@ -38,6 +38,7 @@ Notable changes to Agentaps are recorded here.
 
 ### Changed
 
+- Automatic reviews appear as individual tool activity entries without an approval count or implied approval result.
 - Desktop downloads are limited to Apple Silicon Macs; Intel Mac builds are not offered.
 - Mobile pairing shows linked clients below the QR code at every window width.
 - The development environment can build the browser site, and a command publishes it to Cloudflare Pages.

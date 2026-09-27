@@ -367,7 +367,7 @@ fn adjacent_tool_calls_form_one_group() {
 }
 
 #[test]
-fn tool_activity_summarizes_search_read_and_approval() {
+fn tool_activity_describes_search_read_and_review() {
     assert_eq!(
         tool_description("rg -n 'guardian|review|tool call' src"),
         ("Search guardian|review|tool call in src".into(), true)
@@ -397,10 +397,6 @@ fn tool_activity_summarizes_search_read_and_approval() {
     agent.log(Role::Tool, "Guardian Review");
     agent.log(Role::Tool, "cat README.md");
     assert_eq!(tool_group_heading(&agent.messages), "Activity");
-    assert_eq!(
-        approval_summary(&agent.messages).as_deref(),
-        Some("1 approval check")
-    );
     assert_eq!(markdown_code_block("a ``` b"), "````\na ``` b\n````");
 }
 
@@ -422,12 +418,12 @@ fn tool_group_heading_tracks_live_and_finished_steps() {
     agent.messages[2].text = "Guardian Review · pending".into();
     assert_eq!(
         tool_group_heading(&agent.messages),
-        "Waiting · Approval check"
+        "Waiting · Automatic review"
     );
     agent.messages[2].text = "Guardian Review · failed".into();
     assert_eq!(
         tool_group_heading(&agent.messages),
-        "Needs attention · Approval check"
+        "Needs attention · Automatic review"
     );
 }
 
@@ -447,10 +443,7 @@ fn v1_tool_updates_replace_the_same_call_and_keep_approval_status() {
     }
     assert_eq!(review_agent.messages.len(), 1);
     assert_eq!(review_agent.messages[0].text, "Guardian Review · completed");
-    assert_eq!(
-        approval_summary(&review_agent.messages).as_deref(),
-        Some("1 approval check · passed")
-    );
+    assert_eq!(tool_group_heading(&review_agent.messages), "Activity");
     let mut tool = agent(ProtocolVersion::V2);
     tool.upsert_tool_call(
         &json!({"toolCallId":"command-1","title":"cat README.md","status":"in_progress"}),
