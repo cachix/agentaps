@@ -39,7 +39,7 @@ Notable changes to Agentaps are recorded here.
 
 ### Changed
 
-- The website pairs a real Agentaps desktop screenshot with the mobile preview.
+- The website pairs a wide Agentaps desktop screenshot with the mobile preview.
 - Automatic reviews appear as individual tool activity entries without an approval count or implied approval result.
 - Desktop downloads are limited to Apple Silicon Macs; Intel Mac builds are not offered.
 - Mobile pairing shows linked clients below the QR code at every window width.

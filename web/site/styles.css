@@ -49,11 +49,11 @@ h1 span { color: #8fc5ec; }
 .hero-note { margin: 12px 0 0; color: #8193a5; font-size: 12px; }
 .product-visual { position: relative; width: 100%; min-width: 0; margin-right: -46px; }
 .visual-glow { position: absolute; inset: 16% 3% 5% 10%; border-radius: 50%; filter: blur(55px); background: radial-gradient(ellipse, rgba(79, 139, 196, .24), rgba(87, 110, 179, .1) 55%, transparent 75%); }
-.product-screenshot { position: relative; display: block; width: 100%; height: auto; aspect-ratio: 1.2; object-fit: cover; object-position: center top; border: 1px solid #334253; border-radius: 13px; box-shadow: 0 32px 100px rgba(0,0,0,.45), 0 0 0 7px rgba(143, 197, 236, .04); transform: perspective(1100px) rotateY(-5deg) rotateX(2deg); }
+.product-screenshot { position: relative; display: block; width: 100%; height: auto; aspect-ratio: 1.7; object-fit: cover; object-position: center bottom; border: 1px solid #334253; border-radius: 13px; box-shadow: 0 32px 100px rgba(0,0,0,.45), 0 0 0 7px rgba(143, 197, 236, .04); transform: perspective(1100px) rotateY(-5deg) rotateX(2deg); }
 .status-dot { display: inline-block; width: 6px; height: 6px; flex: none; border-radius: 50%; }
 .status-dot.blue { background: #8fc5ec; }
 .status-dot.green { background: #84c8a7; }
-.phone-window { position: absolute; right: -10px; bottom: -34px; width: 194px; height: 350px; padding: 35px 13px 12px; border: 4px solid #334253; border-radius: 29px; background: #151c25; box-shadow: 0 24px 60px rgba(0,0,0,.58), inset 0 0 0 1px #111; transform: rotate(7deg); }
+.phone-window { position: absolute; right: -10px; bottom: -30px; width: 194px; height: 350px; padding: 35px 13px 12px; border: 4px solid #334253; border-radius: 29px; background: #151c25; box-shadow: 0 24px 60px rgba(0,0,0,.58), inset 0 0 0 1px #111; transform: scale(.82) rotate(7deg); transform-origin: right bottom; }
 .phone-notch { position: absolute; top: 6px; left: 50%; width: 60px; height: 9px; border-radius: 8px; background: #070d12; transform: translateX(-50%); }
 .phone-brand { margin-bottom: 33px; color: #edf2f7; font: 700 12px 'IBM Plex Sans', sans-serif; letter-spacing: -.06em; }
 .phone-title { margin-bottom: 13px; color: #edf2f7; font: 600 13px 'IBM Plex Sans', sans-serif; }
@@ -99,7 +99,7 @@ h1 span { color: #8fc5ec; }
   .button { min-height: 48px; padding: 0 15px; font-size: 12px; }
   .product-visual { margin-top: 33px; }
   .product-screenshot { transform: none; }
-  .phone-window { right: 4px; bottom: -24px; transform: scale(.8) rotate(7deg); transform-origin: right bottom; }
+  .phone-window { right: 4px; bottom: -36px; transform: scale(.76) rotate(7deg); }
   .features { padding: 65px 0 70px; }
   .feature-grid { grid-template-columns: 1fr; gap: 12px; margin-top: 30px; }
   .feature-card { padding: 24px; }
@@ -111,7 +111,7 @@ h1 span { color: #8fc5ec; }
 }
 @media (max-width: 420px) {
   .hero-actions { display: grid; }
-  .phone-window { transform: scale(.68) rotate(7deg); }
+  .phone-window { right: 22px; transform: scale(.68) rotate(7deg); }
 }
 @media (max-width: 360px) {
   .phone-window { transform: scale(.6) rotate(7deg); }
