@@ -66,6 +66,7 @@ Notable changes to Agentaps are recorded here.
 
 ### Fixed
 
+- The macOS desktop package includes an icon format its app bundler accepts.
 - Landing page style updates avoid stale browser CSS that could make the product screenshot fill the screen.
 - The landing page keeps its text, desktop availability, and device preview visible on narrow phones.
 - Cloudflare Pages can build the website without system package installation privileges.
