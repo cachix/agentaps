@@ -7,6 +7,20 @@ const patterns = {
 const platformNames = { linux: 'Linux', macos: 'macOS (Apple Silicon)', windows: 'Windows' };
 const installerFile = /\.(?:AppImage|deb|rpm|tar\.gz|tar\.xz|zip|dmg|pkg|msi|exe)$/i;
 
+const userAgent = navigator.userAgent || '';
+const isMobile = navigator.userAgentData?.mobile
+  || /Android|iPhone|iPad|iPod/i.test(userAgent)
+  || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+if (!isMobile) {
+  const platform = navigator.userAgentData?.platform || navigator.platform || userAgent;
+  const currentPlatform = /Win/i.test(platform) ? 'windows'
+    : /Mac/i.test(platform) ? 'macos'
+      : /Linux/i.test(platform) ? 'linux' : null;
+  if (currentPlatform) {
+    document.querySelector(`.platform-download[data-platform="${currentPlatform}"]`)?.classList.add('is-current-platform');
+  }
+}
+
 fetch(releaseUrl, { headers: { Accept: 'application/vnd.github+json' } })
   .then((response) => response.ok ? response.json() : null)
   .then((release) => {

@@ -44,6 +44,8 @@ Notable changes to Agentaps are recorded here.
 
 ### Changed
 
+- The desktop download button matching the visitor's platform is highlighted.
+- Desktop download buttons are larger, and the preview note now shows only the September 28 build date.
 - Desktop build candidates use installable packages for Linux and Windows, with the macOS app distributed in a DMG.
 - The website pairs the Agentaps desktop screenshot with the mobile preview.
 - Automatic reviews appear as individual tool activity entries without an approval count or implied approval result.
