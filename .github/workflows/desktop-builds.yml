@@ -7,7 +7,6 @@ on:
   pull_request:
     paths:
       - .github/workflows/desktop-builds.yml
-      - scripts/release/**
       - Cargo.toml
       - Cargo.lock
       - crates/**
@@ -29,10 +28,13 @@ jobs:
         include:
           - runner: ubuntu-22.04
             target: x86_64-unknown-linux-gnu
+            formats: deb,appimage
           - runner: macos-15
             target: aarch64-apple-darwin
+            formats: dmg
           - runner: windows-2022
             target: x86_64-pc-windows-msvc
+            formats: nsis
     env:
       CARGO_TERM_COLOR: always
       CARGO_INCREMENTAL: 0
@@ -58,7 +60,13 @@ jobs:
           rustup target add "${{ matrix.target }}"
       - name: Check package metadata
         shell: bash
-        run: python scripts/release/package.py --check-version
+        run: |
+          package_version=$(cargo metadata --no-deps --format-version 1 --locked | python -c 'import json,sys; print(next(p["version"] for p in json.load(sys.stdin)["packages"] if p["name"] == "agentaps"))')
+          if [[ "$GITHUB_REF_TYPE" == tag && "$GITHUB_REF_NAME" != "v$package_version" ]]; then
+            echo "Release tag $GITHUB_REF_NAME must match Cargo version v$package_version" >&2
+            exit 1
+          fi
+          echo "Agentaps $package_version"
       - name: Build desktop app
         shell: bash
         run: cargo build --release --locked --target "${{ matrix.target }}"
@@ -66,9 +74,24 @@ jobs:
         if: runner.os == 'Windows'
         shell: bash
         run: cargo test --release --locked --target "${{ matrix.target }}" discovery::tests::finds_and_runs_batch_commands_without_an_extension
+      - name: Install cargo-packager
+        shell: bash
+        run: cargo install cargo-packager --version 0.11.8 --locked
       - name: Package candidate
         shell: bash
-        run: python scripts/release/package.py --target "${{ matrix.target }}"
+        run: cargo packager --release --target "${{ matrix.target }}" --formats "${{ matrix.formats }}" --out-dir dist/desktop
+      - name: Checksum packages
+        shell: bash
+        working-directory: dist/desktop
+        run: |
+          for asset in *.deb *.AppImage *.dmg *.exe; do
+            [[ -f "$asset" ]] || continue
+            if command -v sha256sum >/dev/null; then
+              sha256sum "$asset" > "$asset.sha256"
+            else
+              shasum -a 256 "$asset" > "$asset.sha256"
+            fi
+          done
       - uses: actions/upload-artifact@v6
         with:
           name: desktop-${{ matrix.target }}

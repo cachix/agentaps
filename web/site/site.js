@@ -1,7 +1,7 @@
 const releaseUrl = 'https://api.github.com/repos/domenkozar/agentaps/releases/latest';
 const patterns = {
   linux: /(?:linux|unknown-linux|appimage|\.deb$|\.rpm$)/i,
-  macos: /macos-aarch64\.dmg$/i,
+  macos: /(?:macos-aarch64|_aarch64)\.dmg$/i,
   windows: /(?:windows|pc-windows|\.msi$|\.exe$)/i,
 };
 const platformNames = { linux: 'Linux', macos: 'macOS (Apple Silicon)', windows: 'Windows' };

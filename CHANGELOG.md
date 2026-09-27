@@ -18,7 +18,7 @@ Notable changes to Agentaps are recorded here.
 
 - Website updates on GitHub `main` deploy through Cloudflare Pages.
 - Candidate desktop builds for Linux, Apple Silicon macOS, and Windows can be downloaded from GitHub Actions before a release, and the development environment includes their packaging tool.
-- Version tags prepare a draft release with verified desktop archives for review before publishing.
+- Version tags prepare a draft release with verified desktop packages for review before publishing.
 - Windows candidate builds validate that installed batch commands can be launched.
 - The website now has a landing page with desktop download availability and an entry point to Web Connect.
 - Desktop mobile pairing lists linked browsers and lets you revoke each new pairing individually; older shared-token pairings can be revoked together.
@@ -39,6 +39,7 @@ Notable changes to Agentaps are recorded here.
 
 ### Changed
 
+- Desktop build candidates use installable packages for Linux and Windows, with the macOS app distributed in a DMG.
 - The website pairs the Agentaps desktop screenshot with the mobile preview.
 - Automatic reviews appear as individual tool activity entries without an approval count or implied approval result.
 - Desktop downloads are limited to Apple Silicon Macs; Intel Mac builds are not offered.
@@ -65,6 +66,7 @@ Notable changes to Agentaps are recorded here.
 
 ### Fixed
 
+- The macOS desktop package includes an icon format its app bundler accepts.
 - Landing page style updates avoid stale browser CSS that could make the product screenshot fill the screen.
 - The landing page keeps its text, desktop availability, and device preview visible on narrow phones.
 - Cloudflare Pages can build the website without system package installation privileges.
