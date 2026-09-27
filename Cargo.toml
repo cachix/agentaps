@@ -8,6 +8,25 @@ repository = "https://github.com/domenkozar/agentaps"
 readme = "README.md"
 categories = ["gui"]
 
+[package.metadata.packager]
+product-name = "Agentaps"
+identifier = "dev.agentaps.app"
+category = "DeveloperTool"
+authors = ["Agentaps contributors"]
+homepage = "https://agentaps.dev"
+long-description = "A universal desktop UI for ACP-compatible coding harnesses running locally or over SSH."
+license-file = "LICENSE"
+icons = ["assets/packaging/icon.png"]
+
+[package.metadata.packager.deb]
+files = { "LICENSE" = "usr/share/doc/agentaps/copyright" }
+
+[package.metadata.packager.macos]
+signing-identity = "-"
+
+[package.metadata.packager.nsis]
+installer-icon = "assets/packaging/icon.ico"
+
 [dependencies]
 agentaps-control-protocol = { path = "crates/control-protocol" }
 agent-client-protocol-schema = { version = "1.9.1", default-features = false, features = ["unstable_protocol_v2"] }
