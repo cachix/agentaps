@@ -255,8 +255,7 @@ impl Workspace {
         cx: &mut Context<Self>,
     ) -> gpui::Stateful<Div> {
         let viewport = window.viewport_size();
-        let side_by_side = f32::from(viewport.width) >= 760.;
-        let available = (f32::from(viewport.width) - if side_by_side { 340. } else { 64. })
+        let available = (f32::from(viewport.width) - 64.)
             .min(f32::from(viewport.height) - 230.)
             .min(640.)
             .max(80.);
@@ -328,7 +327,7 @@ impl Workspace {
             .flex()
             .flex_col()
             .items_center()
-            .justify_center()
+            .justify_start()
             .gap_4()
             .p_4()
             .overflow_y_scroll()
@@ -344,14 +343,13 @@ impl Workspace {
             .child(
                 div()
                     .w_full()
-                    .max_w(px(960.))
+                    .max_w(px(640.))
                     .flex()
-                    .items_start()
+                    .flex_col()
+                    .items_center()
                     .gap_5()
-                    .when(side_by_side, |body| body.flex_row())
-                    .when(!side_by_side, |body| body.flex_col().items_center())
                     .child(qr_column)
-                    .child(div().w_full().max_w(px(280.)).child(clients)),
+                    .child(div().w_full().max_w(px(560.)).child(clients)),
             )
             .when_some(self.notice.as_ref(), |overlay, notice| {
                 overlay.child(div().text_color(rgb(MUTED)).child(notice.clone()))

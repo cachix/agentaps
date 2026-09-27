@@ -39,6 +39,7 @@ Notable changes to Agentaps are recorded here.
 ### Changed
 
 - Desktop downloads are limited to Apple Silicon Macs; Intel Mac builds are not offered.
+- Mobile pairing shows linked clients below the QR code at every window width.
 - The development environment can build the browser site, and a command publishes it to Cloudflare Pages.
 - `@` completion includes folders and shows a folder icon beside them.
 - Desktop platform downloads now appear in the opening section, with availability shown there instead of in a separate section.
