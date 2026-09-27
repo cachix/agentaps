@@ -65,6 +65,7 @@ Notable changes to Agentaps are recorded here.
 
 ### Fixed
 
+- Landing page style updates avoid stale browser CSS that could make the product screenshot fill the screen.
 - The landing page keeps its text, desktop availability, and device preview visible on narrow phones.
 - Cloudflare Pages can build the website without system package installation privileges.
 - Windows desktop builds find and launch installed agent commands with executable extensions.
