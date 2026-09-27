@@ -11,13 +11,13 @@ fetch(releaseUrl, { headers: { Accept: 'application/vnd.github+json' } })
   .then((response) => response.ok ? response.json() : null)
   .then((release) => {
     if (!release || !Array.isArray(release.assets)) return;
-    let hasInstallers = false;
+    let publishedPlatforms = 0;
     for (const [platform, pattern] of Object.entries(patterns)) {
       const slot = document.querySelector(`.platform-download[data-platform="${platform}"]`);
       if (!slot) continue;
       const assets = release.assets.filter((asset) => pattern.test(asset.name) && installerFile.test(asset.name) && asset.browser_download_url);
       if (assets.length === 0) continue;
-      hasInstallers = true;
+      publishedPlatforms += 1;
       slot.replaceChildren(...assets.map((asset) => {
         const link = document.createElement('a');
         link.className = 'platform-link';
@@ -26,6 +26,6 @@ fetch(releaseUrl, { headers: { Accept: 'application/vnd.github+json' } })
         return link;
       }));
     }
-    if (hasInstallers) document.querySelector('#candidate-download')?.remove();
+    if (publishedPlatforms === Object.keys(patterns).length) document.querySelector('#preview-note')?.remove();
   })
   .catch(() => {});

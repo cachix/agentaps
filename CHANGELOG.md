@@ -16,6 +16,7 @@ Notable changes to Agentaps are recorded here.
 
 ### Added
 
+- Each desktop platform button links directly to its own labeled preview build.
 - The website links to the current desktop build candidates with their sign-in and expiration limits clearly labeled.
 - The website shows a larger linked GitHub stars badge beside the logo, including on phones.
 - Local and SSH agent sidebar rows show compact green up and red down commit counts at the right edge, refreshed periodically from the upstream remote.
