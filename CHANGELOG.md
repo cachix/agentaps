@@ -6,6 +6,7 @@ Notable changes to Agentaps are recorded here.
 
 ### Documentation
 
+- Explained Web Connect's encrypted peer-to-peer Iroh connection in the website features.
 - Documented the GitHub app connection and build results for Cloudflare Pages deployments.
 - Documented the production site deployment and custom domain setup.
 - Added a guide for reviewing desktop build candidates and preparing a release.
@@ -38,6 +39,7 @@ Notable changes to Agentaps are recorded here.
 
 ### Changed
 
+- The website pairs a real Agentaps desktop screenshot with the mobile preview.
 - Automatic reviews appear as individual tool activity entries without an approval count or implied approval result.
 - Desktop downloads are limited to Apple Silicon Macs; Intel Mac builds are not offered.
 - Mobile pairing shows linked clients below the QR code at every window width.
