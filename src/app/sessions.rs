@@ -89,6 +89,9 @@ impl Workspace {
         } else {
             self.sidebar_order.push(new_id);
         }
+        if let Some(composer) = self.session_composers.remove(&old_id) {
+            self.session_composers.insert(new_id, composer);
+        }
         self.collapsed_tool_groups.retain(|(id, _)| *id != old_id);
         self.expanded_tool_history.retain(|(id, _)| *id != old_id);
         self.expanded_tool_rows.retain(|(id, _)| *id != old_id);
@@ -132,10 +135,14 @@ impl Workspace {
         self.projects[project_index]
             .agents
             .push(AgentView::new(config));
-        self.set_view(WorkspaceView::Conversation(SessionLocation {
-            project_index,
-            agent_index: new_index,
-        }));
+        self.set_view(
+            WorkspaceView::Conversation(SessionLocation {
+                project_index,
+                agent_index: new_index,
+            }),
+            window,
+            cx,
+        );
         self.connect(project_index, new_index);
         self.notice = None;
         self.persist();

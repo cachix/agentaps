@@ -26,7 +26,7 @@ use gpui_kit::{
 };
 use serde_json::{Value, json};
 use std::{
-    collections::HashSet,
+    collections::{HashMap, HashSet},
     path::{Path, PathBuf},
     sync::{
         Arc,
@@ -434,6 +434,7 @@ struct Workspace {
     sidebar_search: Entity<InputState>,
     mobile_provider_input: Entity<InputState>,
     composer: Entity<TextareaState>,
+    session_composers: HashMap<u64, Entity<TextareaState>>,
     chat_list: ListState,
     chat_list_agent: Option<u64>,
     chat_rows: Vec<ChatRow>,
@@ -658,11 +659,68 @@ fn completed_slash_text(command: &SlashCommand) -> String {
 }
 
 impl Workspace {
-    fn set_view(&mut self, view: WorkspaceView) {
+    fn new_composer(window: &mut Window, cx: &mut Context<Self>) -> Entity<TextareaState> {
+        cx.new(|cx| {
+            TextareaState::new(window, cx)
+                .auto_grow(1, 6)
+                .submit_on_enter(true)
+                .placeholder("Ask your agent…")
+        })
+    }
+
+    fn subscribe_composer(
+        &mut self,
+        composer: &Entity<TextareaState>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        self._subscriptions.push(cx.subscribe_in(
+            composer,
+            window,
+            |this, input, event: &InputEvent, window, cx| {
+                if input.entity_id() != this.composer.entity_id() {
+                    return;
+                }
+                match event {
+                    InputEvent::Change => {
+                        if this.prompt_recall.as_ref().is_some_and(|recall| {
+                            recall.displayed != this.composer.read(cx).value().as_ref()
+                        }) {
+                            this.prompt_recall = None;
+                        }
+                        this.slash_selection = 0;
+                        this.slash_dismissed = false;
+                        this.file_selection = 0;
+                        this.file_dismissed = false;
+                        this.update_file_query(cx);
+                        cx.notify();
+                    }
+                    InputEvent::PressEnter {
+                        secondary: false,
+                        shift: false,
+                    } => this.send_prompt(window, cx),
+                    _ => {}
+                }
+            },
+        ));
+    }
+
+    fn set_view(&mut self, view: WorkspaceView, window: &mut Window, cx: &mut Context<Self>) {
         if let Some(session) = view.displayed_session() {
             let agent_id = self.projects[session.project_index].agents[session.agent_index]
                 .config
                 .id;
+            if !self.session_composers.contains_key(&agent_id) {
+                let composer = if self.session_composers.is_empty() {
+                    self.composer.clone()
+                } else {
+                    let composer = Self::new_composer(window, cx);
+                    self.subscribe_composer(&composer, window, cx);
+                    composer
+                };
+                self.session_composers.insert(agent_id, composer);
+            }
+            self.composer = self.session_composers[&agent_id].clone();
             if self.deferred_connections.contains(&agent_id) {
                 self.connect(session.project_index, session.agent_index);
             }
@@ -828,12 +886,7 @@ impl Workspace {
         let mobile_provider_input = cx.new(|cx| {
             InputState::new(window, cx).placeholder("keyring, onepassword, or provider URI")
         });
-        let composer = cx.new(|cx| {
-            TextareaState::new(window, cx)
-                .auto_grow(1, 6)
-                .submit_on_enter(true)
-                .placeholder("Ask your agent…")
-        });
+        let composer = Self::new_composer(window, cx);
         let _subscriptions = vec![
             cx.subscribe_in(
                 &mobile_provider_input,
@@ -856,7 +909,7 @@ impl Workspace {
                 |this, _, event: &InputEvent, window, cx| match event {
                     InputEvent::Change => {
                         this.sidebar_selection = 0;
-                        this.select_sidebar_session(cx);
+                        this.select_sidebar_session(window, cx);
                         cx.notify();
                     }
                     InputEvent::PressEnter {
@@ -892,30 +945,6 @@ impl Workspace {
                     } => {
                         this.confirm_picker(window, cx);
                     }
-                    _ => {}
-                },
-            ),
-            cx.subscribe_in(
-                &composer,
-                window,
-                |this, _, event: &InputEvent, window, cx| match event {
-                    InputEvent::Change => {
-                        if this.prompt_recall.as_ref().is_some_and(|recall| {
-                            recall.displayed != this.composer.read(cx).value().as_ref()
-                        }) {
-                            this.prompt_recall = None;
-                        }
-                        this.slash_selection = 0;
-                        this.slash_dismissed = false;
-                        this.file_selection = 0;
-                        this.file_dismissed = false;
-                        this.update_file_query(cx);
-                        cx.notify();
-                    }
-                    InputEvent::PressEnter {
-                        secondary: false,
-                        shift: false,
-                    } => this.send_prompt(window, cx),
                     _ => {}
                 },
             ),
@@ -1028,6 +1057,7 @@ impl Workspace {
             sidebar_search,
             mobile_provider_input,
             composer,
+            session_composers: HashMap::new(),
             chat_list: ListState::new(0, ListAlignment::Bottom, px(300.)),
             chat_list_agent: None,
             chat_rows: Vec::new(),
@@ -1075,6 +1105,8 @@ impl Workspace {
             last_mobile_snapshot: None,
             _subscriptions,
         };
+        let composer = this.composer.clone();
+        this.subscribe_composer(&composer, window, cx);
         let mut selected = None;
         for project_index in 0..this.projects.len() {
             for agent_index in 0..this.projects[project_index].agents.len() {
@@ -1115,7 +1147,7 @@ impl Workspace {
             }
         }
         if let Some(session) = selected {
-            this.set_view(WorkspaceView::Conversation(session));
+            this.set_view(WorkspaceView::Conversation(session), window, cx);
             if !this.deferred_connections.is_empty() {
                 this.deferred_connections_deadline = Some(Instant::now() + Duration::from_secs(2));
             }
@@ -1139,7 +1171,7 @@ impl Workspace {
                     return_to: None,
                 }
             };
-            this.set_view(view);
+            this.set_view(view, window, cx);
             if matches!(this.view, WorkspaceView::NewSession { .. }) {
                 this.picker_input
                     .update(cx, |input, cx| input.focus(window, cx));
@@ -1238,7 +1270,7 @@ impl Workspace {
     }
 
     fn open_picker(&mut self, step: PickerStep, window: &mut Window, cx: &mut Context<Self>) {
-        self.set_view(self.view.open_picker(step));
+        self.set_view(self.view.open_picker(step), window, cx);
         self.picker_selection = 0;
         if step == PickerStep::Folders {
             self.folder_search.set_query("");
@@ -1268,7 +1300,7 @@ impl Workspace {
                 step: PickerStep::Folders,
                 return_to: Some(session),
             } => {
-                self.set_view(WorkspaceView::Conversation(session));
+                self.set_view(WorkspaceView::Conversation(session), window, cx);
                 self.composer
                     .update(cx, |input, cx| input.focus(window, cx));
                 cx.notify();
@@ -1351,14 +1383,14 @@ impl Workspace {
                 cx,
             );
         } else {
-            self.set_view(WorkspaceView::Conversation(location));
+            self.set_view(WorkspaceView::Conversation(location), window, cx);
             self.composer
                 .update(cx, |input, cx| input.focus(window, cx));
             cx.notify();
         }
     }
 
-    fn select_sidebar_session(&mut self, cx: &mut Context<Self>) {
+    fn select_sidebar_session(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let query = self.sidebar_search.read(cx).value().trim().to_owned();
         if query.is_empty() {
             return;
@@ -1374,7 +1406,7 @@ impl Workspace {
             .config
             .archived
         {
-            self.set_view(WorkspaceView::Conversation(location));
+            self.set_view(WorkspaceView::Conversation(location), window, cx);
         }
     }
 
@@ -1467,10 +1499,14 @@ impl Workspace {
         cx: &mut Context<Self>,
     ) {
         let (_, agent_index) = self.create_agent_for_project(project_index, command, name, cx);
-        self.set_view(WorkspaceView::Conversation(SessionLocation {
-            project_index,
-            agent_index,
-        }));
+        self.set_view(
+            WorkspaceView::Conversation(SessionLocation {
+                project_index,
+                agent_index,
+            }),
+            window,
+            cx,
+        );
         self.composer
             .update(cx, |input, cx| input.focus(window, cx));
         cx.notify();
@@ -1554,7 +1590,7 @@ impl Workspace {
                         })
                     })
                 });
-                self.set_view(self.view.session_archived(location, next));
+                self.set_view(self.view.session_archived(location, next), window, cx);
             }
         } else {
             if self.projects[project_index].agents[agent_index]
@@ -1563,10 +1599,14 @@ impl Workspace {
             {
                 self.connect(project_index, agent_index);
             }
-            self.set_view(WorkspaceView::Conversation(SessionLocation {
-                project_index,
-                agent_index,
-            }));
+            self.set_view(
+                WorkspaceView::Conversation(SessionLocation {
+                    project_index,
+                    agent_index,
+                }),
+                window,
+                cx,
+            );
             self.composer
                 .update(cx, |input, cx| input.focus(window, cx));
         }
@@ -1647,13 +1687,13 @@ impl Workspace {
                 match event.keystroke.key.as_str() {
                     "down" if count > 0 => {
                         self.sidebar_selection = (self.sidebar_selection + 1) % count;
-                        self.select_sidebar_session(cx);
+                        self.select_sidebar_session(window, cx);
                         cx.stop_propagation();
                         cx.notify();
                     }
                     "up" if count > 0 => {
                         self.sidebar_selection = (self.sidebar_selection + count - 1) % count;
-                        self.select_sidebar_session(cx);
+                        self.select_sidebar_session(window, cx);
                         cx.stop_propagation();
                         cx.notify();
                     }

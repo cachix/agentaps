@@ -152,10 +152,14 @@ impl Workspace {
                         return;
                     }
                     this.sidebar_selection = index;
-                    this.set_view(WorkspaceView::Conversation(SessionLocation {
-                        project_index,
-                        agent_index,
-                    }));
+                    this.set_view(
+                        WorkspaceView::Conversation(SessionLocation {
+                            project_index,
+                            agent_index,
+                        }),
+                        window,
+                        cx,
+                    );
                     this.composer
                         .update(cx, |input, cx| input.focus(window, cx));
                     cx.notify();
@@ -460,7 +464,7 @@ impl Workspace {
                                 Tooltip::new(archive_tooltip).build(window, cx)
                             })
                             .on_click(cx.listener(|this, _, window, cx| {
-                                this.set_view(this.view.toggle_archive());
+                                this.set_view(this.view.toggle_archive(), window, cx);
                                 if this.view.displayed_session().is_some() {
                                     this.composer
                                         .update(cx, |input, cx| input.focus(window, cx));

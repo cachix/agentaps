@@ -46,6 +46,7 @@ Notable changes to Agentaps are recorded here.
 
 ### Changed
 
+- Each agent session keeps its own chat draft, cursor, and undo history when switching sessions.
 - Desktop and Web Connect use GPUI Kit 0.7 instead of the GPUI CE forks. Web Connect embeds its UI icons so they remain available without extra site assets, and its WASM build shares one reqwest version with Iroh.
 - Automatic reviews no longer appear in agent conversation activity.
 - Sidebar branch names align to the right edge of each session row.
