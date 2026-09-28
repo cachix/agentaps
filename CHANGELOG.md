@@ -16,6 +16,10 @@ Notable changes to Agentaps are recorded here.
 - The README now leads with installation and everyday use, with detailed Web Connect and deployment instructions in separate guides.
 - The README and website now show the same desktop screenshot.
 
+### Fixed
+
+- Agents installed in user paths such as Homebrew, `~/.local/bin`, or Nix profiles are found when Agentaps is opened from the Dock, Finder, or a desktop launcher.
+
 ## [0.3.0] - 2026-09-28
 
 ### Documentation

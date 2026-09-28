@@ -10,8 +10,12 @@ mod git_diff;
 mod git_sync;
 mod mobile;
 mod remote;
+#[cfg(unix)]
+mod shell_env;
 mod theme;
 
 fn main() {
+    #[cfg(unix)]
+    shell_env::import_login_path();
     app::run();
 }
