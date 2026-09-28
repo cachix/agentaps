@@ -49,7 +49,9 @@ h1 span { color: #8fc5ec; }
 .platform-link:hover { border-color: #8fc5ec; color: #b6dcf4; }
 .platform-download.is-current-platform > .platform-link { border-color: #8fc5ec; background: #8fc5ec; color: #10151c; box-shadow: 0 12px 35px rgba(66, 133, 189, .18); font-weight: 700; }
 .platform-download.is-current-platform > .platform-link:hover { border-color: #b6dcf4; background: #b6dcf4; color: #10151c; }
-.preview-note { margin: 12px 0 0; color: #8193a5; font-size: 12px; }
+.release-note { margin: 12px 0 0; color: #8193a5; font-size: 12px; }
+.release-note a { color: #b6dcf4; }
+.release-note a:hover { color: #edf2f7; }
 .hero-note { margin: 12px 0 0; color: #8193a5; font-size: 12px; }
 .product-visual { position: relative; width: 100%; min-width: 0; margin-right: -46px; }
 .visual-glow { position: absolute; inset: 16% 3% 5% 10%; border-radius: 50%; filter: blur(55px); background: radial-gradient(ellipse, rgba(79, 139, 196, .24), rgba(87, 110, 179, .1) 55%, transparent 75%); }

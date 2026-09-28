@@ -4,6 +4,10 @@ Notable changes to Agentaps are recorded here.
 
 ## [Unreleased]
 
+### Changed
+
+- The website shows Agentaps 0.3.0 and links directly to its public desktop installers.
+
 ## [0.3.0] - 2026-09-28
 
 ### Documentation

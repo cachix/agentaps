@@ -6,6 +6,11 @@ const patterns = {
 };
 const platformNames = { linux: 'Linux', macos: 'macOS (Apple Silicon)', windows: 'Windows' };
 const installerFile = /\.(?:AppImage|deb|rpm|tar\.gz|tar\.xz|zip|dmg|pkg|msi|exe)$/i;
+const downloadLabel = (platform, asset) => {
+  if (platform === 'linux' && /\.deb$/i.test(asset.name)) return 'Linux DEB';
+  if (platform === 'linux' && /\.AppImage$/i.test(asset.name)) return 'Linux AppImage';
+  return platformNames[platform];
+};
 
 const userAgent = navigator.userAgent || '';
 const isMobile = navigator.userAgentData?.mobile
@@ -36,10 +41,16 @@ fetch(releaseUrl, { headers: { Accept: 'application/vnd.github+json' } })
         const link = document.createElement('a');
         link.className = 'platform-link';
         link.href = asset.browser_download_url;
-        link.textContent = assets.length === 1 ? `Download ${platformNames[platform]}` : asset.name;
+        link.textContent = downloadLabel(platform, asset);
         return link;
       }));
     }
-    if (publishedPlatforms === Object.keys(patterns).length) document.querySelector('#preview-note')?.remove();
+    if (publishedPlatforms === Object.keys(patterns).length && release.tag_name && release.html_url) {
+      const version = document.querySelector('#release-version');
+      if (version) {
+        version.textContent = `Agentaps ${release.tag_name.replace(/^v/, '')}`;
+        version.href = release.html_url;
+      }
+    }
   })
   .catch(() => {});
