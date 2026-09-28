@@ -1177,10 +1177,11 @@ impl Workspace {
                     .update(cx, |input, cx| input.focus(window, cx));
             }
         }
+        this.refresh_branches(cx);
         let background_executor = cx.background_executor().clone();
         cx.spawn_in(window, async move |this, cx| {
             let mut tick_interval = Duration::from_millis(25);
-            let mut last_branch_refresh = Instant::now() - Duration::from_secs(5);
+            let mut last_branch_refresh = Instant::now();
             let mut fast_poll_session = None;
             let mut fast_poll_started = Instant::now();
             loop {

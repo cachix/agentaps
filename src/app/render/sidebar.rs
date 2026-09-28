@@ -123,10 +123,10 @@ impl Workspace {
             let project_working = project.agents.iter().any(|agent| agent.active_work);
             let sync_counts = project
                 .sync_counts
-                .filter(|(ahead, behind)| *ahead > 0 || *behind > 0)
-                .filter(|_| {
-                    !project_working && !matches!(agent.status, Status::Working | Status::Done)
-                });
+                .filter(|(ahead, behind)| *ahead > 0 || *behind > 0);
+            let show_sync_button = sync_counts.is_some()
+                && !project_working
+                && !matches!(agent.status, Status::Working | Status::Done);
             let action = sync_action(sync_counts);
             let sync_busy = self
                 .sync_in_progress
@@ -195,13 +195,19 @@ impl Workspace {
                         .flex()
                         .items_center()
                         .justify_start()
-                        .when_some(sync_counts, |slot, (ahead, behind)| {
-                            slot.child(sync_counts_badge(("sync", agent_id).into(), ahead, behind))
-                        })
-                        .when(sync_counts.is_none(), |slot| {
-                            slot.child(status_badge(agent))
-                        }),
+                        .child(status_badge(agent)),
                 )
+                .when_some(sync_counts, |row, (ahead, behind)| {
+                    row.child(
+                        div()
+                            .w(px(16.))
+                            .h(px(20.))
+                            .flex_shrink_0()
+                            .flex()
+                            .items_center()
+                            .child(sync_counts_badge(("sync", agent_id).into(), ahead, behind)),
+                    )
+                })
                 .child(
                     div()
                         .flex_shrink_0()
@@ -235,7 +241,7 @@ impl Workspace {
                             .child(format!("{} ?", agent.elicitations.len())),
                     )
                 })
-                .when(sync_counts.is_some(), |row| {
+                .when(show_sync_button, |row| {
                     row.child(Self::render_sync_button(
                         project_index,
                         action,

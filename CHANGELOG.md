@@ -4,6 +4,8 @@ Notable changes to Agentaps are recorded here.
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-09-28
+
 ### Documentation
 
 - Included the bundled Lucide icon license in source and Web Connect builds.
@@ -51,7 +53,7 @@ Notable changes to Agentaps are recorded here.
 - Desktop and Web Connect use GPUI Kit 0.7 instead of the GPUI CE forks. Web Connect embeds its UI icons so they remain available without extra site assets, and its WASM build shares one reqwest version with Iroh.
 - Automatic reviews no longer appear in agent conversation activity.
 - Sidebar branch names align to the right edge of each session row.
-- Compact sidebar upstream counts appear before project names when agents are not working or done, and zero count directions are hidden.
+- Compact sidebar upstream counts appear before project names beside agent status dots, and zero count directions are hidden.
 - Idle agents leave their sidebar status slot blank so project names stay aligned, and completed agents use a brighter green dot.
 - The website hero starts directly with its main headline.
 - Opening a file in diff review expands its changes beneath the file row while the file list stays visible.
@@ -59,7 +61,6 @@ Notable changes to Agentaps are recorded here.
 - Desktop download buttons are larger, and the preview note now shows only the September 28 build date.
 - Desktop build candidates use installable packages for Linux and Windows, with the macOS app distributed in a DMG.
 - The website pairs the Agentaps desktop screenshot with the mobile preview.
-- Automatic reviews appear as individual tool activity entries without an approval count or implied approval result.
 - Desktop downloads are limited to Apple Silicon Macs; Intel Mac builds are not offered.
 - Mobile pairing shows linked clients below the QR code at every window width.
 - The development environment can build the browser site, and a command publishes it to Cloudflare Pages.
@@ -84,6 +85,8 @@ Notable changes to Agentaps are recorded here.
 
 ### Fixed
 
+- Agent rows keep upstream commit counts visible while agents are working or done.
+- Sidebar Git counts begin refreshing when the app opens.
 - Reset context is hidden when a session's context usage is unknown or zero.
 - Mobile access keeps the session sidebar visible and shows progress while SecretSpec loads credentials and the connection starts.
 - The macOS desktop package includes an icon format its app bundler accepts.
@@ -93,7 +96,6 @@ Notable changes to Agentaps are recorded here.
 - Windows desktop builds find and launch installed agent commands with executable extensions.
 - Native macOS and Windows builds use the current GPUI asset registry for menu icons.
 - The visible saved session connects before other sessions on startup, and connection replies are handled sooner.
-- Desktop and browser use current GPUI CE, including WebGL2 fallback and mobile input support.
 - File path completion adds a space and closes its suggestion menu.
 - Finger swipes scroll browser conversations, and phone keyboards can type into the browser chat composer while the page adjusts to the keyboard.
 - The browser conversation is easier to read on phones, with distinct message roles, formatted replies, a visible composer, and automatic scrolling to new replies when already at the bottom.
@@ -147,7 +149,8 @@ Notable changes to Agentaps are recorded here.
 - Added chat controls for queued messages, stopping turns, resetting agent context, and completing agent slash commands.
 - Added ACP form questions with answer, decline, and cancel actions.
 
-[Unreleased]: https://github.com/domenkozar/agentaps/compare/v0.2.1...HEAD
+[Unreleased]: https://github.com/domenkozar/agentaps/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/domenkozar/agentaps/compare/v0.2.1...v0.3.0
 [0.2.1]: https://github.com/domenkozar/agentaps/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/domenkozar/agentaps/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/domenkozar/agentaps/tree/v0.1.0
