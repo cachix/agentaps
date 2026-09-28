@@ -129,30 +129,18 @@ impl Workspace {
                 );
             }
             for (offset, entry) in tool_entries.iter().enumerate().filter(|(_, entry)| {
-                is_approval_review(&entry.text)
-                    || !has_specific_actions
-                    || !is_generic_tool_title(&entry.text)
+                !is_approval_review(&entry.text)
+                    && (!has_specific_actions || !is_generic_tool_title(&entry.text))
             }) {
-                let review = is_approval_review(&entry.text);
-                let description = if review {
-                    "Automatic review".to_owned()
-                } else {
-                    tool_description(&entry.text).0
-                };
+                let description = tool_description(&entry.text).0;
                 let (_, status) = tool_title_and_status(&entry.text);
-                if !review
-                    && status == Some("completed")
-                    && completed_count > 1
-                    && !history_expanded
-                {
+                if status == Some("completed") && completed_count > 1 && !history_expanded {
                     continue;
                 }
                 let label = match status {
-                    Some("in_progress") if review => format!("{description} · reviewing"),
                     Some("in_progress") => format!("{description} · running"),
                     Some("pending") => format!("{description} · pending"),
                     Some("failed") => format!("{description} · failed"),
-                    Some("completed") if review => format!("{description} · completed"),
                     _ => description,
                 };
                 let (status_marker, status_color, label_color) = match status {
@@ -184,12 +172,7 @@ impl Workspace {
                         )
                         .child(div().text_xs().child(if row_expanded { "⌄" } else { "›" }))
                         .tooltip(move |window, cx| {
-                            Tooltip::new(if review {
-                                "Show review details"
-                            } else {
-                                "Show command and output"
-                            })
-                            .build(window, cx)
+                            Tooltip::new("Show command and output").build(window, cx)
                         })
                         .on_click(cx.listener(move |this, _, _, cx| {
                             if !this.expanded_tool_rows.insert(row_key) {

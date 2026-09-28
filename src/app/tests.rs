@@ -463,15 +463,9 @@ fn tool_group_heading_tracks_live_and_finished_steps() {
     assert_eq!(tool_group_heading(&agent.messages), "Working · Using tool");
     agent.messages.pop();
     agent.messages[2].text = "Guardian Review · pending".into();
-    assert_eq!(
-        tool_group_heading(&agent.messages),
-        "Waiting · Automatic review"
-    );
+    assert_eq!(tool_group_heading(&agent.messages), "Completed");
     agent.messages[2].text = "Guardian Review · failed".into();
-    assert_eq!(
-        tool_group_heading(&agent.messages),
-        "Needs attention · Automatic review"
-    );
+    assert_eq!(tool_group_heading(&agent.messages), "Completed");
 }
 
 #[test]

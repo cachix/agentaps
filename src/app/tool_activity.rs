@@ -247,12 +247,16 @@ pub(super) fn tool_description(text: &str) -> (String, bool) {
 }
 
 pub(super) fn tool_group_heading(entries: &[ChatEntry]) -> String {
-    let review_only = entries.iter().all(|entry| is_approval_review(&entry.text));
+    let mut has_actions = false;
     let mut all_completed = true;
     let mut current = None;
     let mut pending = None;
     let mut failed = None;
-    for entry in entries {
+    for entry in entries
+        .iter()
+        .filter(|entry| !is_approval_review(&entry.text))
+    {
+        has_actions = true;
         let status = tool_title_and_status(&entry.text).1;
         all_completed &= status == Some("completed");
         match status {
@@ -271,7 +275,7 @@ pub(super) fn tool_group_heading(entries: &[ChatEntry]) -> String {
     if let Some(entry) = pending {
         return format!("Waiting · {}", group_step_description(entry));
     }
-    if all_completed && !entries.is_empty() && !review_only {
+    if all_completed && has_actions {
         "Completed".into()
     } else {
         "Activity".into()
@@ -279,11 +283,7 @@ pub(super) fn tool_group_heading(entries: &[ChatEntry]) -> String {
 }
 
 fn group_step_description(entry: &ChatEntry) -> String {
-    if is_approval_review(&entry.text) {
-        "Automatic review".into()
-    } else {
-        tool_description(&entry.text).0
-    }
+    tool_description(&entry.text).0
 }
 
 fn ongoing_tool_description(entry: &ChatEntry) -> String {

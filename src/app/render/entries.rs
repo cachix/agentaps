@@ -21,34 +21,36 @@ fn chat_rows(
     expanded_tool_rows: &HashSet<(u64, usize)>,
 ) -> Vec<ChatRow> {
     let mut rows = Vec::new();
-    if agent.messages.is_empty() {
-        rows.push(ChatRow {
-            kind: ChatRowKind::Empty,
-            signature: u64::from(agent.status == Status::Connecting),
-        });
-    }
     let mut index = 0;
     while index < agent.messages.len() {
         let entry = &agent.messages[index];
         let mut hasher = std::collections::hash_map::DefaultHasher::new();
         if entry.role == Role::Tool {
             let end = tool_run_end(&agent.messages, index);
-            collapsed_tool_groups
-                .contains(&(agent.config.id, index))
-                .hash(&mut hasher);
-            expanded_tool_history
-                .contains(&(agent.config.id, index))
-                .hash(&mut hasher);
-            for (offset, tool) in agent.messages[index..end].iter().enumerate() {
-                text_signature(&tool.text, &mut hasher);
-                expanded_tool_rows
-                    .contains(&(agent.config.id, index + offset))
+            if agent.messages[index..end]
+                .iter()
+                .any(|tool| !is_approval_review(&tool.text))
+            {
+                collapsed_tool_groups
+                    .contains(&(agent.config.id, index))
                     .hash(&mut hasher);
+                expanded_tool_history
+                    .contains(&(agent.config.id, index))
+                    .hash(&mut hasher);
+                for (offset, tool) in agent.messages[index..end].iter().enumerate() {
+                    if is_approval_review(&tool.text) {
+                        continue;
+                    }
+                    text_signature(&tool.text, &mut hasher);
+                    expanded_tool_rows
+                        .contains(&(agent.config.id, index + offset))
+                        .hash(&mut hasher);
+                }
+                rows.push(ChatRow {
+                    kind: ChatRowKind::Tools(index, end),
+                    signature: hasher.finish(),
+                });
             }
-            rows.push(ChatRow {
-                kind: ChatRowKind::Tools(index, end),
-                signature: hasher.finish(),
-            });
             index = end;
         } else {
             if !entry.text.is_empty() {
@@ -61,6 +63,12 @@ fn chat_rows(
             }
             index += 1;
         }
+    }
+    if rows.is_empty() {
+        rows.push(ChatRow {
+            kind: ChatRowKind::Empty,
+            signature: u64::from(agent.status == Status::Connecting),
+        });
     }
     for (index, prompt) in agent.config.pending_prompts.iter().enumerate() {
         let mut hasher = std::collections::hash_map::DefaultHasher::new();
@@ -706,5 +714,24 @@ mod tests {
             changed_row_range(&history_rows, &queued_rows),
             Some((3..3, 1))
         );
+    }
+
+    #[test]
+    fn chat_rows_hide_automatic_reviews() {
+        let mut agent = agent();
+        agent.log(Role::Tool, "Guardian Review · pending");
+        let empty = HashSet::new();
+        let rows = chat_rows(&agent, &empty, &empty, &empty);
+        assert_eq!(rows.len(), 1);
+        assert_eq!(rows[0].kind, ChatRowKind::Empty);
+
+        agent.log(Role::Tool, "cat README.md · completed");
+        let rows = chat_rows(&agent, &empty, &empty, &empty);
+        assert_eq!(rows.len(), 1);
+        assert_eq!(rows[0].kind, ChatRowKind::Tools(0, 2));
+
+        agent.messages[0].text = "Guardian Review · failed".into();
+        let updated = chat_rows(&agent, &empty, &empty, &empty);
+        assert_eq!(changed_row_range(&rows, &updated), None);
     }
 }

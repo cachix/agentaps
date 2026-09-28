@@ -44,6 +44,7 @@ Notable changes to Agentaps are recorded here.
 
 ### Changed
 
+- Automatic reviews no longer appear in agent conversation activity.
 - Idle agents leave their sidebar status slot blank so project names stay aligned, and completed agents use a brighter green dot.
 - The website hero starts directly with its main headline.
 - Opening a file in diff review expands its changes beneath the file row while the file list stays visible.
