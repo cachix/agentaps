@@ -16,6 +16,7 @@ Notable changes to Agentaps are recorded here.
 
 ### Added
 
+- Sidebar upstream commit counts stay visible, while hovering hides the branch name and reveals a Push or Pull action when the branch can sync safely; diverged branches explain that they need manual resolution.
 - Each desktop platform button links directly to its own preview download.
 - The website shows the preview build date and status below the desktop download buttons.
 - The website links to the current desktop build candidates with their sign-in and expiration limits clearly labeled.
@@ -45,6 +46,8 @@ Notable changes to Agentaps are recorded here.
 ### Changed
 
 - Automatic reviews no longer appear in agent conversation activity.
+- Sidebar branch names align to the right edge of each session row.
+- Compact sidebar upstream counts appear before project names when agents are not working or done, and zero count directions are hidden.
 - Idle agents leave their sidebar status slot blank so project names stay aligned, and completed agents use a brighter green dot.
 - The website hero starts directly with its main headline.
 - Opening a file in diff review expands its changes beneath the file row while the file list stays visible.

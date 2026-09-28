@@ -36,7 +36,7 @@ fn status_badge(agent: &AgentView) -> impl IntoElement {
         .flex_shrink_0()
         .size(px(12.))
         .items_center()
-        .justify_center()
+        .justify_start()
         .when(agent.status != Status::Idle || pending > 0, |badge| {
             badge.child(status_dot(color))
         })

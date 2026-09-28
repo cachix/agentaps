@@ -971,6 +971,11 @@ impl Workspace {
                 .projects
                 .iter()
                 .filter(|project| refresh_remote || project.ssh_host.is_none())
+                .filter(|project| {
+                    !self
+                        .sync_in_progress
+                        .contains(&(project.path.clone(), project.ssh_host.clone()))
+                })
                 .map(|project| (project.path.clone(), project.ssh_host.clone()))
                 .collect();
             projects.sort_by_key(|(_, host)| host.is_some());
@@ -996,11 +1001,62 @@ impl Workspace {
         }
     }
 
+    pub(super) fn start_git_sync(
+        &mut self,
+        project_index: usize,
+        action: crate::git_sync::SyncAction,
+        cx: &mut Context<Self>,
+    ) {
+        let Some(project) = self.projects.get(project_index) else {
+            return;
+        };
+        if project.agents.iter().any(|agent| agent.active_work) {
+            self.notice = Some("Wait for the agent to finish before syncing this project".into());
+            cx.notify();
+            return;
+        }
+        let path = project.path.clone();
+        let host = project.ssh_host.clone();
+        let key = (path.clone(), host.clone());
+        if !self.sync_in_progress.insert(key) {
+            return;
+        }
+        self.notice = Some(match action {
+            crate::git_sync::SyncAction::Push => "Pushing commits…".into(),
+            crate::git_sync::SyncAction::Pull => "Pulling commits…".into(),
+        });
+        let tx = self.sync_tx.clone();
+        std::thread::spawn(move || {
+            let result = crate::git_sync::sync(&path, host.as_deref(), action);
+            if result.is_err() && host.is_none() {
+                crate::git_sync::fetch(&path);
+            }
+            let counts = host.as_ref().map_or_else(
+                || crate::git_sync::counts(&path),
+                |host| crate::git_sync::remote_counts(host, &path, result.is_err()),
+            );
+            let _ = tx.send(SyncUpdate::OperationFinished {
+                path,
+                host,
+                action,
+                result,
+                counts,
+            });
+        });
+        cx.notify();
+    }
+
     pub(super) fn poll_sync_counts(&mut self, cx: &mut Context<Self>) {
         let mut changed = false;
         while let Ok(update) = self.sync_rx.try_recv() {
             match update {
                 SyncUpdate::Counts(path, host, counts) => {
+                    if self
+                        .sync_in_progress
+                        .contains(&(path.clone(), host.clone()))
+                    {
+                        continue;
+                    }
                     if let Some(project) = self
                         .projects
                         .iter_mut()
@@ -1010,6 +1066,30 @@ impl Workspace {
                         project.sync_counts = counts;
                         changed = true;
                     }
+                }
+                SyncUpdate::OperationFinished {
+                    path,
+                    host,
+                    action,
+                    result,
+                    counts,
+                } => {
+                    self.sync_in_progress.remove(&(path.clone(), host.clone()));
+                    if let Some(project) = self
+                        .projects
+                        .iter_mut()
+                        .find(|project| project.ssh_host == host && project.path == path)
+                    {
+                        project.sync_counts = counts;
+                    }
+                    self.notice = Some(match result {
+                        Ok(_) => match action {
+                            crate::git_sync::SyncAction::Push => "Commits pushed.".into(),
+                            crate::git_sync::SyncAction::Pull => "Commits pulled.".into(),
+                        },
+                        Err(error) => format!("Could not sync commits: {error}"),
+                    });
+                    changed = true;
                 }
                 SyncUpdate::Finished => self.sync_loading = false,
             }

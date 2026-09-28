@@ -1,5 +1,133 @@
 use std::path::Path;
-use std::process::Command;
+use std::process::{Command, Stdio};
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum SyncAction {
+    Push,
+    Pull,
+}
+
+fn git_output(path: &Path, host: Option<&str>, args: &[&str]) -> Result<String, String> {
+    let mut command = if let Some(host) = host {
+        if host.starts_with('-') || host.chars().any(char::is_control) {
+            return Err("Invalid SSH host".into());
+        }
+        let path = path.to_str().ok_or("Project path is not valid UTF-8")?;
+        let remote_command = format!(
+            "GIT_TERMINAL_PROMPT=0 SSH_ASKPASS_REQUIRE=never git -C {} {}",
+            crate::remote::quote_shell(path),
+            args.iter()
+                .map(|arg| crate::remote::quote_shell(arg))
+                .collect::<Vec<_>>()
+                .join(" ")
+        );
+        let mut command = Command::new("ssh");
+        command.args([
+            "-T",
+            "-o",
+            "BatchMode=yes",
+            "-o",
+            "StrictHostKeyChecking=yes",
+            "-o",
+            "ConnectTimeout=5",
+            host,
+            &remote_command,
+        ]);
+        command
+    } else {
+        let mut command = Command::new("git");
+        command.arg("-C").arg(path).args(args);
+        command
+    };
+    let output = command
+        .env("GIT_TERMINAL_PROMPT", "0")
+        .env("SSH_ASKPASS_REQUIRE", "never")
+        .stdin(Stdio::null())
+        .output()
+        .map_err(|error| format!("Could not run Git: {error}"))?;
+    if !output.status.success() {
+        let error = String::from_utf8_lossy(&output.stderr);
+        let error = error.trim();
+        return Err(if error.is_empty() {
+            format!("Git exited with {}", output.status)
+        } else {
+            error.to_owned()
+        });
+    }
+    Ok(String::from_utf8_lossy(&output.stdout).trim().to_owned())
+}
+
+fn tracking_counts(path: &Path, host: Option<&str>) -> Result<(usize, usize), String> {
+    let output = git_output(
+        path,
+        host,
+        &["rev-list", "--left-right", "--count", "HEAD...@{upstream}"],
+    )?;
+    let mut counts = output.split_whitespace();
+    let ahead = counts.next().and_then(|count| count.parse().ok());
+    let behind = counts.next().and_then(|count| count.parse().ok());
+    match (ahead, behind, counts.next()) {
+        (Some(ahead), Some(behind), None) => Ok((ahead, behind)),
+        _ => Err("Could not read upstream commit counts".into()),
+    }
+}
+
+/// Sync only the current branch with its configured upstream.
+pub fn sync(path: &Path, host: Option<&str>, action: SyncAction) -> Result<(usize, usize), String> {
+    git_output(path, host, &["fetch", "--no-tags", "--quiet"])?;
+    let (ahead, behind) = tracking_counts(path, host)?;
+    match action {
+        SyncAction::Push => {
+            if ahead == 0 {
+                return Err("No commits to push".into());
+            }
+            if behind > 0 {
+                return Err(
+                    "Upstream has new commits. Pull or resolve the divergence first".into(),
+                );
+            }
+            let branch = git_output(path, host, &["symbolic-ref", "--quiet", "--short", "HEAD"])?;
+            let remote = git_output(
+                path,
+                host,
+                &["config", "--get", &format!("branch.{branch}.remote")],
+            )?;
+            let merge = git_output(
+                path,
+                host,
+                &["config", "--get", &format!("branch.{branch}.merge")],
+            )?;
+            if remote.is_empty() || !merge.starts_with("refs/heads/") {
+                return Err("This branch has no pushable upstream".into());
+            }
+            git_output(
+                path,
+                host,
+                &[
+                    "push",
+                    "--porcelain",
+                    "--",
+                    &remote,
+                    &format!("HEAD:{merge}"),
+                ],
+            )?;
+            git_output(path, host, &["fetch", "--no-tags", "--quiet"])?;
+        }
+        SyncAction::Pull => {
+            if behind == 0 {
+                return Err("No commits to pull".into());
+            }
+            if ahead > 0 {
+                return Err("Local and upstream commits diverged. Rebase or merge them in Git, then sync again".into());
+            }
+            if !git_output(path, host, &["status", "--porcelain"])?.is_empty() {
+                return Err("Save or discard working tree changes before pulling".into());
+            }
+            git_output(path, host, &["merge", "--ff-only", "@{upstream}"])?;
+        }
+    }
+    tracking_counts(path, host)
+}
 
 /// Commits unique to HEAD and its configured upstream tracking branch.
 pub fn counts(path: &Path) -> Option<(usize, usize)> {
@@ -227,5 +355,108 @@ mod tests {
         assert_eq!(counts(&local), Some((0, 0)));
         fetch(&local);
         assert_eq!(counts(&local), Some((0, 1)));
+    }
+
+    #[test]
+    fn sync_pushes_and_pulls_without_rewriting_diverged_commits() {
+        let dir = tempfile::tempdir().unwrap();
+        let remote = dir.path().join("remote.git");
+        let local = dir.path().join("local");
+        let other = dir.path().join("other");
+        let git = |cwd: &Path, args: &[&str]| {
+            let output = Command::new("git")
+                .arg("-C")
+                .arg(cwd)
+                .args(args)
+                .output()
+                .unwrap();
+            assert!(
+                output.status.success(),
+                "{}",
+                String::from_utf8_lossy(&output.stderr)
+            );
+            String::from_utf8(output.stdout).unwrap().trim().to_owned()
+        };
+        let commit = |cwd: &Path, message: &str| {
+            git(
+                cwd,
+                &[
+                    "-c",
+                    "user.name=Agentaps",
+                    "-c",
+                    "user.email=agentaps@example.invalid",
+                    "commit",
+                    "--allow-empty",
+                    "-qm",
+                    message,
+                ],
+            );
+        };
+        git(
+            dir.path(),
+            &["init", "--bare", "-q", remote.to_str().unwrap()],
+        );
+        git(
+            dir.path(),
+            &["init", "-qb", "main", local.to_str().unwrap()],
+        );
+        commit(&local, "initial");
+        git(
+            &local,
+            &["remote", "add", "origin", remote.to_str().unwrap()],
+        );
+        git(&local, &["push", "-qu", "origin", "main"]);
+
+        commit(&local, "local change");
+        assert_eq!(sync(&local, None, SyncAction::Push), Ok((0, 0)));
+        git(
+            dir.path(),
+            &[
+                "clone",
+                "-qb",
+                "main",
+                remote.to_str().unwrap(),
+                other.to_str().unwrap(),
+            ],
+        );
+        assert_eq!(
+            git(&other, &["rev-parse", "HEAD"]),
+            git(&local, &["rev-parse", "HEAD"])
+        );
+
+        commit(&other, "upstream change");
+        git(&other, &["push", "-q", "origin", "main"]);
+        let before_pull = git(&local, &["rev-parse", "HEAD"]);
+        let draft = local.join("draft.txt");
+        std::fs::write(&draft, "unsaved work").unwrap();
+        assert!(
+            sync(&local, None, SyncAction::Pull)
+                .unwrap_err()
+                .contains("working tree changes")
+        );
+        assert_eq!(git(&local, &["rev-parse", "HEAD"]), before_pull);
+        std::fs::remove_file(draft).unwrap();
+        assert_eq!(sync(&local, None, SyncAction::Pull), Ok((0, 0)));
+        assert_eq!(
+            git(&other, &["rev-parse", "HEAD"]),
+            git(&local, &["rev-parse", "HEAD"])
+        );
+
+        commit(&local, "local divergence");
+        let local_head = git(&local, &["rev-parse", "HEAD"]);
+        commit(&other, "upstream divergence");
+        git(&other, &["push", "-q", "origin", "main"]);
+        assert!(
+            sync(&local, None, SyncAction::Pull)
+                .unwrap_err()
+                .contains("diverged")
+        );
+        assert!(
+            sync(&local, None, SyncAction::Push)
+                .unwrap_err()
+                .contains("new commits")
+        );
+        assert_eq!(git(&local, &["rev-parse", "HEAD"]), local_head);
+        assert_eq!(counts(&local), Some((1, 1)));
     }
 }

@@ -82,6 +82,13 @@ enum DiffListRow {
 
 enum SyncUpdate {
     Counts(PathBuf, Option<String>, Option<(usize, usize)>),
+    OperationFinished {
+        path: PathBuf,
+        host: Option<String>,
+        action: crate::git_sync::SyncAction,
+        result: Result<(usize, usize), String>,
+        counts: Option<(usize, usize)>,
+    },
     Finished,
 }
 
@@ -449,6 +456,7 @@ struct Workspace {
     sync_tx: Sender<SyncUpdate>,
     sync_rx: Receiver<SyncUpdate>,
     sync_loading: bool,
+    sync_in_progress: HashSet<(PathBuf, Option<String>)>,
     last_remote_sync: Instant,
     last_upstream_fetch: Instant,
     diff_first_change_at: Option<Instant>,
@@ -1042,6 +1050,7 @@ impl Workspace {
             sync_tx,
             sync_rx,
             sync_loading: false,
+            sync_in_progress: HashSet::new(),
             last_remote_sync: Instant::now() - Duration::from_secs(30),
             last_upstream_fetch: Instant::now() - Duration::from_secs(300),
             diff_first_change_at: None,

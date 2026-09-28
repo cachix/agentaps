@@ -1,6 +1,86 @@
 use super::*;
 
+fn sync_counts_badge(id: gpui::ElementId, ahead: usize, behind: usize) -> impl IntoElement {
+    let tooltip = match (ahead, behind) {
+        (0, behind) => format!("{behind} behind upstream"),
+        (ahead, 0) => format!("{ahead} ahead of upstream"),
+        (ahead, behind) => format!(
+            "{ahead} ahead, {behind} behind upstream. Resolve diverged commits in Git before syncing"
+        ),
+    };
+    div()
+        .id(id)
+        .flex()
+        .flex_col()
+        .items_start()
+        .text_size(px(9.))
+        .line_height(px(10.))
+        .when(ahead > 0, |counts| {
+            counts.child(
+                div()
+                    .text_color(rgb(crate::diff_view::ADDED_TEXT))
+                    .child(format!("↑{ahead}")),
+            )
+        })
+        .when(behind > 0, |counts| {
+            counts.child(
+                div()
+                    .text_color(rgb(crate::diff_view::REMOVED_TEXT))
+                    .child(format!("↓{behind}")),
+            )
+        })
+        .tooltip(move |window, cx| Tooltip::new(tooltip.clone()).build(window, cx))
+}
+
+fn sync_action(counts: Option<(usize, usize)>) -> Option<crate::git_sync::SyncAction> {
+    match counts {
+        Some((ahead, 0)) if ahead > 0 => Some(crate::git_sync::SyncAction::Push),
+        Some((0, behind)) if behind > 0 => Some(crate::git_sync::SyncAction::Pull),
+        _ => None,
+    }
+}
+
 impl Workspace {
+    fn render_sync_button(
+        project_index: usize,
+        action: Option<crate::git_sync::SyncAction>,
+        busy: bool,
+        id: gpui::ElementId,
+        group: String,
+        cx: &mut Context<Self>,
+    ) -> impl IntoElement {
+        div()
+            .id(id)
+            .absolute()
+            .right(px(30.))
+            .top(px(2.))
+            .invisible()
+            .group_hover(group, |style| style.visible())
+            .rounded_sm()
+            .bg(rgb(ACCENT_SURFACE))
+            .px_2()
+            .py_1()
+            .text_xs()
+            .text_color(rgb(TEXT))
+            .when(action.is_some() && !busy, |button| button.cursor_pointer())
+            .child(if busy {
+                "Syncing…"
+            } else {
+                match action {
+                    Some(crate::git_sync::SyncAction::Push) => "Push",
+                    Some(crate::git_sync::SyncAction::Pull) => "Pull",
+                    None => "Diverged",
+                }
+            })
+            .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
+            .when_some(action.filter(|_| !busy), |button, action| {
+                button.on_click(cx.listener(move |this, _, _, cx| {
+                    cx.stop_propagation();
+                    this.start_git_sync(project_index, action, cx);
+                }))
+            })
+    }
+
     pub(super) fn render_sidebar(&self, window: &mut Window, cx: &mut Context<Self>) -> Div {
         let session_query = self.sidebar_search.read(cx).value().trim().to_owned();
         let archive_view = matches!(self.view, WorkspaceView::Archive { .. });
@@ -40,9 +120,17 @@ impl Workspace {
                 .position(|id| *id == agent_id)
                 .unwrap_or(usize::MAX);
             let row_group = format!("agent-row-{agent_id}");
+            let project_working = project.agents.iter().any(|agent| agent.active_work);
             let sync_counts = project
                 .sync_counts
-                .filter(|(ahead, behind)| *ahead > 0 || *behind > 0);
+                .filter(|(ahead, behind)| *ahead > 0 || *behind > 0)
+                .filter(|_| {
+                    !project_working && !matches!(agent.status, Status::Working | Status::Done)
+                });
+            let action = sync_action(sync_counts);
+            let sync_busy = self
+                .sync_in_progress
+                .contains(&(project.path.clone(), project.ssh_host.clone()));
             let row = div()
                 .id(("agent", agent_id))
                 .group(row_group.clone())
@@ -50,7 +138,8 @@ impl Workspace {
                 .flex()
                 .items_center()
                 .gap_1()
-                .px_2()
+                .pl_1()
+                .pr_2()
                 .py_1()
                 .rounded_md()
                 .cursor_pointer()
@@ -94,11 +183,25 @@ impl Workspace {
                             this.move_agent(drag.id, agent_id, cx)
                         }))
                 })
-                .child(status_badge(agent))
+                .child(
+                    div()
+                        .w(px(16.))
+                        .h(px(20.))
+                        .flex_shrink_0()
+                        .flex()
+                        .items_center()
+                        .justify_start()
+                        .when_some(sync_counts, |slot, (ahead, behind)| {
+                            slot.child(sync_counts_badge(("sync", agent_id).into(), ahead, behind))
+                        })
+                        .when(sync_counts.is_none(), |slot| {
+                            slot.child(status_badge(agent))
+                        }),
+                )
                 .child(
                     div()
                         .flex_shrink_0()
-                        .max_w(relative(0.65))
+                        .max_w(relative(0.55))
                         .truncate()
                         .text_sm()
                         .font_weight(gpui::FontWeight::MEDIUM)
@@ -110,6 +213,8 @@ impl Workspace {
                         .flex_1()
                         .min_w(px(0.))
                         .truncate()
+                        .text_right()
+                        .group_hover(row_group.clone(), |style| style.invisible())
                         .text_xs()
                         .text_color(rgb(MUTED))
                         .child(project.branch.clone()),
@@ -126,32 +231,15 @@ impl Workspace {
                             .child(format!("{} ?", agent.elicitations.len())),
                     )
                 })
-                .when_some(sync_counts, |row, (ahead, behind)| {
-                    let tooltip = format!("{ahead} ahead, {behind} behind upstream");
-                    row.child(
-                        div()
-                            .id(("sync", agent_id))
-                            .flex()
-                            .flex_col()
-                            .flex_shrink_0()
-                            .items_center()
-                            .text_size(px(9.))
-                            .line_height(px(10.))
-                            .group_hover(row_group.clone(), |style| style.invisible())
-                            .child(
-                                div()
-                                    .text_color(rgb(crate::diff_view::ADDED_TEXT))
-                                    .child(format!("↑ {ahead}")),
-                            )
-                            .child(
-                                div()
-                                    .text_color(rgb(crate::diff_view::REMOVED_TEXT))
-                                    .child(format!("↓ {behind}")),
-                            )
-                            .tooltip(move |window, cx| {
-                                Tooltip::new(tooltip.clone()).build(window, cx)
-                            }),
-                    )
+                .when(sync_counts.is_some(), |row| {
+                    row.child(Self::render_sync_button(
+                        project_index,
+                        action,
+                        sync_busy,
+                        ("sync-action", agent_id).into(),
+                        row_group.clone(),
+                        cx,
+                    ))
                 })
                 .child(
                     div()
@@ -220,13 +308,24 @@ impl Workspace {
                     continue;
                 }
                 visible_sessions += 1;
+                let row_group = format!("project-row-{project_index}");
+                let sync_counts = project
+                    .sync_counts
+                    .filter(|(ahead, behind)| *ahead > 0 || *behind > 0);
+                let action = sync_action(sync_counts);
+                let sync_busy = self
+                    .sync_in_progress
+                    .contains(&(project.path.clone(), project.ssh_host.clone()));
                 project_list = project_list.child(
                     div()
                         .id(("project", project_index))
+                        .group(row_group.clone())
+                        .relative()
                         .flex()
                         .items_center()
                         .gap_1()
-                        .px_2()
+                        .pl_1()
+                        .pr_2()
                         .py_1()
                         .rounded_md()
                         .cursor_pointer()
@@ -234,11 +333,26 @@ impl Workspace {
                         .on_click(cx.listener(move |this, _, window, cx| {
                             this.open_picker(PickerStep::Agents { project_index }, window, cx);
                         }))
-                        .child(div().size(px(12.)).flex_shrink_0())
+                        .child(
+                            div()
+                                .w(px(16.))
+                                .h(px(20.))
+                                .flex_shrink_0()
+                                .flex()
+                                .items_center()
+                                .justify_start()
+                                .when_some(sync_counts, |slot, (ahead, behind)| {
+                                    slot.child(sync_counts_badge(
+                                        ("sync-project", project_index).into(),
+                                        ahead,
+                                        behind,
+                                    ))
+                                }),
+                        )
                         .child(
                             div()
                                 .flex_shrink_0()
-                                .max_w(relative(0.54))
+                                .max_w(relative(0.55))
                                 .truncate()
                                 .text_sm()
                                 .text_color(rgb(TEXT))
@@ -249,11 +363,23 @@ impl Workspace {
                                 .flex_1()
                                 .min_w(px(0.))
                                 .truncate()
+                                .text_right()
+                                .group_hover(row_group.clone(), |style| style.invisible())
                                 .text_xs()
                                 .text_color(rgb(MUTED))
                                 .child(project.branch.clone()),
                         )
-                        .child(div().text_xs().text_color(rgb(ACCENT)).child("add")),
+                        .child(div().text_xs().text_color(rgb(ACCENT)).child("add"))
+                        .when(sync_counts.is_some(), |row| {
+                            row.child(Self::render_sync_button(
+                                project_index,
+                                action,
+                                sync_busy,
+                                ("sync-project-action", project_index).into(),
+                                row_group.clone(),
+                                cx,
+                            ))
+                        }),
                 );
             }
         }
@@ -304,7 +430,9 @@ impl Workspace {
                     .id("sidebar-scroll")
                     .flex_1()
                     .overflow_y_scroll()
-                    .p_3()
+                    .pl_1()
+                    .pr_3()
+                    .py_3()
                     .child(project_list),
             )
             .child(
