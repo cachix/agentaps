@@ -8,6 +8,10 @@ Notable changes to Agentaps are recorded here.
 
 - The website shows Agentaps 0.3.0 and links directly to its public desktop installers.
 
+### Fixed
+
+- Agents installed in user paths such as Homebrew, `~/.local/bin`, or Nix profiles are found when Agentaps is opened from the Dock, Finder, or a desktop launcher.
+
 ## [0.3.0] - 2026-09-28
 
 ### Documentation
