@@ -59,6 +59,8 @@ pub struct AgentConfig {
     pub available_commands: Vec<SlashCommand>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub pending_prompts: Vec<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub active_prompt: Option<String>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub prompt_history: Vec<String>,
     #[serde(default)]

@@ -196,6 +196,97 @@ fn old_sessions_seed_prompt_history_from_messages_and_queue() {
     assert_eq!(restored.config.prompt_history, ["sent", "queued"]);
 }
 
+#[test]
+fn interrupted_turn_waits_for_recovery_before_queued_prompts() {
+    let mut config = agent(ProtocolVersion::V1).snapshot();
+    config.was_working = true;
+    config.prompt_history = vec!["Earlier".into(), "Active request".into(), "Queued".into()];
+    config.pending_prompts.push("Queued".into());
+    let mut restored = AgentView::new(config);
+    restored.status = Status::Idle;
+    restored.session_id = Some("session-1".into());
+
+    assert!(restored.snapshot().was_working);
+    assert!(restored.continuation_prompt().contains("Active request"));
+    assert!(!restored.continuation_prompt().contains("Queued"));
+    assert!(!restored.start_next_queued_prompt());
+
+    restored.config.prompt_history.push("Continuation".into());
+    let saved = serde_json::to_vec(&restored.snapshot()).unwrap();
+    let reloaded = AgentView::new(serde_json::from_slice(&saved).unwrap());
+    assert_eq!(reloaded.messages.len(), restored.messages.len());
+    assert!(reloaded.continuation_prompt().contains("Active request"));
+    assert!(!reloaded.continuation_prompt().contains("Queued"));
+    restored.config.was_working = false;
+    assert!(!restored.snapshot().was_working);
+}
+
+#[cfg(unix)]
+#[test]
+fn restored_turn_continues_automatically_before_queued_work() {
+    let mut config = agent(ProtocolVersion::V1).snapshot();
+    config.was_working = true;
+    config.active_prompt = Some("Finish the work".into());
+    config.pending_prompts.push("Next task".into());
+    let mut restored = AgentView::new(config);
+    restored.protocol = Some(ProtocolVersion::V1);
+    restored.session_id = Some("session-1".into());
+    restored.status = Status::Idle;
+    let command = vec![
+        "/bin/sh".into(),
+        "-c".into(),
+        "IFS= read -r request; printf '%s\\n' \"$request\"".into(),
+    ];
+    let (tx, rx) = mpsc::channel();
+    restored.connection = Some(Connection::spawn(1, &command, Path::new("/"), None, tx).unwrap());
+    restored.recovery_due = Some(Instant::now() - Duration::from_secs(1));
+
+    assert!(restored.auto_continue_interrupted_turn());
+    assert!(restored.active_work);
+    assert!(!restored.config.was_working);
+    assert_eq!(
+        restored.config.active_prompt.as_deref(),
+        Some("Finish the work")
+    );
+    assert_eq!(restored.config.pending_prompts, ["Next task"]);
+    assert!(!restored.auto_continue_interrupted_turn());
+
+    let Event::Message { value, .. } = rx.recv_timeout(Duration::from_secs(2)).unwrap() else {
+        panic!("Agent did not receive a continuation prompt");
+    };
+    assert_eq!(value["method"], "session/prompt");
+    assert!(
+        value["params"]["prompt"][0]["text"]
+            .as_str()
+            .unwrap()
+            .contains("Finish the work")
+    );
+}
+
+#[test]
+fn live_v2_turn_after_restore_does_not_start_a_second_prompt() {
+    let mut config = agent(ProtocolVersion::V2).snapshot();
+    config.was_working = true;
+    config.active_prompt = Some("Finish the work".into());
+    let mut restored = AgentView::new(config);
+    restored.protocol = Some(ProtocolVersion::V2);
+    restored.session_id = Some("session-1".into());
+    restored.status = Status::Idle;
+    restored.recovery_due = Some(Instant::now() - Duration::from_secs(1));
+
+    Workspace::handle_update(
+        &mut restored,
+        &json!({"params":{"sessionId":"session-1","update":{
+            "sessionUpdate":"state_update","state":"running"
+        }}}),
+    );
+
+    assert!(restored.active_work);
+    assert!(!restored.config.was_working);
+    assert!(restored.recovery_due.is_none());
+    assert!(!restored.auto_continue_interrupted_turn());
+}
+
 fn agent(protocol: ProtocolVersion) -> AgentView {
     let mut agent = AgentView::new(AgentConfig {
         id: 1,
@@ -208,6 +299,7 @@ fn agent(protocol: ProtocolVersion) -> AgentView {
         messages: Vec::new(),
         available_commands: Vec::new(),
         pending_prompts: Vec::new(),
+        active_prompt: None,
         prompt_history: Vec::new(),
         was_working: false,
         session_has_activity: false,

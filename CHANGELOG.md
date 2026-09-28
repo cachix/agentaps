@@ -17,6 +17,7 @@ Notable changes to Agentaps are recorded here.
 
 ### Added
 
+- Agent tasks interrupted by shutdown automatically continue after their session restores, before queued prompts run.
 - Sidebar upstream commit counts stay visible, while hovering hides the branch name and reveals a Push or Pull action when the branch can sync safely; diverged branches explain that they need manual resolution.
 - Each desktop platform button links directly to its own preview download.
 - The website shows the preview build date and status below the desktop download buttons.

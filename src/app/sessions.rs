@@ -518,6 +518,7 @@ impl Workspace {
         self.mark_displayed_agent_viewed();
         for project in &mut self.projects {
             for agent in &mut project.agents {
+                changed |= agent.auto_continue_interrupted_turn();
                 changed |= agent.start_next_queued_prompt();
             }
         }
@@ -533,6 +534,9 @@ impl Workspace {
 
     pub(super) fn start_new_session(agent: &mut AgentView, path: &Path) {
         agent.restoring = None;
+        agent.recovery_due = None;
+        agent.config.was_working = false;
+        agent.config.active_prompt = None;
         agent.session_id = None;
         agent.config.session_id = None;
         agent.config.session_has_activity = false;
@@ -727,6 +731,7 @@ impl Workspace {
                 agent.active_work = false;
                 agent.awaiting_response = false;
                 agent.cancel_requested = false;
+                agent.config.active_prompt = None;
                 agent.status = Status::Idle;
             } else {
                 agent.status = Status::Error;
@@ -805,6 +810,10 @@ impl Workspace {
                     if agent.status == Status::Connecting {
                         agent.status = Status::Idle;
                     }
+                    if agent.config.was_working && !agent.active_work {
+                        // A live v2 agent may report running just after resume responds.
+                        agent.recovery_due = Some(Instant::now() + Duration::from_secs(1));
+                    }
                 } else if let Some(session_id) = value["result"]["sessionId"].as_str() {
                     agent.session_id = Some(session_id.to_owned());
                     agent.config.session_id = agent.session_id.clone();
@@ -860,6 +869,8 @@ impl Workspace {
                     Some("running" | "requires_action") => {
                         agent.status = Status::Working;
                         agent.active_work = true;
+                        agent.config.was_working = false;
+                        agent.recovery_due = None;
                     }
                     Some("idle") => {
                         agent.status = if agent.active_work {
@@ -870,6 +881,7 @@ impl Workspace {
                         agent.active_work = false;
                         agent.awaiting_response = false;
                         agent.cancel_requested = false;
+                        agent.config.active_prompt = None;
                         if let Some(reason) = update["stopReason"].as_str()
                             && reason != "end_turn"
                         {

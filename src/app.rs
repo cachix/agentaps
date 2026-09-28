@@ -1531,6 +1531,7 @@ impl Workspace {
             messages: Vec::new(),
             available_commands: Vec::new(),
             pending_prompts: Vec::new(),
+            active_prompt: None,
             prompt_history: Vec::new(),
             was_working: false,
             session_has_activity: false,

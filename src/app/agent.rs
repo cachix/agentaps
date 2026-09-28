@@ -106,6 +106,7 @@ pub(super) struct AgentView {
     pub(super) cancel_requested: bool,
     pub(super) session_id: Option<String>,
     pub(super) restoring: Option<RestoreMode>,
+    pub(super) recovery_due: Option<Instant>,
     pub(super) next_request_id: u64,
     pub(super) messages: Vec<ChatEntry>,
     pub(super) permissions: Vec<Permission>,
@@ -210,6 +211,7 @@ impl AgentView {
             messages,
             available_commands: Vec::new(),
             pending_prompts: Vec::new(),
+            active_prompt: None,
             prompt_history: self.config.prompt_history.clone(),
             was_working: false,
             session_has_activity: false,
@@ -241,6 +243,7 @@ impl AgentView {
             messages,
             available_commands: Vec::new(),
             pending_prompts: Vec::new(),
+            active_prompt: None,
             was_working: false,
             session_has_activity: false,
             fork_pending: true,
@@ -263,6 +266,13 @@ impl AgentView {
                 .chain(config.pending_prompts.iter().cloned())
                 .collect();
         }
+        if config.was_working && config.active_prompt.is_none() {
+            config.active_prompt = config
+                .prompt_history
+                .len()
+                .checked_sub(config.pending_prompts.len() + 1)
+                .and_then(|index| config.prompt_history.get(index).cloned());
+        }
         let name = config
             .display_name
             .clone()
@@ -282,7 +292,11 @@ impl AgentView {
             })
             .cloned()
             .collect::<Vec<_>>();
-        if config.was_working {
+        if config.was_working
+            && !messages.last().is_some_and(|entry| {
+                entry.role == Role::System && entry.text == "App closed while this turn was active."
+            })
+        {
             messages.push(ChatEntry {
                 role: Role::System,
                 key: None,
@@ -307,6 +321,7 @@ impl AgentView {
             cancel_requested: false,
             session_id: None,
             restoring: None,
+            recovery_due: None,
             next_request_id: 3,
             messages,
             permissions: Vec::new(),
@@ -330,8 +345,9 @@ impl AgentView {
             messages: self.messages.clone(),
             available_commands: self.config.available_commands.clone(),
             pending_prompts: self.config.pending_prompts.clone(),
+            active_prompt: self.config.active_prompt.clone(),
             prompt_history: self.config.prompt_history.clone(),
-            was_working: self.active_work,
+            was_working: self.active_work || self.config.was_working,
             session_has_activity: self.config.session_has_activity || self.active_work,
             fork_pending: self.config.fork_pending,
         }
@@ -339,6 +355,45 @@ impl AgentView {
 
     pub(super) fn has_restorable_activity(&self) -> bool {
         self.config.session_has_activity || self.config.was_working
+    }
+
+    pub(super) fn continuation_prompt(&self) -> String {
+        let mut prompt = String::from(
+            "Continue the task interrupted when Agentaps closed. Inspect the current state and avoid repeating completed actions.",
+        );
+        if let Some(previous) = &self.config.active_prompt {
+            prompt.push_str("\n\nThe interrupted request was:\n\n");
+            prompt.push_str(previous);
+        }
+        prompt
+    }
+
+    pub(super) fn auto_continue_interrupted_turn(&mut self) -> bool {
+        if !self.config.was_working
+            || self.active_work
+            || self.restoring.is_some()
+            || !matches!(self.status, Status::Idle | Status::Done)
+            || !self.recovery_due.is_some_and(|due| Instant::now() >= due)
+        {
+            return false;
+        }
+        self.recovery_due = None;
+        let interrupted_prompt = self.config.active_prompt.clone();
+        let prompt = self.continuation_prompt();
+        match self.start_prompt(prompt.clone()) {
+            Ok(()) => {
+                self.config.active_prompt = interrupted_prompt;
+                self.config.prompt_history.push(prompt);
+            }
+            Err(error) => {
+                self.status = Status::Error;
+                self.log(
+                    Role::System,
+                    format!("Could not continue interrupted task: {error}"),
+                );
+            }
+        }
+        true
     }
 
     pub(super) fn send(&mut self, value: Value) -> Result<(), String> {
@@ -364,6 +419,9 @@ impl AgentView {
         )?;
         self.next_request_id += 1;
         self.config.fork_pending = false;
+        self.config.was_working = false;
+        self.config.active_prompt = Some(prompt.clone());
+        self.recovery_due = None;
         if self.protocol == Some(ProtocolVersion::V1) {
             self.log(Role::User, prompt);
         }
@@ -378,6 +436,7 @@ impl AgentView {
     pub(super) fn start_next_queued_prompt(&mut self) -> bool {
         if self.active_work
             || self.restoring.is_some()
+            || self.config.was_working
             || !matches!(self.status, Status::Idle | Status::Done)
         {
             return false;
@@ -496,6 +555,7 @@ impl AgentView {
                 self.active_work = false;
                 self.awaiting_response = false;
                 self.cancel_requested = false;
+                self.config.active_prompt = None;
                 self.log(
                     Role::System,
                     format!("Invalid ACP v2 prompt response: {error}"),
@@ -505,6 +565,7 @@ impl AgentView {
             self.active_work = false;
             self.awaiting_response = false;
             self.cancel_requested = false;
+            self.config.active_prompt = None;
             self.status = Status::Done;
             if result["stopReason"].as_str() == Some("cancelled") {
                 self.log(Role::System, "Turn cancelled");
