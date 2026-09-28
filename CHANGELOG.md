@@ -10,6 +10,7 @@ Notable changes to Agentaps are recorded here.
 
 ### Changed
 
+- Agentaps no longer scans folders under your home directory at startup. The new session picker offers a native folder chooser, recent projects, and manually entered local or SSH paths.
 - Desktop header controls show reasoning effort and context usage without their text prefixes.
 - Context usage and Reset now share one control in the desktop conversation header.
 - The website shows Agentaps 0.3.0 and links directly to its public desktop installers.

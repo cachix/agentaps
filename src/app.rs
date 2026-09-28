@@ -1,9 +1,9 @@
 use crate::acp::{Connection, Event};
 use crate::config::{AgentConfig, ChatEntry, Config, ProjectConfig, Role, SlashCommand};
 use crate::diff_view::{File as DiffFile, Presentation as DiffPresentation, Row as DiffRow};
-use crate::discovery::{AgentChoice, discover_folders, installed_agents, score};
+use crate::discovery::{AgentChoice, installed_agents, score};
 use crate::file_search::{FileSearch, scan_project};
-use crate::folder_search::{FolderSearch, inject_path};
+use crate::folder_search::FolderSearch;
 use crate::theme::*;
 use crate::{config, theme};
 use agent_client_protocol_schema::{ProtocolVersion, v2};
@@ -21,8 +21,9 @@ use gpui_kit::component::{
 };
 use gpui_kit::{
     App, Bounds, Context, DragMoveEvent, Entity, Focusable, IntoElement, KeyBinding, KeyDownEvent,
-    ListAlignment, ListState, MouseButton, Render, StatefulInteractiveElement, Subscription,
-    Window, WindowBounds, WindowOptions, actions, div, prelude::*, px, relative, rems, rgb, size,
+    ListAlignment, ListState, MouseButton, PathPromptOptions, Render, StatefulInteractiveElement,
+    Subscription, Window, WindowBounds, WindowOptions, actions, div, prelude::*, px, relative,
+    rems, rgb, size,
 };
 use serde_json::{Value, json};
 use std::{
@@ -423,9 +424,8 @@ struct Workspace {
     events_rx: Receiver<Event>,
     deferred_connections: Vec<u64>,
     deferred_connections_deadline: Option<Instant>,
-    folders_rx: Receiver<Vec<PathBuf>>,
     folder_search: FolderSearch,
-    folder_scan_complete: bool,
+    folder_dialog_open: bool,
     file_search: Option<FileSearch>,
     file_search_project: Option<usize>,
     file_scan_tx: Sender<u64>,
@@ -888,7 +888,7 @@ impl Workspace {
     fn new(window: &mut Window, cx: &mut Context<Self>) -> Self {
         let picker_input = cx.new(|cx| {
             InputState::new(window, cx)
-                .placeholder("Search folders or enter ssh://host/absolute/path…")
+                .placeholder("Search recent folders or enter a local or SSH path…")
         });
         let sidebar_search =
             cx.new(|cx| InputState::new(window, cx).placeholder("Search sessions…"));
@@ -1021,18 +1021,7 @@ impl Workspace {
         {
             recent_folders.insert(0, cwd);
         }
-        let folder_search = FolderSearch::new(recent_folders.clone());
-        let folder_injector = folder_search.injector();
-        let (folders_tx, folders_rx) = mpsc::channel();
-        std::thread::spawn(move || {
-            let folders = discover_folders();
-            for path in &folders {
-                if !recent_folders.contains(path) {
-                    inject_path(&folder_injector, path.clone());
-                }
-            }
-            let _ = folders_tx.send(folders);
-        });
+        let folder_search = FolderSearch::new(recent_folders);
         let mut this = Self {
             projects,
             view: WorkspaceView::Empty,
@@ -1046,9 +1035,8 @@ impl Workspace {
             events_rx,
             deferred_connections: Vec::new(),
             deferred_connections_deadline: None,
-            folders_rx,
             folder_search,
-            folder_scan_complete: false,
+            folder_dialog_open: false,
             file_search: None,
             file_search_project: None,
             file_scan_tx,
@@ -1198,18 +1186,6 @@ impl Workspace {
                 let Ok(connecting_session) = this.update_in(cx, |this, window, cx| {
                     this.poll_events(window, cx);
                     this.poll_sync_counts(cx);
-                    if let Ok(mut folders) = this.folders_rx.try_recv() {
-                        folders.extend(
-                            this.projects
-                                .iter()
-                                .map(|project| PathBuf::from(project.display_path())),
-                        );
-                        folders.sort();
-                        folders.dedup();
-                        this.folder_search.set_paths(&folders);
-                        this.folder_scan_complete = true;
-                        cx.notify();
-                    }
                     if this.folder_search.tick() {
                         cx.notify();
                     }
@@ -1290,7 +1266,7 @@ impl Workspace {
             input.set_placeholder(
                 match step {
                     PickerStep::Agents { .. } => "Search installed agents or enter an ACP command…",
-                    PickerStep::Folders => "Search folders or enter ssh://host/absolute/path…",
+                    PickerStep::Folders => "Search recent folders or enter a local or SSH path…",
                 },
                 window,
                 cx,
@@ -1317,6 +1293,51 @@ impl Workspace {
             }
             _ => {}
         }
+    }
+
+    fn choose_folder(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if self.folder_dialog_open {
+            return;
+        }
+        self.folder_dialog_open = true;
+        let selection = cx.prompt_for_paths(PathPromptOptions {
+            files: false,
+            directories: true,
+            multiple: false,
+            prompt: Some("Choose Folder".into()),
+        });
+        cx.spawn_in(window, async move |this, cx| {
+            let result = selection.await;
+            let _ = this.update_in(cx, |this, window, cx| {
+                this.folder_dialog_open = false;
+                if !matches!(
+                    this.view,
+                    WorkspaceView::NewSession {
+                        step: PickerStep::Folders,
+                        ..
+                    }
+                ) {
+                    return;
+                }
+                match result {
+                    Ok(Ok(Some(paths))) => {
+                        if let Some(path) = paths.into_iter().next() {
+                            this.select_folder(path, window, cx);
+                        }
+                    }
+                    Ok(Ok(None)) => {}
+                    Ok(Err(error)) => {
+                        this.notice = Some(format!("Could not open folder chooser: {error}"));
+                        cx.notify();
+                    }
+                    Err(error) => {
+                        this.notice = Some(format!("Folder chooser closed unexpectedly: {error}"));
+                        cx.notify();
+                    }
+                }
+            });
+        })
+        .detach();
     }
 
     fn sidebar_results(&self, query: &str) -> Vec<SessionLocation> {

@@ -12,10 +12,10 @@ impl Workspace {
             let matches = self.folder_search.results();
             if matches.is_empty() {
                 results = results.child(div().p_5().text_sm().text_color(rgb(MUTED)).child(
-                    if !self.folder_scan_complete || self.folder_search.searching() {
-                        "Looking for folders…"
+                    if self.folder_search.searching() {
+                        "Searching recent folders…"
                     } else {
-                        "No matching folders. Enter a local path or ssh://host/absolute/path."
+                        "No matching recent folders. Enter a local absolute path or ssh://host/absolute/path."
                     },
                 ));
             }
@@ -241,7 +241,7 @@ impl Workspace {
                                 }),
                         )
                         .child(div().text_sm().text_color(rgb(MUTED)).child(if is_folders {
-                            "Search local folders or enter ssh://host/absolute/path."
+                            "Choose a local folder, select a recent project, or enter a local or SSH path."
                         } else {
                             "Select an installed agent or enter an ACP command."
                         }))
@@ -275,13 +275,39 @@ impl Workspace {
                                 .p_2()
                                 .child(Input::new(&self.picker_input).cleanable(true)),
                         )
+                        .when(is_folders, |element| {
+                            element.child(
+                                div()
+                                    .id("choose-folder")
+                                    .cursor_pointer()
+                                    .rounded_lg()
+                                    .border_1()
+                                    .border_color(rgb(BORDER))
+                                    .bg(rgb(SURFACE))
+                                    .px_4()
+                                    .py_3()
+                                    .flex()
+                                    .items_center()
+                                    .gap_3()
+                                    .hover(|style| style.bg(rgb(HOVER)))
+                                    .child(
+                                        Icon::new(IconName::Folder)
+                                            .size(px(18.))
+                                            .text_color(rgb(ACCENT)),
+                                    )
+                                    .child("Choose Folder…")
+                                    .on_click(cx.listener(|this, _, window, cx| {
+                                        this.choose_folder(window, cx)
+                                    })),
+                            )
+                        })
                         .child(
                             div()
                                 .text_xs()
                                 .font_weight(gpui_kit::FontWeight::SEMIBOLD)
                                 .text_color(rgb(MUTED))
                                 .child(if is_folders {
-                                    "FOLDERS"
+                                    "RECENT FOLDERS"
                                 } else {
                                     "AVAILABLE AGENTS"
                                 }),

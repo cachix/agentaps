@@ -36,25 +36,6 @@ impl FolderSearch {
         }
     }
 
-    pub fn injector(&self) -> Injector<PathBuf> {
-        self.matcher.injector()
-    }
-
-    pub fn set_paths(&mut self, paths: &[PathBuf]) {
-        self.defaults.clear();
-        for path in self.recent.iter().chain(paths) {
-            if !self.defaults.contains(path) {
-                self.defaults.push(path.clone());
-                if self.defaults.len() == RESULT_LIMIT {
-                    break;
-                }
-            }
-        }
-        if self.query.is_empty() {
-            self.results.clone_from(&self.defaults);
-        }
-    }
-
     pub fn add_recent(&mut self, path: PathBuf) {
         self.recent.retain(|recent| recent != &path);
         self.recent.insert(0, path.clone());

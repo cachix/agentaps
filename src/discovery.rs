@@ -1,5 +1,4 @@
 use std::{
-    collections::HashSet,
     env, fs,
     path::{Path, PathBuf},
 };
@@ -148,59 +147,6 @@ pub fn score(query: &str, candidate: &str) -> Option<i32> {
         last = Some(offset);
     }
     Some(score - (candidate.len() as i32 / 8))
-}
-
-pub fn discover_folders() -> Vec<PathBuf> {
-    let mut roots = Vec::new();
-    if let Some(home) = env::var_os("HOME") {
-        let home = PathBuf::from(home);
-        roots.push(home.clone());
-        roots.push(home.join("dev"));
-        roots.push(home.join("projects"));
-    }
-    if let Ok(cwd) = env::current_dir() {
-        roots.push(cwd);
-    }
-    let mut found = Vec::new();
-    let mut visited = HashSet::new();
-    let mut stack = roots
-        .into_iter()
-        .map(|path| (path, 0usize))
-        .collect::<Vec<_>>();
-    while let Some((path, depth)) = stack.pop() {
-        if found.len() >= 30_000 {
-            break;
-        }
-        let Ok(path) = path.canonicalize() else {
-            continue;
-        };
-        if !visited.insert(path.clone()) {
-            continue;
-        }
-        found.push(path.clone());
-        if depth >= 5 {
-            continue;
-        }
-        let Ok(entries) = fs::read_dir(&path) else {
-            continue;
-        };
-        for entry in entries.flatten() {
-            let name = entry.file_name();
-            let name = name.to_string_lossy();
-            if name.starts_with('.')
-                || matches!(
-                    name.as_ref(),
-                    "node_modules" | "target" | "result" | "vendor" | "dist" | "build"
-                )
-            {
-                continue;
-            }
-            if entry.file_type().is_ok_and(|kind| kind.is_dir()) {
-                stack.push((entry.path(), depth + 1));
-            }
-        }
-    }
-    found
 }
 
 #[cfg(test)]
