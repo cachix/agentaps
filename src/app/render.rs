@@ -1,5 +1,6 @@
 use super::*;
 use gpui::Div;
+use gpui_component::progress::Progress;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 mod conversation;
@@ -58,6 +59,55 @@ fn paired_ago(paired_at: u64) -> String {
 }
 
 impl Workspace {
+    fn render_mobile_loading(&self, cx: &mut Context<Self>) -> gpui::Stateful<Div> {
+        div()
+            .id("mobile-loading-overlay")
+            .absolute()
+            .top(px(0.))
+            .left(px(0.))
+            .size_full()
+            .flex()
+            .flex_col()
+            .items_center()
+            .justify_center()
+            .gap_4()
+            .p_6()
+            .bg(rgb(BG))
+            .text_color(rgb(TEXT))
+            .child(div().text_2xl().child("Connect your phone"))
+            .child(
+                div()
+                    .text_sm()
+                    .text_color(rgb(MUTED))
+                    .child(if self.mobile_loading {
+                        "Loading mobile secrets from SecretSpec…"
+                    } else {
+                        "Starting mobile connection…"
+                    }),
+            )
+            .child(
+                div().w_full().max_w(px(360.)).child(
+                    Progress::new("mobile-secrets-loading")
+                        .loading(true)
+                        .accessibility_label("Loading mobile secrets"),
+                ),
+            )
+            .child(
+                div()
+                    .id("close-mobile-loading")
+                    .cursor_pointer()
+                    .rounded_md()
+                    .px_4()
+                    .py_2()
+                    .bg(rgb(SURFACE))
+                    .child("Close")
+                    .on_click(cx.listener(|this, _, _, cx| {
+                        this.mobile_pairing_visible = false;
+                        cx.notify();
+                    })),
+            )
+    }
+
     fn render_linked_clients(&self, cx: &mut Context<Self>) -> gpui::Stateful<Div> {
         let clients = self
             .mobile
@@ -255,7 +305,8 @@ impl Workspace {
         cx: &mut Context<Self>,
     ) -> gpui::Stateful<Div> {
         let viewport = window.viewport_size();
-        let available = (f32::from(viewport.width) - 64.)
+        let sidebar_width = (f32::from(viewport.width) * self.sidebar_fraction).max(180.);
+        let available = (f32::from(viewport.width) - sidebar_width - 70.)
             .min(f32::from(viewport.height) - 230.)
             .min(640.)
             .max(80.);
@@ -359,9 +410,10 @@ impl Workspace {
 
 impl Render for Workspace {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        let mobile_pairing = self
-            .mobile_pairing_visible
+        let mobile_pairing = (self.mobile_pairing_visible && self.mobile_endpoint_id.is_some())
             .then(|| self.render_mobile_pairing(window, cx));
+        let mobile_loading = (self.mobile_pairing_visible && self.mobile_endpoint_id.is_none())
+            .then(|| self.render_mobile_loading(cx));
         let mobile_provider = self
             .mobile_provider_prompt
             .as_ref()
@@ -384,6 +436,7 @@ impl Render for Workspace {
             .flex_1()
             .min_w(px(0.))
             .h_full()
+            .relative()
             .flex()
             .flex_col()
             .bg(rgb(BG));
@@ -433,9 +486,12 @@ impl Render for Workspace {
                     .child(notice.clone()),
             );
         }
+        chat = chat
+            .when_some(mobile_loading, |chat, loading| chat.child(loading))
+            .when_some(mobile_pairing, |chat, pairing| chat.child(pairing))
+            .when_some(mobile_provider, |chat, provider| chat.child(provider));
         div()
             .size_full()
-            .relative()
             .flex()
             .bg(rgb(BG))
             .on_action(cx.listener(Self::quick_open))
@@ -470,7 +526,5 @@ impl Render for Workspace {
             .child(sidebar)
             .child(divider)
             .child(chat)
-            .when_some(mobile_pairing, |root, pairing| root.child(pairing))
-            .when_some(mobile_provider, |root, provider| root.child(provider))
     }
 }

@@ -75,6 +75,7 @@ Notable changes to Agentaps are recorded here.
 
 ### Fixed
 
+- Mobile access keeps the session sidebar visible and shows progress while SecretSpec loads credentials and the connection starts.
 - The macOS desktop package includes an icon format its app bundler accepts.
 - Landing page style updates avoid stale browser CSS that could make the product screenshot fill the screen.
 - The landing page keeps its text, desktop availability, and device preview visible on narrow phones.

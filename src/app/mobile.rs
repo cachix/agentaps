@@ -26,22 +26,11 @@ impl Workspace {
         ))
     }
 
-    pub(super) fn show_mobile_link(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+    pub(super) fn show_mobile_link(&mut self, _window: &mut Window, cx: &mut Context<Self>) {
         if self.mobile.is_none() {
-            match crate::mobile::start() {
-                Ok(server) => {
-                    self.mobile = Some(server);
-                    self.notice = Some(
-                        "Starting mobile access. Select the phone icon again to copy the link."
-                            .into(),
-                    );
-                }
-                Err(error) => {
-                    self.mobile_provider_prompt = Some(error);
-                    self.notice = None;
-                    self.mobile_provider_input
-                        .update(cx, |input, cx| input.focus(window, cx));
-                }
+            self.mobile_pairing_visible = true;
+            if !self.mobile_loading {
+                self.start_mobile(None);
             }
         } else if let Some(link) = self.mobile_link() {
             cx.write_to_clipboard(ClipboardItem::new_string(link.clone()));
@@ -61,9 +50,24 @@ impl Workspace {
                 .into(),
             );
         } else {
+            self.mobile_pairing_visible = !self.mobile_pairing_visible;
             self.notice = Some("Mobile access is starting".into());
         }
         cx.notify();
+    }
+
+    fn start_mobile(&mut self, provider: Option<String>) {
+        self.mobile_loading = true;
+        self.mobile_provider_prompt = None;
+        self.notice = None;
+        let sender = self.mobile_start_tx.clone();
+        std::thread::spawn(move || {
+            let result = match provider {
+                Some(provider) => crate::mobile::start_with_provider(Some(&provider)),
+                None => crate::mobile::start(),
+            };
+            let _ = sender.send(result);
+        });
     }
 
     pub(super) fn use_mobile_provider(&mut self, cx: &mut Context<Self>) {
@@ -82,17 +86,8 @@ impl Workspace {
             cx.notify();
             return;
         }
-        match crate::mobile::start_with_provider(Some(provider)) {
-            Ok(server) => {
-                self.mobile = Some(server);
-                self.mobile_provider_prompt = None;
-                self.notice = Some("Starting mobile access with the selected provider.".into());
-            }
-            Err(error) => {
-                self.mobile_provider_prompt =
-                    Some(format!("Could not use the selected provider: {error}"));
-            }
-        }
+        self.mobile_pairing_visible = true;
+        self.start_mobile(Some(provider.to_owned()));
         cx.notify();
     }
 
@@ -119,6 +114,20 @@ impl Workspace {
     }
 
     pub(super) fn poll_mobile(&mut self, cx: &mut Context<Self>) {
+        if let Ok(result) = self.mobile_start_rx.try_recv() {
+            self.mobile_loading = false;
+            match result {
+                Ok(server) => {
+                    self.mobile = Some(server);
+                    self.notice = Some("Connecting mobile access…".into());
+                }
+                Err(error) => {
+                    self.mobile_pairing_visible = false;
+                    self.mobile_provider_prompt = Some(error);
+                }
+            }
+            cx.notify();
+        }
         let Some(server) = &self.mobile else {
             return;
         };
@@ -127,6 +136,7 @@ impl Workspace {
         let commands: Vec<_> = server.commands.try_iter().collect();
         let handled_command = !commands.is_empty();
         let received_status = !statuses.is_empty();
+        let mut startup_error = None;
         for status in statuses {
             match status {
                 Ok(endpoint_id) => {
@@ -152,13 +162,20 @@ impl Workspace {
                                 .collect()
                         });
                         cx.write_to_clipboard(ClipboardItem::new_string(link));
-                        self.mobile_pairing_visible = true;
                         self.notice = Some("Mobile link copied. Scan the code or open the copied link on your phone.".into());
                     }
                 }
-                Err(error) => self.notice = Some(format!("Mobile access failed: {error}")),
+                Err(error) => startup_error = Some(error),
             }
             cx.notify();
+        }
+        if let Some(error) = startup_error {
+            self.mobile = None;
+            self.mobile_endpoint_id = None;
+            self.mobile_pairing_visible = false;
+            self.notice = Some(format!("Mobile access failed: {error}"));
+            cx.notify();
+            return;
         }
         for result in revocations {
             self.notice = Some(match result {

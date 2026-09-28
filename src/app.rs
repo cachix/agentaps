@@ -462,6 +462,9 @@ struct Workspace {
     last_saved: Instant,
     notice: Option<String>,
     mobile: Option<crate::mobile::Server>,
+    mobile_start_tx: Sender<Result<crate::mobile::Server, String>>,
+    mobile_start_rx: Receiver<Result<crate::mobile::Server, String>>,
+    mobile_loading: bool,
     mobile_endpoint_id: Option<String>,
     mobile_pairing_visible: bool,
     mobile_revoke_confirm: Option<String>,
@@ -915,6 +918,7 @@ impl Workspace {
         let (diff_watch_tx, diff_watch_rx) = mpsc::channel();
         let (diff_watcher_tx, diff_watcher_rx) = mpsc::channel();
         let (sync_tx, sync_rx) = mpsc::channel();
+        let (mobile_start_tx, mobile_start_rx) = mpsc::channel();
         let (config, migrate_config, notice) = match config::load() {
             Ok((config, migrate)) => (config, migrate, None),
             Err(error) => (
@@ -1051,6 +1055,9 @@ impl Workspace {
             last_saved: Instant::now(),
             notice,
             mobile: None,
+            mobile_start_tx,
+            mobile_start_rx,
+            mobile_loading: false,
             mobile_endpoint_id: None,
             mobile_pairing_visible: false,
             mobile_revoke_confirm: None,
