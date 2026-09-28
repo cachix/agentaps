@@ -3,7 +3,7 @@ use agentaps_control_protocol::{
     Agent as RemoteAgent, AgentOption, Command as RemoteCommand, Message as RemoteMessage,
     Permission as RemotePermission, PermissionOption, Project as RemoteProject, Response,
 };
-use gpui::ClipboardItem;
+use gpui_kit::ClipboardItem;
 use qrcode::{Color, QrCode};
 
 fn mobile_text(text: &str) -> String {

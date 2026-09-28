@@ -1,10 +1,10 @@
-//! Read-only GPUI CE adaptation of GPUI Box Kit's MIT-licensed DiffView.
+//! Read-only GPUI Kit adaptation of GPUI Box Kit's MIT-licensed DiffView.
 //! Source: https://github.com/fran0220/gpui-box/blob/24afaaf1b2f34827342b5ad04a4efba95e705c45/crates/gpui-kit/src/content/diff_view.rs
 //! Original license: licenses/GPUI-Box-Kit-MIT.txt.
 //! Diff production and filesystem access belong to the caller.
 
 use crate::theme::{ACCENT, BG, BORDER, MUTED, SURFACE, TEXT};
-use gpui::{AnyElement, IntoElement, div, prelude::*, px, rgb};
+use gpui_kit::{AnyElement, IntoElement, div, prelude::*, px, rgb};
 
 const ADDED_BG: u32 = 0x19382e;
 const REMOVED_BG: u32 = 0x422a31;
@@ -151,7 +151,7 @@ pub(crate) fn render_row(row: &Row) -> AnyElement {
             .items_center()
             .bg(rgb(SURFACE))
             .text_sm()
-            .font_weight(gpui::FontWeight::SEMIBOLD)
+            .font_weight(gpui_kit::FontWeight::SEMIBOLD)
             .text_color(rgb(TEXT))
             .child(path.clone())
             .into_any_element(),

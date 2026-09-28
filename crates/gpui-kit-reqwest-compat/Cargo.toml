@@ -1,0 +1,21 @@
+[package]
+name = "gpui-pre-reqwest"
+version = "0.12.15"
+edition = "2024"
+publish = false
+
+# GPUI Kit 0.7 assets still request gpui-pre-reqwest 0.12.15 on WASM.
+# Its wasm-streams 0.4 conflicts with the reqwest 0.13 used by Iroh.
+[features]
+default = []
+charset = ["reqwest/charset"]
+http2 = ["reqwest/http2"]
+# These two native-only options do not affect browser asset downloads.
+macos-system-configuration = []
+multipart = ["reqwest/multipart"]
+rustls-tls-native-roots = []
+socks = ["reqwest/socks"]
+stream = ["reqwest/stream"]
+
+[dependencies]
+reqwest = { version = "0.13", default-features = false }

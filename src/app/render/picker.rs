@@ -205,7 +205,7 @@ impl Workspace {
                                 .child(
                                     div()
                                         .text_xs()
-                                        .font_weight(gpui::FontWeight::SEMIBOLD)
+                                        .font_weight(gpui_kit::FontWeight::SEMIBOLD)
                                         .text_color(rgb(ACCENT))
                                         .child("NEW SESSION"),
                                 )
@@ -232,7 +232,7 @@ impl Workspace {
                         .child(
                             div()
                                 .text_2xl()
-                                .font_weight(gpui::FontWeight::SEMIBOLD)
+                                .font_weight(gpui_kit::FontWeight::SEMIBOLD)
                                 .text_color(rgb(TEXT))
                                 .child(if is_folders {
                                     "Choose a project"
@@ -278,7 +278,7 @@ impl Workspace {
                         .child(
                             div()
                                 .text_xs()
-                                .font_weight(gpui::FontWeight::SEMIBOLD)
+                                .font_weight(gpui_kit::FontWeight::SEMIBOLD)
                                 .text_color(rgb(MUTED))
                                 .child(if is_folders {
                                     "FOLDERS"

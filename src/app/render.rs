@@ -1,6 +1,6 @@
 use super::*;
-use gpui::Div;
-use gpui_component::progress::Progress;
+use gpui_kit::Div;
+use gpui_kit::component::progress::Progress;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 mod conversation;
@@ -61,7 +61,7 @@ fn paired_ago(paired_at: u64) -> String {
 }
 
 impl Workspace {
-    fn render_mobile_loading(&self, cx: &mut Context<Self>) -> gpui::Stateful<Div> {
+    fn render_mobile_loading(&self, cx: &mut Context<Self>) -> gpui_kit::Stateful<Div> {
         div()
             .id("mobile-loading-overlay")
             .absolute()
@@ -110,7 +110,7 @@ impl Workspace {
             )
     }
 
-    fn render_linked_clients(&self, cx: &mut Context<Self>) -> gpui::Stateful<Div> {
+    fn render_linked_clients(&self, cx: &mut Context<Self>) -> gpui_kit::Stateful<Div> {
         let clients = self
             .mobile
             .as_ref()
@@ -195,7 +195,11 @@ impl Workspace {
         list
     }
 
-    fn render_mobile_provider(&self, error: &str, cx: &mut Context<Self>) -> gpui::Stateful<Div> {
+    fn render_mobile_provider(
+        &self,
+        error: &str,
+        cx: &mut Context<Self>,
+    ) -> gpui_kit::Stateful<Div> {
         div()
             .id("mobile-provider-overlay")
             .absolute()
@@ -305,7 +309,7 @@ impl Workspace {
         &self,
         window: &Window,
         cx: &mut Context<Self>,
-    ) -> gpui::Stateful<Div> {
+    ) -> gpui_kit::Stateful<Div> {
         let viewport = window.viewport_size();
         let sidebar_width = (f32::from(viewport.width) * self.sidebar_fraction).max(180.);
         let available = (f32::from(viewport.width) - sidebar_width - 70.)

@@ -6,6 +6,7 @@ Notable changes to Agentaps are recorded here.
 
 ### Documentation
 
+- Included the bundled Lucide icon license in source and Web Connect builds.
 - Explained Web Connect's encrypted peer-to-peer Iroh connection in the website features.
 - Documented the GitHub app connection and build results for Cloudflare Pages deployments.
 - Documented the production site deployment and custom domain setup.
@@ -45,6 +46,7 @@ Notable changes to Agentaps are recorded here.
 
 ### Changed
 
+- Desktop and Web Connect use GPUI Kit 0.7 instead of the GPUI CE forks. Web Connect embeds its UI icons so they remain available without extra site assets, and its WASM build shares one reqwest version with Iroh.
 - Automatic reviews no longer appear in agent conversation activity.
 - Sidebar branch names align to the right edge of each session row.
 - Compact sidebar upstream counts appear before project names when agents are not working or done, and zero count directions are hidden.

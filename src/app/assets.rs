@@ -1,5 +1,5 @@
-use gpui::{AssetSource, Result, SharedString};
-use gpui_component_assets::Assets;
+use gpui_kit::assets::Assets;
+use gpui_kit::{AssetSource, Result, SharedString};
 use std::borrow::Cow;
 
 pub(super) struct AppAssets;

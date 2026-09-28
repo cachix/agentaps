@@ -216,7 +216,7 @@ impl Workspace {
         match agent.start_prompt(prompt.clone()) {
             Ok(()) => {
                 agent.config.prompt_history.push(prompt);
-                self.chat_list.scroll_to(gpui::ListOffset {
+                self.chat_list.scroll_to(gpui_kit::ListOffset {
                     item_ix: self.chat_list.item_count(),
                     offset_in_item: px(0.),
                 });

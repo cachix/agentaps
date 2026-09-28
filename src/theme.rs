@@ -1,8 +1,8 @@
 //! Agentaps' dark palette. Keep the interaction accent and surfaces consistent
 //! across the sidebar, chat, picker, and activity views.
 
-use gpui::App;
-use gpui_component::{
+use gpui_kit::App;
+use gpui_kit::component::{
     scroll::ScrollbarMode,
     theme::{Theme, ThemeMode},
 };

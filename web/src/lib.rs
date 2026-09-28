@@ -2,16 +2,126 @@ use agentaps_control_protocol::{
     ALPN, Agent, AgentOption, Command, MAX_RESPONSE_BYTES, Project, Request, Response,
 };
 use async_channel::{Receiver, Sender};
-use gpui::{
-    App, ApplicationHandle, Context, Entity, IntoElement, Render, ScrollHandle,
-    StatefulInteractiveElement, Window, WindowOptions, div, prelude::*, px, relative, rems, rgb,
-};
-use gpui_component::{
+use gpui_kit::component::{
     ActiveTheme, Root,
     input::{Input, InputEvent, InputState, Textarea, TextareaState},
     text::{TextView, TextViewStyle},
 };
-use gpui_component_assets::Assets;
+use gpui_kit::{
+    App, ApplicationHandle, Context, Entity, IntoElement, Render, ScrollHandle,
+    StatefulInteractiveElement, Window, WindowOptions, div, prelude::*, px, relative, rems, rgb,
+};
+// Embed the default component icons so Web Connect does not depend on runtime icon URLs.
+gpui_kit::assets::icon_assets!(
+    WebAssets,
+    [
+        ALargeSmall,
+        ArrowDown,
+        ArrowLeft,
+        ArrowRight,
+        ArrowUp,
+        Asterisk,
+        Ban,
+        BatteryCharging,
+        BatteryFull,
+        BatteryLow,
+        BatteryMedium,
+        BatteryWarning,
+        Battery,
+        Bell,
+        BookOpen,
+        Bot,
+        Building2,
+        Calendar,
+        CaseSensitive,
+        ChartPie,
+        Check,
+        ChevronDown,
+        ChevronLeft,
+        ChevronRight,
+        ChevronUp,
+        ChevronsUpDown,
+        CircleAlert,
+        CircleCheck,
+        CircleUser,
+        CircleX,
+        Close,
+        Copy,
+        Cpu,
+        Dash,
+        Delete,
+        EllipsisVertical,
+        Ellipsis,
+        ExternalLink,
+        EyeOff,
+        Eye,
+        FileText,
+        File,
+        FolderClosed,
+        FolderOpen,
+        Folder,
+        Frame,
+        GalleryVerticalEnd,
+        Github,
+        Globe,
+        HardDrive,
+        HeartOff,
+        Heart,
+        Inbox,
+        Info,
+        Inspector,
+        LayoutDashboard,
+        LoaderCircle,
+        Loader,
+        Map,
+        Maximize,
+        MemoryStick,
+        Menu,
+        Minimize,
+        Minus,
+        Moon,
+        Network,
+        Palette,
+        PanelBottomOpen,
+        PanelBottom,
+        PanelLeftClose,
+        PanelLeftOpen,
+        PanelLeft,
+        PanelRightClose,
+        PanelRightOpen,
+        PanelRight,
+        Pause,
+        Play,
+        Plus,
+        Redo2,
+        Redo,
+        RefreshCw,
+        Replace,
+        ResizeCorner,
+        RotateCw,
+        Search,
+        Settings2,
+        Settings,
+        SortAscending,
+        SortDescending,
+        SquareTerminal,
+        StarFill,
+        StarOff,
+        Star,
+        Sun,
+        ThumbsDown,
+        ThumbsUp,
+        TriangleAlert,
+        Undo2,
+        Undo,
+        User,
+        WindowClose,
+        WindowMaximize,
+        WindowMinimize,
+        WindowRestore,
+    ]
+);
+
 use iroh::{Endpoint, EndpointId, endpoint::presets};
 use js_sys::{Promise, Reflect, Uint8Array};
 use std::{borrow::Cow, cell::RefCell, str::FromStr, time::Duration};
@@ -426,7 +536,7 @@ struct MobileView {
     connection_status: String,
     action_error: Option<String>,
     prompt_queued: bool,
-    _subscriptions: Vec<gpui::Subscription>,
+    _subscriptions: Vec<gpui_kit::Subscription>,
 }
 
 impl MobileView {
@@ -1428,7 +1538,7 @@ impl Render for MobileView {
                     );
                     continue;
                 }
-                let text_id: gpui::ElementId = ("mobile-message", agent.id).into();
+                let text_id: gpui_kit::ElementId = ("mobile-message", agent.id).into();
                 let content =
                     TextView::markdown((text_id, index.to_string()), message.text.clone())
                         .style(TextViewStyle {
@@ -1735,11 +1845,11 @@ fn decode_qr_frame(frame: &JsValue) -> Result<Option<(EndpointId, String)>, Stri
 
 #[wasm_bindgen(start)]
 pub fn start() {
-    gpui_ce_platform::web_init();
-    let app = gpui_ce_platform::single_threaded_web().with_assets(Assets::default());
+    gpui_kit::platform::web_init();
+    let app = gpui_kit::platform::single_threaded_web().with_assets(WebAssets);
     APPLICATION.with(|application| {
         *application.borrow_mut() = Some(app.run_embedded(|cx: &mut App| {
-            gpui_component::init(cx);
+            gpui_kit::init(cx);
             cx.text_system()
                 .add_fonts(vec![Cow::Borrowed(include_bytes!(
                     "../fonts/IBMPlexSans-Regular.ttf"

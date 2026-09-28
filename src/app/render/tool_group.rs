@@ -60,7 +60,7 @@ impl Workspace {
         } else {
             ("•", TOOL_MARKER)
         };
-        let group_id: gpui::ElementId = ("tool-group", agent.config.id).into();
+        let group_id: gpui_kit::ElementId = ("tool-group", agent.config.id).into();
         let mut group = div().max_w(px(900.)).min_w(px(0.)).py_1().child(
             div()
                 .id((group_id, message_index.to_string()))
@@ -100,7 +100,7 @@ impl Workspace {
         if expanded {
             let mut details = div().pl_4().flex().flex_col().gap_1();
             if completed_count > 1 {
-                let history_id: gpui::ElementId = ("tool-history", agent.config.id).into();
+                let history_id: gpui_kit::ElementId = ("tool-history", agent.config.id).into();
                 details = details.child(
                     div()
                         .id((history_id, message_index.to_string()))
@@ -152,7 +152,7 @@ impl Workspace {
                 };
                 let row_key = (agent.config.id, message_index + offset);
                 let row_expanded = self.expanded_tool_rows.contains(&row_key);
-                let row_id: gpui::ElementId = ("tool-row", agent.config.id).into();
+                let row_id: gpui_kit::ElementId = ("tool-row", agent.config.id).into();
                 let mut action = div().min_w(px(0.)).child(
                     div()
                         .id((row_id, (message_index + offset).to_string()))
@@ -182,7 +182,7 @@ impl Workspace {
                         })),
                 );
                 if row_expanded {
-                    let text_id: gpui::ElementId = ("tool-detail", agent.config.id).into();
+                    let text_id: gpui_kit::ElementId = ("tool-detail", agent.config.id).into();
                     action = action.child(
                         div()
                             .ml(px(22.))
