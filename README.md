@@ -1,93 +1,66 @@
 # Agentaps
 
-Use your coding harness locally or over SSH using [ACP](https://agentclientprotocol.com/get-started/introduction), then securely connect from the web with Agentaps.
+Agentaps is a desktop workspace for coding agents that speak the [Agent Client Protocol (ACP)](https://agentclientprotocol.com/get-started/introduction). Run an agent in a local project or over SSH, keep its conversations together, and continue from a phone browser when you step away.
 
-Agentaps is a Rust and GPUI desktop client for agents that speak the Agent Client Protocol (ACP).
+![Agentaps showing a Codex conversation and project sessions](web/site/agentaps-desktop.png)
 
-![Agentaps showing a Codex conversation and project sessions](docs/images/agentaps.png)
+## Get started
 
-## Features
+1. [Download Agentaps](https://github.com/domenkozar/agentaps/releases) for Linux, Apple Silicon macOS, or Windows. You can also [build from source](#build-from-source).
+2. Install an ACP compatible agent or adapter. Agentaps discovers Codex and Claude adapters, Gemini CLI (`gemini --acp`), and OpenCode (`opencode acp`). You can enter another ACP command yourself.
+3. Open Agentaps and select **New**. Search for a local folder or enter its absolute path, then choose an agent and send a message.
 
-- **Project based sessions:** Open a folder with **New** or **Ctrl+P** (**Cmd+P** on macOS). Search by name or path, or enter an absolute path, then choose an agent.
-- **Agent discovery:** Detect Codex and Claude ACP adapters, Gemini CLI's `--acp` mode, and OpenCode's `acp` mode. Enter a custom ACP command for other agents. Agentaps requests ACP v2 and also accepts v1 agents.
-- **Session sidebar:** See each project's git branch and status, reorder rows by dragging, resize the sidebar, and archive sessions.
-- **Diff review:** Open **Diff** from an agent conversation to see a file summary of the folder's staged, unstaged, and untracked changes against HEAD. Open a file to inspect its unified or split diff. The view refreshes automatically as the checkout changes, and agents in the same folder share it.
-- **Persistent chats:** Save projects, agents, chat history, and queued messages. On launch, reconnect agents and resume sessions when supported. If an agent cannot restore a session, keep the saved chat visible and start a new session.
-- **Context reset:** Start a fresh agent session in the same project while keeping earlier messages visible above a divider. Resetting stops the active turn and clears queued messages.
-- **Conversation forks:** Choose the fork icon beside an agent reply to start a separate session with the conversation through that reply. The first new prompt includes user and agent messages since the last context reset. Agent internal state and past file versions are not restored.
-- **Chat controls:** Send with **Enter**, insert a newline with **Ctrl+Enter**, stop an active turn, or queue messages while the agent connects or works. Use **Up/Down** in the composer to recall earlier prompts. Type `/` to find agent commands, use **Up/Down** to choose one, and complete it with **Tab** or **Enter**. Start a message with `!` to ask the agent to run the following text as a shell command. A `shell` label appears inside the composer.
-- **Structured questions:** Answer, decline, or cancel ACP form questions in conversation cards. A status dot and count show pending questions in the sidebar while the agent continues working.
-- **Mobile browser preview:** Open a paired browser page to read active conversations, send prompts, stop turns, and answer ACP permission requests through Iroh.
-- **SSH projects:** Enter `ssh://user@host/absolute/path` as a project path to run an ACP agent on a server over SSH.
+If Codex or Claude is installed without its ACP adapter, Agentaps can offer to start the adapter through `npx`. The first run may download it. Agentaps supports ACP v1 and v2 agents.
 
-## Run
+## Work in Agentaps
 
-Install from crates.io where GPUI's native build dependencies are available:
+- **Keep projects and conversations together.** Agentaps saves sessions, chat history, and queued prompts. On launch, it reconnects agents and resumes sessions when they support it. You can archive sessions or reset an agent's context. Forking a reply starts a new session with the visible conversation as context.
+- **Review local changes.** Select **Diff** in a conversation to inspect staged, unstaged, and untracked changes against HEAD. Open files in unified or split view. The diff refreshes as the checkout changes.
+- **Use your agent's controls.** Choose a model or reasoning effort when the agent offers them, run its slash commands, and answer ACP form questions in the chat.
+- **Work over SSH.** Enter a path such as `ssh://user@server.example/home/user/project` when creating a project. Agentaps runs the agent on that server using your existing SSH configuration and keys. The agent and its ACP adapter must be installed there, and the server's host key must already be known. Try `ssh user@server.example` first. Diff review is currently available for local projects only.
+- **Continue in a browser.** Pair a phone browser with the desktop app to read conversations, send prompts, stop turns, and answer permission requests. Agent processes and project files stay on the desktop computer.
+
+In the composer, **Enter** sends a prompt and **Ctrl+Enter** inserts a newline. Type `/` for agent commands, `@` to find a project file, or start with `!` to ask the agent to run a shell command. Prompts sent while an agent is busy are queued. **Up/Down** recalls earlier prompts when the composer is empty.
+
+## Web Connect
+
+1. In the desktop sidebar, select the phone icon. Agentaps shows a pairing QR code.
+2. On your phone, open [Web Connect](https://agentaps.dev/connect/) and scan the code, or open the pairing link from the desktop.
+3. Protect the saved connection with a compatible phone passkey or a passphrase of at least 15 characters. On later visits, unlock the saved desktop to reconnect.
+
+Web Connect connects to the running desktop app through Iroh. Both devices need network access to a compatible relay. The desktop stores its Iroh identity and linked browser credentials in a [SecretSpec](https://secretspec.dev/) provider. If no default provider is configured, Agentaps prompts you to choose one; `secretspec config global init` configures a persistent default. Keep unused pairing links private, and revoke a linked browser from the desktop pairing view when needed. Closing Agentaps ends browser access until you run it again.
+
+See the [Web Connect guide](docs/web-connect.md) for setup, storage, revocation, and current browser limitations.
+
+## Build from source
+
+On a system with Rust and GPUI's native build dependencies, install from crates.io:
 
 ```sh
 cargo install agentaps
 ```
 
-Source builds on Linux need fontconfig and FreeType development files available to `pkg-config`.
-
-From the repository root, with `devenv` installed:
+On Linux, fontconfig and FreeType development files must be available to `pkg-config`. To run this checkout with [devenv](https://devenv.sh/) installed:
 
 ```sh
 devenv shell cargo run --release
 ```
 
-The development environment provides Rust, the native libraries GPUI needs, and Node for optional ACP adapters.
-
-Candidate desktop builds for Linux, Apple Silicon macOS, and Windows are
-available from GitHub Actions. See the [desktop build guide](docs/releasing.md).
-They are not published as releases yet.
-
-## Mobile browser preview
-
-The website and browser UI are a static build in `web/`. The site landing page is at `/`, and Web Connect is at `/connect/`. The browser connects directly to the running desktop app through Iroh. Agent processes and project files stay on the desktop computer.
-
-The browser preview uses WebGPU when available and falls back to WebGL2 if WebGPU cannot initialize.
-
-The development environment includes the `wasm32-unknown-unknown` Rust target, Trunk, and Clang. Build the static site with:
+The development environment provides Rust, GPUI's native libraries, and Node for optional ACP adapters. To build the static website and Web Connect UI in `web/`:
 
 ```sh
 devenv shell -- bash web/build.sh
 ```
 
-The `agentaps-site` Cloudflare Pages project builds and publishes the website from GitHub `main` using `web/cloudflare-build.sh`. Its build output is `web/dist/`. The Cloudflare Workers & Pages GitHub app has access to `domenkozar/agentaps` so each push to `main` triggers a production deployment. Build results appear under the project's Deployments tab. With Wrangler signed in to the same Cloudflare account, you can also build and publish manually with:
+The output is in `web/dist/`. See the [web deployment guide](docs/web-deployment.md) for hosting and local testing, and the [desktop build guide](docs/releasing.md) for package builds and releases.
 
-```sh
-devenv shell -- bash web/deploy.sh
-```
+On NixOS, Agentaps points `claude-agent-acp` at an installed `claude` executable. Set `CLAUDE_CODE_EXECUTABLE` to override this.
 
-In Cloudflare Pages, attach `agentaps.dev` as a custom domain. Its Cloudflare DNS zone needs a proxied CNAME record named `@` that points to `agentaps-site.pages.dev`. Wait for Cloudflare to mark the domain active and verify that both `https://agentaps.dev/` and `https://agentaps.dev/connect/` load before sharing pairing links.
+## Current limitations
 
-The desktop pairing link points to `https://agentaps.dev/` by default. The landing page forwards pairing links to `/connect/` without sending the secret to the server. The landing page links directly to the public Agentaps 0.3.0 desktop installers and checks GitHub for newer releases. Set `AGENTAPS_WEB_URL` to another site URL if you host it elsewhere, or to `http://localhost:8080/` when testing with `python3 -m http.server 8080 --directory web/dist` on the same computer. Select the phone icon next to Archive in the desktop sidebar to start Iroh access. Agentaps shows a QR code and linked browsers in the main window; press Escape or click **Close** when done. On your phone, visit the site, select **Web Connect**, and allow camera access to scan the desktop QR code. You can also open the copied pairing link directly. The site in the QR code must match the site open on your phone.
-
-The pairing link contains a one time enrollment secret that grants access until it is used. Keep unused links private. The desktop app stores its Iroh identity and linked browser credentials through your user-global SecretSpec provider. Configure a provider that supports reading and writing with `secretspec config global init`. If that default is missing or fails, Agentaps shows the configuration path it checked and lets you choose a provider for this run. You can choose the system keyring, 1Password, or enter another SecretSpec provider name or URI. This choice is not saved as a new default; select the same provider on the next launch to keep existing phone pairings. The stored value is UTF-8 JSON, so text-based providers can hold it.
-
-Agentaps creates the desktop credentials in the configured provider on first use and reads them from there on later launches. After scanning the QR code or opening the pairing link on the phone, choose **Pair with phone unlock** or **Pair with passphrase**. Phone unlock creates a platform passkey and uses its WebAuthn PRF output to encrypt the saved connection. The system may verify you with a fingerprint, face scan, or device PIN. If the browser or passkey does not support PRF, use a unique passphrase of at least 15 characters instead. When a link is opened, the page removes the secret from the address bar. When scanned in the page, the secret never enters the address bar. The page exchanges the one time enrollment secret for an access token, and saves that token and the desktop's public Iroh ID as an AES-GCM encrypted record in browser storage. The used pairing link then expires.
-
-Later, visit `https://agentaps.dev/connect/`. The Connect page shows desktops saved in this browser and **Pair another desktop**. You can rename each saved desktop. Choose one to unlock it: phone unlock requests system verification, while passphrase unlock shows a field and **Unlock** button. Agentaps connects as soon as the selected connection is unlocked. The page locks when hidden or on reload. If browser storage is cleared, the passkey becomes unavailable, or you forget the passphrase, pair again from the desktop. To change protection methods, open a new desktop pairing link and choose the other method. Pair on the final HTTPS site because browser storage and passkeys belong to that site's origin.
-
-The chosen unlock method protects the saved token if someone gets your phone. It does not protect a session already open in the browser, or a phone whose passphrase or device PIN is known to the person holding it. Keep each new pairing link private until it has been used.
-
-The saved desktop list belongs to this browser and site origin. The desktop pairing view lists linked browsers. Pairings made with this version have separate access tokens, so you can revoke one browser without removing the others. An older shared-token pairing appears as **Previously paired browsers** and can only be revoked as a group. A revoked browser may still display cached conversation content until it refreshes, but it cannot make new requests. To link it again, scan a fresh QR code.
-
-Closing Agentaps ends mobile access until the app runs again. To rotate the Iroh identity and revoke all linked browsers and pairing links, close Agentaps and remove the `MOBILE_CREDENTIALS` entry for project `agentaps` and profile `default` from the provider you used before starting it again.
-
-The phone browser uses an Iroh relay, so both devices need network access to a compatible relay. On the agents page, **New** starts a session by choosing a project and an agent. **Other project** accepts a local absolute path or an `ssh://host/absolute/path` URL, and **Custom ACP command** accepts an executable with arguments. The mobile preview shows the latest 100 messages per session, shortens long messages, and does not yet offer diff review or ACP form questions.
-
-## SSH projects
-
-Choose **New**, enter a project path such as `ssh://user@server.example/home/user/project`, then choose an ACP adapter or enter its command. Agentaps starts that command on the server through `ssh -T` and uses the server path as the ACP working directory. The agent and adapter must be installed on the server. Agentaps uses your SSH configuration and keys, requires a known host key, and does not store SSH credentials. Check that `ssh user@server.example` works before starting a remote session. Diff review is currently available for local projects only.
-
-## Notes
-
-- If a Codex or Claude CLI is installed without an ACP adapter, Agentaps can offer one through `npx` when available. The first launch may download it.
-- On NixOS, Agentaps points `claude-agent-acp` at an installed `claude` executable. Set `CLAUDE_CODE_EXECUTABLE` to override this.
-- Session data is stored in `$XDG_CONFIG_HOME/agentaps/config.json`, or `~/.config/agentaps/config.json` if `XDG_CONFIG_HOME` is unset. Closing the app may interrupt an active turn.
-- URL-based elicitation, ACP client file system and terminal methods, and a built-in authentication flow are not yet supported. Agents that require those client features may not work.
+- Web Connect shows the latest 100 messages per session and shortens long messages. It does not yet offer diff review or ACP form questions.
+- URL based elicitation, ACP client file system and terminal methods, and built in authentication are not yet supported. Agents that require those client features may not work.
+- Session data is stored at `$XDG_CONFIG_HOME/agentaps/config.json`, or `~/.config/agentaps/config.json` when `XDG_CONFIG_HOME` is unset. Closing the app can interrupt an active turn.
 
 ## License
 

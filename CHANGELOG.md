@@ -7,6 +7,8 @@ Notable changes to Agentaps are recorded here.
 ### Changed
 
 - The website shows Agentaps 0.3.0 and links directly to its public desktop installers.
+- The README now leads with installation and everyday use, with detailed Web Connect and deployment instructions in separate guides.
+- The README and website now show the same desktop screenshot.
 
 ## [0.3.0] - 2026-09-28
 
