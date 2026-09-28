@@ -54,12 +54,31 @@ enum DiffData {
         Vec<(usize, usize)>,
         DiffPresentation,
         Option<String>,
-        Arc<Vec<DiffRow>>,
+        Arc<Vec<DiffListRow>>,
     ),
     Counts(Option<(usize, usize)>),
 }
 
 type DiffLoadResult = Result<DiffData, String>;
+
+#[derive(Clone)]
+enum DiffListRow {
+    Summary {
+        files: usize,
+        added: usize,
+        removed: usize,
+    },
+    File {
+        path: String,
+        note: Option<String>,
+        added: usize,
+        removed: usize,
+        bar_width: f32,
+        added_width: f32,
+        expanded: bool,
+    },
+    Content(DiffRow),
+}
 
 enum SyncUpdate {
     Counts(PathBuf, Option<String>, Option<(usize, usize)>),
@@ -414,7 +433,7 @@ struct Workspace {
     diff_visible: bool,
     diff_selected_file: Option<String>,
     diff_presentation: DiffPresentation,
-    diff_rows: Arc<Vec<DiffRow>>,
+    diff_rows: Arc<Vec<DiffListRow>>,
     diff_list: ListState,
     diff_tx: Sender<(u64, DiffLoadResult)>,
     diff_rx: Receiver<(u64, DiffLoadResult)>,
@@ -452,15 +471,58 @@ struct Workspace {
     _subscriptions: Vec<Subscription>,
 }
 
-fn diff_rows_for_file(
+fn diff_list_rows(
     files: &[DiffFile],
+    stats: &[(usize, usize)],
     path: Option<&str>,
     presentation: DiffPresentation,
-) -> Vec<DiffRow> {
-    path.and_then(|path| files.iter().find(|file| file.path == path))
-        .map_or_else(Vec::new, |file| {
-            crate::diff_view::flatten(std::slice::from_ref(file), presentation)
-        })
+) -> Vec<DiffListRow> {
+    let (added, removed) = stats.iter().copied().fold((0, 0), |total, count| {
+        (total.0 + count.0, total.1 + count.1)
+    });
+    let max_changed = stats
+        .iter()
+        .map(|(added, removed)| added + removed)
+        .max()
+        .unwrap_or(1)
+        .max(1);
+    let mut rows = vec![DiffListRow::Summary {
+        files: files.len(),
+        added,
+        removed,
+    }];
+    for (file, &(added, removed)) in files.iter().zip(stats) {
+        let changed = added + removed;
+        let bar_width = if changed == 0 {
+            0.0
+        } else {
+            (changed as f32 / max_changed as f32 * 96.0).max(4.0)
+        };
+        let added_width = if changed == 0 {
+            0.0
+        } else {
+            bar_width * added as f32 / changed as f32
+        };
+        let expanded = path == Some(file.path.as_str());
+        rows.push(DiffListRow::File {
+            path: file.path.clone(),
+            note: file.note.clone(),
+            added,
+            removed,
+            bar_width,
+            added_width,
+            expanded,
+        });
+        if expanded {
+            rows.extend(
+                crate::diff_view::flatten(std::slice::from_ref(file), presentation)
+                    .into_iter()
+                    .skip(1)
+                    .map(DiffListRow::Content),
+            );
+        }
+    }
+    rows
 }
 
 fn branch(path: &Path) -> String {
@@ -682,9 +744,10 @@ impl Workspace {
         std::thread::spawn(move || {
             let result = if visible {
                 crate::git_diff::load(&path).map(|files| {
-                    let stats = files.iter().map(crate::diff_view::stats).collect();
-                    let rows = Arc::new(diff_rows_for_file(
+                    let stats: Vec<_> = files.iter().map(crate::diff_view::stats).collect();
+                    let rows = Arc::new(diff_list_rows(
                         &files,
+                        &stats,
                         selected_file.as_deref(),
                         presentation,
                     ));
@@ -703,24 +766,39 @@ impl Workspace {
         presentation: crate::diff_view::Presentation,
         cx: &mut Context<Self>,
     ) {
+        let scroll_top = self.diff_list.logical_scroll_top();
         self.diff_presentation = presentation;
-        self.diff_rows = Arc::new(diff_rows_for_file(
+        self.diff_rows = Arc::new(diff_list_rows(
             &self.diff_files,
+            &self.diff_file_stats,
             self.diff_selected_file.as_deref(),
             presentation,
         ));
         self.diff_list = ListState::new(self.diff_rows.len(), ListAlignment::Top, px(28.));
+        self.diff_list.scroll_to(scroll_top);
         cx.notify();
     }
 
     fn select_diff_file(&mut self, path: String, cx: &mut Context<Self>) {
-        self.diff_selected_file = Some(path);
+        let clicked_path = path.clone();
+        let old_scroll_top = self.diff_list.logical_scroll_top();
+        let old_file_index = self.diff_rows.iter().position(|row| {
+            matches!(row, DiffListRow::File { path: row_path, .. } if row_path == &clicked_path)
+        });
+        self.diff_selected_file =
+            (self.diff_selected_file.as_deref() != Some(path.as_str())).then_some(path);
         self.set_diff_presentation(self.diff_presentation, cx);
-    }
-
-    fn show_diff_summary(&mut self, cx: &mut Context<Self>) {
-        self.diff_selected_file = None;
-        self.set_diff_presentation(self.diff_presentation, cx);
+        if let Some(old_file_index) = old_file_index
+            && let Some(new_file_index) = self.diff_rows.iter().position(|row| {
+                matches!(row, DiffListRow::File { path: row_path, .. } if row_path == &clicked_path)
+            })
+        {
+            let distance = old_file_index.saturating_sub(old_scroll_top.item_ix);
+            self.diff_list.scroll_to(gpui::ListOffset {
+                item_ix: new_file_index.saturating_sub(distance),
+                offset_in_item: old_scroll_top.offset_in_item,
+            });
+        }
     }
 
     fn mark_displayed_agent_viewed(&mut self) {

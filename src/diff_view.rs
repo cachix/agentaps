@@ -4,8 +4,7 @@
 //! Diff production and filesystem access belong to the caller.
 
 use crate::theme::{ACCENT, BG, BORDER, MUTED, SURFACE, TEXT};
-use gpui::{AnyElement, IntoElement, ListState, div, prelude::*, px, rgb};
-use std::sync::Arc;
+use gpui::{AnyElement, IntoElement, div, prelude::*, px, rgb};
 
 const ADDED_BG: u32 = 0x19382e;
 const REMOVED_BG: u32 = 0x422a31;
@@ -143,13 +142,7 @@ pub fn flatten(files: &[File], presentation: Presentation) -> Vec<Row> {
     rows
 }
 
-pub fn view(state: ListState, rows: Arc<Vec<Row>>) -> impl IntoElement {
-    gpui::list(state, move |index, _, _| render_row(&rows[index]))
-        .w_full()
-        .h_full()
-}
-
-fn render_row(row: &Row) -> AnyElement {
+pub(crate) fn render_row(row: &Row) -> AnyElement {
     match row {
         Row::File(path) => div()
             .h(px(32.))

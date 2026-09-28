@@ -424,8 +424,9 @@ impl Workspace {
                     {
                         rows
                     } else {
-                        Arc::new(diff_rows_for_file(
+                        Arc::new(diff_list_rows(
                             &files,
+                            &stats,
                             self.diff_selected_file.as_deref(),
                             self.diff_presentation,
                         ))

@@ -1,6 +1,53 @@
 use super::*;
 
 #[test]
+fn diff_file_expands_beneath_its_row_without_hiding_other_files() {
+    use crate::diff_view::{Hunk, Line, Mark, Side};
+
+    let files = [
+        DiffFile {
+            path: "first.txt".into(),
+            hunks: vec![Hunk {
+                header: "@@ -0,0 +1 @@".into(),
+                lines: vec![Line {
+                    old: None,
+                    new: Some(Side {
+                        number: 1,
+                        text: "added line".into(),
+                        mark: Mark::Added,
+                    }),
+                }],
+            }],
+            note: None,
+        },
+        DiffFile {
+            path: "second.txt".into(),
+            hunks: Vec::new(),
+            note: Some("Second file note".into()),
+        },
+    ];
+    let stats = [(1, 0), (0, 0)];
+    let rows = diff_list_rows(&files, &stats, Some("first.txt"), DiffPresentation::Unified);
+    assert!(matches!(rows[0], DiffListRow::Summary { files: 2, .. }));
+    assert!(
+        matches!(&rows[1], DiffListRow::File { path, expanded: true, .. } if path == "first.txt")
+    );
+    assert!(
+        matches!(&rows[2], DiffListRow::Content(DiffRow::Hunk(header)) if header == "@@ -0,0 +1 @@")
+    );
+    assert!(
+        matches!(&rows[3], DiffListRow::Content(DiffRow::Unified { side, .. }) if side.text == "added line")
+    );
+    assert!(
+        matches!(&rows[4], DiffListRow::File { path, expanded: false, .. } if path == "second.txt")
+    );
+    assert_eq!(rows.len(), 5);
+
+    let collapsed = diff_list_rows(&files, &stats, None, DiffPresentation::Unified);
+    assert_eq!(collapsed.len(), 3);
+}
+
+#[test]
 fn branch_labels_unborn_and_detached_heads_without_git() {
     use std::time::{SystemTime, UNIX_EPOCH};
 
