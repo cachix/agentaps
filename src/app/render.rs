@@ -37,7 +37,9 @@ fn status_badge(agent: &AgentView) -> impl IntoElement {
         .size(px(12.))
         .items_center()
         .justify_center()
-        .child(status_dot(color))
+        .when(agent.status != Status::Idle || pending > 0, |badge| {
+            badge.child(status_dot(color))
+        })
         .tooltip(move |window, cx| Tooltip::new(label.clone()).build(window, cx))
 }
 

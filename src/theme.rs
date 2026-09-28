@@ -30,7 +30,7 @@ pub const ACCENT_SURFACE: u32 = 0x304b60;
 pub const STATUS_CONNECTING: u32 = 0xa2b0be;
 pub const STATUS_IDLE: u32 = 0x8aa9c0;
 pub const STATUS_WORKING: u32 = 0xe9b978;
-pub const STATUS_DONE: u32 = 0x84c8a7;
+pub const STATUS_DONE: u32 = 0x4ade80;
 pub const STATUS_ERROR: u32 = 0xe99191;
 pub const STATUS_QUESTION: u32 = 0xc8a7f4;
 

@@ -234,6 +234,7 @@ impl Workspace {
                         .on_click(cx.listener(move |this, _, window, cx| {
                             this.open_picker(PickerStep::Agents { project_index }, window, cx);
                         }))
+                        .child(div().size(px(12.)).flex_shrink_0())
                         .child(
                             div()
                                 .flex_shrink_0()
