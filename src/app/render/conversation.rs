@@ -267,7 +267,12 @@ impl Workspace {
                 agent.model.is_some() || agent.context.is_some() || agent.effort_option.is_some(),
                 |element| element.child(metadata),
             )
-            .child(reset_context);
+            .when(
+                agent
+                    .context
+                    .is_some_and(|(used, size)| used > 0 && size > 0),
+                |element| element.child(reset_context),
+            );
         let project_controls = div()
             .flex()
             .min_w(px(0.))
