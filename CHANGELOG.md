@@ -44,6 +44,7 @@ Notable changes to Agentaps are recorded here.
 
 ### Changed
 
+- The website hero starts directly with its main headline.
 - The desktop download button matching the visitor's platform is highlighted.
 - Desktop download buttons are larger, and the preview note now shows only the September 28 build date.
 - Desktop build candidates use installable packages for Linux and Windows, with the macOS app distributed in a DMG.

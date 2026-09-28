@@ -27,7 +27,6 @@ a:focus-visible { outline: 2px solid #8fc5ec; outline-offset: 4px; }
 .hero { min-height: 690px; display: grid; grid-template-columns: .9fr 1.1fr; gap: 42px; align-items: center; padding: 82px 0 102px; }
 .hero-copy { position: relative; z-index: 2; }
 .eyebrow { display: flex; align-items: center; gap: 12px; margin: 0 0 22px; color: #8fc5ec; font: 700 11px/1.4 'IBM Plex Sans', sans-serif; letter-spacing: .18em; }
-.eyebrow-line { width: 22px; height: 1px; background: currentColor; }
 h1, h2, h3, p { margin-top: 0; }
 h1, h2, h3 { font-family: 'IBM Plex Sans', system-ui, sans-serif; }
 h1 { margin-bottom: 23px; font-size: clamp(48px, 5.25vw, 76px); line-height: 1.05; letter-spacing: -.07em; font-weight: 600; }
