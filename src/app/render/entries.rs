@@ -665,6 +665,7 @@ mod tests {
             command: vec!["agent".into()],
             archived: false,
             display_name: None,
+            title: None,
             session_id: None,
             model: None,
             context: None,

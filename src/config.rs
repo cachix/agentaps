@@ -48,6 +48,8 @@ pub struct AgentConfig {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub display_name: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub title: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub session_id: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub model: Option<String>,
@@ -214,6 +216,7 @@ mod tests {
         let agent: AgentConfig =
             serde_json::from_str(r#"{"id":7,"command":["agent"],"display_name":"Agent"}"#).unwrap();
         assert!(agent.session_id.is_none());
+        assert!(agent.title.is_none());
         assert!(!agent.archived);
         assert!(agent.messages.is_empty());
         assert!(!agent.was_working);

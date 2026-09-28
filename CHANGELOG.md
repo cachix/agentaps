@@ -4,8 +4,14 @@ Notable changes to Agentaps are recorded here.
 
 ## [Unreleased]
 
+### Added
+
+- The desktop header shows agent-supplied session titles after the context and Reset control and on session hover, retaining them across restarts.
+
 ### Changed
 
+- Desktop header controls show reasoning effort and context usage without their text prefixes.
+- Context usage and Reset now share one control in the desktop conversation header.
 - The website shows Agentaps 0.3.0 and links directly to its public desktop installers.
 - The README now leads with installation and everyday use, with detailed Web Connect and deployment instructions in separate guides.
 - The README and website now show the same desktop screenshot.

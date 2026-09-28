@@ -164,6 +164,10 @@ impl Workspace {
                         .update(cx, |input, cx| input.focus(window, cx));
                     cx.notify();
                 }))
+                .when_some(agent.config.title.as_ref(), |row, title| {
+                    let title = title.clone();
+                    row.tooltip(move |window, cx| Tooltip::new(title.clone()).build(window, cx))
+                })
                 .when(!archived, |element| {
                     element
                         .on_drag(

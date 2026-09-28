@@ -168,11 +168,7 @@ impl Workspace {
                         .ghost()
                         .compact()
                         .tooltip("Reasoning effort")
-                        .label(if compact_header {
-                            option.label()
-                        } else {
-                            format!("Effort: {}", option.label())
-                        })
+                        .label(option.label())
                         .icon(IconName::ChevronDown)
                         .disabled(pending)
                         .dropdown_menu(move |mut menu, _, _| {
@@ -198,61 +194,7 @@ impl Workspace {
                             menu.min_w(px(140.)).max_h(px(320.)).scrollable(true)
                         }),
                 )
-            })
-            .when_some(agent.context, |element, (used, size)| {
-                element.child(
-                    div()
-                        .id(("context", agent.config.id))
-                        .flex_shrink_0()
-                        .whitespace_nowrap()
-                        .text_xs()
-                        .text_color(rgb(MUTED))
-                        .child(if compact_header {
-                            format!("{}/{}", compact_tokens(used), compact_tokens(size))
-                        } else {
-                            format!(
-                                "Context {} / {}",
-                                compact_tokens(used),
-                                compact_tokens(size)
-                            )
-                        })
-                        .tooltip(move |window, cx| {
-                            Tooltip::new(format!(
-                                "Context {} / {}",
-                                compact_tokens(used),
-                                compact_tokens(size)
-                            ))
-                            .build(window, cx)
-                        }),
-                )
             });
-        let reset_context = div()
-            .id("reset-context")
-            .flex_shrink_0()
-            .flex()
-            .items_center()
-            .gap_1()
-            .px_2()
-            .py_1()
-            .rounded_md()
-            .border_1()
-            .border_color(rgb(BORDER))
-            .text_sm()
-            .text_color(rgb(TEXT))
-            .cursor_pointer()
-            .hover(|style| style.bg(rgb(HOVER)))
-            .child(
-                Icon::new(IconName::Redo2)
-                    .size(px(14.))
-                    .text_color(rgb(TEXT)),
-            )
-            .when(!compact_header, |element| element.child("Reset context"))
-            .tooltip(|window, cx| {
-                Tooltip::new("Start fresh here. Earlier messages stay visible.").build(window, cx)
-            })
-            .on_click(cx.listener(move |this, _, _, cx| {
-                this.reset_context(project_index, agent_index, cx);
-            }));
         let agent_controls = div()
             .flex()
             .flex_wrap()
@@ -264,15 +206,67 @@ impl Workspace {
             .when(stacked_header, |element| element.w_full())
             .child(agent_selector)
             .when(
-                agent.model.is_some() || agent.context.is_some() || agent.effort_option.is_some(),
+                agent.model.is_some() || agent.effort_option.is_some(),
                 |element| element.child(metadata),
             )
-            .when(
-                agent
-                    .context
-                    .is_some_and(|(used, size)| used > 0 && size > 0),
-                |element| element.child(reset_context),
-            );
+            .when_some(agent.context, |element, (used, size)| {
+                let can_reset = used > 0 && size > 0;
+                let context_label = format!(
+                    "Context {} / {}",
+                    compact_tokens(used),
+                    compact_tokens(size)
+                );
+                let tooltip = if can_reset {
+                    format!("{context_label}. Click to start fresh. Earlier messages stay visible.")
+                } else {
+                    context_label.clone()
+                };
+                element.child(
+                    div()
+                        .id("reset-context")
+                        .flex_shrink_0()
+                        .flex()
+                        .items_center()
+                        .gap_2()
+                        .px_2()
+                        .py_1()
+                        .rounded_md()
+                        .border_1()
+                        .border_color(rgb(BORDER))
+                        .text_sm()
+                        .text_color(rgb(if can_reset { TEXT } else { MUTED }))
+                        .child(div().whitespace_nowrap().child(format!(
+                            "{} / {}",
+                            compact_tokens(used),
+                            compact_tokens(size)
+                        )))
+                        .when(can_reset, |control| {
+                            control
+                                .child(div().w(px(1.)).h(px(14.)).bg(rgb(BORDER)))
+                                .child(Icon::new(IconName::Redo2).size(px(14.)))
+                                .when(!compact_header, |control| control.child("Reset"))
+                                .cursor_pointer()
+                                .hover(|style| style.bg(rgb(HOVER)))
+                                .on_click(cx.listener(move |this, _, _, cx| {
+                                    this.reset_context(project_index, agent_index, cx);
+                                }))
+                        })
+                        .tooltip(move |window, cx| Tooltip::new(tooltip.clone()).build(window, cx)),
+                )
+            })
+            .when_some(agent.config.title.as_ref(), |element, title| {
+                element.child(
+                    div()
+                        .min_w(px(0.))
+                        .max_w(px(360.))
+                        .flex_1()
+                        .truncate()
+                        .text_sm()
+                        .font_weight(gpui_kit::FontWeight::MEDIUM)
+                        .text_color(rgb(TEXT))
+                        .child(title.clone()),
+                )
+            });
         let project_controls = div()
             .flex()
             .min_w(px(0.))

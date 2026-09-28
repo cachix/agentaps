@@ -845,6 +845,17 @@ impl Workspace {
             return;
         }
         match update["sessionUpdate"].as_str() {
+            Some("session_info_update") => {
+                if let Some(title) = update.get("title") {
+                    if title.is_null() {
+                        agent.config.title = None;
+                    } else if let Some(title) = title.as_str() {
+                        agent.config.title =
+                            Some(title.split_whitespace().collect::<Vec<_>>().join(" "))
+                                .filter(|title| !title.is_empty());
+                    }
+                }
+            }
             Some("usage_update") => {
                 if let (Some(used), Some(size)) = (update["used"].as_u64(), update["size"].as_u64())
                     && size > 0

@@ -121,7 +121,13 @@ struct SessionLocation {
     agent_index: usize,
 }
 
-fn session_search_score(query: &str, path: &Path, branch: &str, agent: &str) -> Option<i32> {
+fn session_search_score(
+    query: &str,
+    path: &Path,
+    branch: &str,
+    agent: &str,
+    title: Option<&str>,
+) -> Option<i32> {
     let name = path
         .file_name()
         .map(|name| name.to_string_lossy().into_owned())
@@ -129,6 +135,9 @@ fn session_search_score(query: &str, path: &Path, branch: &str, agent: &str) -> 
     [
         score(query, &name).map(|rank| rank + 30),
         score(query, agent).map(|rank| rank + 30),
+        title
+            .and_then(|title| score(query, title))
+            .map(|rank| rank + 30),
         score(query, &path.to_string_lossy()),
         score(query, branch),
     ]
@@ -1330,6 +1339,7 @@ impl Workspace {
                             &project.path,
                             &project.branch,
                             &agent.name,
+                            agent.config.title.as_deref(),
                         )?;
                         let order = self
                             .sidebar_order
@@ -1526,6 +1536,7 @@ impl Workspace {
             command,
             archived: false,
             display_name: name,
+            title: None,
             session_id: None,
             model: None,
             context: None,

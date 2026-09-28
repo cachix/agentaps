@@ -72,17 +72,36 @@ fn branch_labels_unborn_and_detached_heads_without_git() {
 
 #[test]
 fn session_search_prefers_direct_name_matches() {
-    let direct = session_search_score("agentaps", Path::new("/dev/agentaps"), "main", "Codex");
+    let direct = session_search_score(
+        "agentaps",
+        Path::new("/dev/agentaps"),
+        "main",
+        "Codex",
+        None,
+    );
     let path_only = session_search_score(
         "agentaps",
         Path::new("/dev/agentaps/examples"),
         "main",
         "Codex",
+        None,
     );
     assert!(direct > path_only);
-    assert!(session_search_score("codex", Path::new("/dev/project"), "main", "Codex").is_some());
+    assert!(
+        session_search_score("codex", Path::new("/dev/project"), "main", "Codex", None).is_some()
+    );
+    assert!(
+        session_search_score(
+            "login",
+            Path::new("/dev/project"),
+            "main",
+            "Codex",
+            Some("Fix login flow")
+        )
+        .is_some()
+    );
     assert_eq!(
-        session_search_score("missing", Path::new("/dev/project"), "main", "Codex"),
+        session_search_score("missing", Path::new("/dev/project"), "main", "Codex", None),
         None
     );
 }
@@ -293,6 +312,7 @@ fn agent(protocol: ProtocolVersion) -> AgentView {
         command: vec!["fixture".into()],
         archived: false,
         display_name: None,
+        title: None,
         session_id: None,
         model: None,
         context: None,
@@ -310,6 +330,47 @@ fn agent(protocol: ProtocolVersion) -> AgentView {
     agent.status = Status::Working;
     agent.active_work = true;
     agent
+}
+
+#[test]
+fn agent_session_titles_update_and_survive_restarts() {
+    for protocol in [ProtocolVersion::V1, ProtocolVersion::V2] {
+        let mut agent = agent(protocol);
+        Workspace::handle_update(
+            &mut agent,
+            &json!({"params":{"sessionId":"session-1","update":{
+                "sessionUpdate":"session_info_update","title":"  Fix   login flow  "
+            }}}),
+        );
+        assert_eq!(agent.config.title.as_deref(), Some("Fix login flow"));
+
+        Workspace::handle_update(
+            &mut agent,
+            &json!({"params":{"sessionId":"other-session","update":{
+                "sessionUpdate":"session_info_update","title":"Unrelated work"
+            }}}),
+        );
+        assert_eq!(agent.config.title.as_deref(), Some("Fix login flow"));
+
+        let restored = AgentView::new(agent.snapshot());
+        assert_eq!(restored.config.title.as_deref(), Some("Fix login flow"));
+
+        Workspace::handle_update(
+            &mut agent,
+            &json!({"params":{"sessionId":"session-1","update":{
+                "sessionUpdate":"session_info_update","updatedAt":"2026-09-28T00:00:00Z"
+            }}}),
+        );
+        assert_eq!(agent.config.title.as_deref(), Some("Fix login flow"));
+
+        Workspace::handle_update(
+            &mut agent,
+            &json!({"params":{"sessionId":"session-1","update":{
+                "sessionUpdate":"session_info_update","title":null
+            }}}),
+        );
+        assert!(agent.config.title.is_none());
+    }
 }
 
 #[test]
@@ -361,6 +422,7 @@ fn v1_prompt_response_still_completes_turn() {
 fn resetting_context_reuses_agent_settings_without_reusing_session_state() {
     let mut previous = agent(ProtocolVersion::V2);
     previous.config.display_name = Some("Example agent".into());
+    previous.config.title = Some("Earlier task".into());
     previous.config.session_id = Some("session-1".into());
     previous.config.pending_prompts.push("Queued work".into());
     previous.model = Some("Example model".into());
@@ -383,6 +445,7 @@ fn resetting_context_reuses_agent_settings_without_reusing_session_state() {
     assert_eq!(config.id, 2);
     assert_eq!(config.command, previous.config.command);
     assert_eq!(config.display_name, previous.config.display_name);
+    assert!(config.title.is_none());
     assert_eq!(config.session_id, None);
     assert_eq!(config.model, None);
     assert_eq!(config.context, None);
@@ -411,6 +474,7 @@ fn resetting_context_reuses_agent_settings_without_reusing_session_state() {
 #[test]
 fn fork_copies_history_through_selected_response_without_source_session_state() {
     let mut source = agent(ProtocolVersion::V2);
+    source.config.title = Some("Original task".into());
     source.config.pending_prompts.push("Queued work".into());
     source.log(Role::User, "First question");
     source.upsert_message(
@@ -425,6 +489,7 @@ fn fork_copies_history_through_selected_response_without_source_session_state() 
     let config = source.fork_config(2, 1).unwrap();
     assert_eq!(config.id, 2);
     assert_eq!(config.session_id, None);
+    assert!(config.title.is_none());
     assert_eq!(config.messages.len(), 2);
     assert_eq!(config.messages[1].text, "First answer");
     assert!(config.messages.iter().all(|entry| entry.key.is_none()));

@@ -205,6 +205,7 @@ impl AgentView {
             command: self.config.command.clone(),
             archived: self.config.archived,
             display_name: self.config.display_name.clone(),
+            title: None,
             session_id: None,
             model: None,
             context: None,
@@ -232,6 +233,7 @@ impl AgentView {
             command: self.config.command.clone(),
             archived: false,
             display_name: self.config.display_name.clone(),
+            title: None,
             session_id: None,
             model: None,
             context: None,
@@ -336,6 +338,7 @@ impl AgentView {
             command: self.config.command.clone(),
             archived: self.config.archived,
             display_name: self.config.display_name.clone(),
+            title: self.config.title.clone(),
             session_id: self
                 .session_id
                 .clone()
