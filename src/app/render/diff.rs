@@ -1,6 +1,6 @@
 use super::*;
 use crate::diff_view::{self, Presentation};
-use gpui_component::progress::Progress;
+use gpui_kit::component::progress::Progress;
 
 impl Workspace {
     pub(super) fn render_diff(
@@ -31,7 +31,7 @@ impl Workspace {
                         .items_center()
                         .child(
                             div()
-                                .font_weight(gpui::FontWeight::SEMIBOLD)
+                                .font_weight(gpui_kit::FontWeight::SEMIBOLD)
                                 .text_sm()
                                 .text_color(rgb(TEXT))
                                 .child(agent.name.clone()),
@@ -132,7 +132,7 @@ impl Workspace {
                 .relative()
                 .child(
                     div().id("diff-scroll").size_full().child(
-                        gpui::list(self.diff_list.clone(), move |index, _, cx| {
+                        gpui_kit::list(self.diff_list.clone(), move |index, _, cx| {
                             view.update(cx, |this, cx| this.render_diff_list_row(&rows[index], cx))
                         })
                         .w_full()
@@ -145,7 +145,11 @@ impl Workspace {
         panel.child(body)
     }
 
-    fn render_diff_list_row(&self, row: &DiffListRow, cx: &mut Context<Self>) -> gpui::AnyElement {
+    fn render_diff_list_row(
+        &self,
+        row: &DiffListRow,
+        cx: &mut Context<Self>,
+    ) -> gpui_kit::AnyElement {
         match row {
             DiffListRow::Summary {
                 files,

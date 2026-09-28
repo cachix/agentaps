@@ -7,13 +7,8 @@ use crate::folder_search::{FolderSearch, inject_path};
 use crate::theme::*;
 use crate::{config, theme};
 use agent_client_protocol_schema::{ProtocolVersion, v2};
-use gpui::{
-    App, Bounds, Context, DragMoveEvent, Entity, Focusable, IntoElement, KeyBinding, KeyDownEvent,
-    ListAlignment, ListState, MouseButton, Render, StatefulInteractiveElement, Subscription,
-    Window, WindowBounds, WindowOptions, actions, div, prelude::*, px, relative, rems, rgb, size,
-};
-use gpui_component::{
-    ActiveTheme, Disableable, Icon, IconName, Root,
+use gpui_kit::component::{
+    ActiveTheme, Disableable, Icon, IconName,
     button::{Button, ButtonVariants},
     input::{
         Enter, Escape, IndentInline, Input, InputEvent, InputState, MoveDown, MoveUp, Position,
@@ -23,6 +18,11 @@ use gpui_component::{
     scroll::ScrollableElement,
     text::{TextView, TextViewStyle},
     tooltip::Tooltip,
+};
+use gpui_kit::{
+    App, Bounds, Context, DragMoveEvent, Entity, Focusable, IntoElement, KeyBinding, KeyDownEvent,
+    ListAlignment, ListState, MouseButton, Render, StatefulInteractiveElement, Subscription,
+    Window, WindowBounds, WindowOptions, actions, div, prelude::*, px, relative, rems, rgb, size,
 };
 use serde_json::{Value, json};
 use std::{
@@ -805,7 +805,7 @@ impl Workspace {
             })
         {
             let distance = old_file_index.saturating_sub(old_scroll_top.item_ix);
-            self.diff_list.scroll_to(gpui::ListOffset {
+            self.diff_list.scroll_to(gpui_kit::ListOffset {
                 item_ix: new_file_index.saturating_sub(distance),
                 offset_in_item: old_scroll_top.offset_in_item,
             });
@@ -1922,13 +1922,13 @@ impl Drop for Workspace {
 }
 
 pub(crate) fn run() {
-    gpui_ce_platform::application()
+    gpui_kit::application()
         .with_assets(AppAssets)
         .run(|cx: &mut App| {
-            gpui_component::init(cx);
+            gpui_kit::init(cx);
             cx.bind_keys([KeyBinding::new(
                 "ctrl-enter",
-                gpui_component::input::Enter {
+                gpui_kit::component::input::Enter {
                     secondary: true,
                     shift: true,
                 },
@@ -1940,15 +1940,15 @@ pub(crate) fn run() {
             cx.bind_keys([KeyBinding::new("ctrl-p", QuickOpen, None)]);
             theme::apply(cx);
             let bounds = Bounds::centered(None, size(px(1200.), px(760.)), cx);
-            cx.open_window(
+            gpui_kit::open_window(
                 WindowOptions {
                     window_bounds: Some(WindowBounds::Windowed(bounds)),
                     ..Default::default()
                 },
+                cx,
                 |window, cx| {
                     window.set_window_title("Agentaps");
-                    let view = cx.new(|cx| Workspace::new(window, cx));
-                    cx.new(|cx| Root::new(view, window, cx))
+                    cx.new(|cx| Workspace::new(window, cx))
                 },
             )
             .expect("Could not open GPUI window");

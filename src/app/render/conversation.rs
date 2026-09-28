@@ -357,7 +357,7 @@ impl Workspace {
         );
         let view = cx.entity().clone();
         let rows = self.chat_rows.clone();
-        let history = gpui::list(self.chat_list.clone(), move |index, window, cx| {
+        let history = gpui_kit::list(self.chat_list.clone(), move |index, window, cx| {
             view.update(cx, |this, cx| {
                 let agent = &this.projects[project_index].agents[agent_index];
                 this.render_chat_row(

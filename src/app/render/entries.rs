@@ -151,7 +151,7 @@ impl Workspace {
                 <= px(24.);
             self.chat_list.splice(range, count);
             if near_bottom {
-                self.chat_list.scroll_to(gpui::ListOffset {
+                self.chat_list.scroll_to(gpui_kit::ListOffset {
                     item_ix: rows.len(),
                     offset_in_item: px(0.),
                 });
@@ -240,7 +240,7 @@ impl Workspace {
         let display_text = shell
             .map(|command| format!("!{command}"))
             .unwrap_or_else(|| entry.text.clone());
-        let text_id: gpui::ElementId = ("chat", agent.config.id).into();
+        let text_id: gpui_kit::ElementId = ("chat", agent.config.id).into();
         let content = TextView::markdown((text_id, index.to_string()), display_text)
             .style(self.chat_text_style(cx))
             .selectable(true)
@@ -319,7 +319,7 @@ impl Workspace {
                                         .when(!copied, |button| {
                                             button.on_click(move |_, _, cx| {
                                                 cx.write_to_clipboard(
-                                                    gpui::ClipboardItem::new_string(
+                                                    gpui_kit::ClipboardItem::new_string(
                                                         reply_text.clone(),
                                                     ),
                                                 );
@@ -379,7 +379,7 @@ impl Workspace {
                     .child(
                         div()
                             .text_xs()
-                            .font_weight(gpui::FontWeight::SEMIBOLD)
+                            .font_weight(gpui_kit::FontWeight::SEMIBOLD)
                             .text_color(rgb(color))
                             .child(label),
                     )

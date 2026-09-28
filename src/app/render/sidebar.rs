@@ -1,6 +1,6 @@
 use super::*;
 
-fn sync_counts_badge(id: gpui::ElementId, ahead: usize, behind: usize) -> impl IntoElement {
+fn sync_counts_badge(id: gpui_kit::ElementId, ahead: usize, behind: usize) -> impl IntoElement {
     let tooltip = match (ahead, behind) {
         (0, behind) => format!("{behind} behind upstream"),
         (ahead, 0) => format!("{ahead} ahead of upstream"),
@@ -45,7 +45,7 @@ impl Workspace {
         project_index: usize,
         action: Option<crate::git_sync::SyncAction>,
         busy: bool,
-        id: gpui::ElementId,
+        id: gpui_kit::ElementId,
         group: String,
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
@@ -204,7 +204,7 @@ impl Workspace {
                         .max_w(relative(0.55))
                         .truncate()
                         .text_sm()
-                        .font_weight(gpui::FontWeight::MEDIUM)
+                        .font_weight(gpui_kit::FontWeight::MEDIUM)
                         .text_color(rgb(if selected { TEXT } else { MUTED }))
                         .child(name),
                 )
