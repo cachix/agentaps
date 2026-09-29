@@ -2,7 +2,7 @@
 
 Agentaps is a desktop workspace for coding agents that speak the [Agent Client Protocol (ACP)](https://agentclientprotocol.com/get-started/introduction). Run an agent in a local project or over SSH, keep its conversations together, and continue from a phone browser when you step away.
 
-![Agentaps showing a Codex conversation and project sessions](web/site/agentaps-desktop.png)
+![Agentaps showing a Codex conversation, project sessions, and task activity](docs/images/agentaps.png)
 
 ## Get started
 

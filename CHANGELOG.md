@@ -16,6 +16,7 @@ Notable changes to Agentaps are recorded here.
 
 ### Changed
 
+- The README shows a recent desktop conversation and task activity screenshot.
 - The website's direct download links and release label now show Agentaps 0.3.1.
 
 ### Fixed
