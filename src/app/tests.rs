@@ -1119,6 +1119,8 @@ fn zoom_shortcuts_and_menu_actions_change_the_font_scale(cx: &mut gpui_kit::Test
         (1.1, px(BASE_FONT_SIZE * 1.1), px(BASE_MONO_FONT_SIZE * 1.1)),
         "Cmd+= should zoom in"
     );
+    let (saved, _) = config::load().expect("zooming should save the config");
+    assert_eq!(saved.font_scale, 1.1, "Cmd+= should persist the zoom level");
     cx.simulate_keystrokes("cmd--");
     assert_eq!(
         zoom_state(cx),
@@ -1137,4 +1139,6 @@ fn zoom_shortcuts_and_menu_actions_change_the_font_scale(cx: &mut gpui_kit::Test
         (1.0, px(BASE_FONT_SIZE), px(BASE_MONO_FONT_SIZE)),
         "menu-dispatched ZoomReset should reset"
     );
+    let (saved, _) = config::load().expect("zooming should save the config");
+    assert_eq!(saved.font_scale, 1.0, "ZoomReset should persist the reset");
 }
