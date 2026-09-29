@@ -1750,14 +1750,19 @@ impl Workspace {
         self.set_font_scale(1.0, window, cx);
     }
 
-    fn set_font_scale(&mut self, scale: f32, window: &mut Window, cx: &mut Context<Self>) {
+    fn apply_font_scale(&mut self, scale: f32) -> f32 {
         let scale = ((scale * 10.).round() / 10.).clamp(MIN_FONT_SCALE, MAX_FONT_SCALE);
-        if scale == self.font_scale {
-            return;
+        if scale != self.font_scale {
+            self.font_scale = scale;
+            self.notice = Some(format!("Zoom {:.0}%", scale * 100.));
+            self.persist();
         }
-        self.font_scale = scale;
+        scale
+    }
+
+    fn set_font_scale(&mut self, scale: f32, window: &mut Window, cx: &mut Context<Self>) {
+        let scale = self.apply_font_scale(scale);
         window.set_rem_size(px(BASE_FONT_SIZE * scale));
-        self.persist();
         cx.notify();
     }
 
@@ -2105,7 +2110,7 @@ pub(crate) fn run() {
             ]);
             theme::apply(cx);
             let bounds = Bounds::centered(None, size(px(1200.), px(760.)), cx);
-            gpui_kit::open_window(
+            let window_handle = gpui_kit::open_window(
                 WindowOptions {
                     window_bounds: Some(WindowBounds::Windowed(bounds)),
                     ..Default::default()
@@ -2117,6 +2122,40 @@ pub(crate) fn run() {
                 },
             )
             .expect("Could not open GPUI window");
+            // App-level handlers so View menu items and shortcuts reach the
+            // workspace regardless of which element holds focus.
+            let (any_window, workspace) = window_handle;
+            let workspace_out = workspace.clone();
+            let workspace_reset = workspace.clone();
+            cx.on_action(move |_: &ZoomIn, cx| {
+                let _ = any_window.update(cx, |_, window, cx| {
+                    let _ = workspace.update(cx, |this, cx| {
+                        let next = this.font_scale + FONT_SCALE_STEP;
+                        let scale = this.apply_font_scale(next);
+                        window.set_rem_size(px(BASE_FONT_SIZE * scale));
+                        cx.notify();
+                    });
+                });
+            });
+            cx.on_action(move |_: &ZoomOut, cx| {
+                let _ = any_window.update(cx, |_, window, cx| {
+                    let _ = workspace_out.update(cx, |this, cx| {
+                        let next = this.font_scale - FONT_SCALE_STEP;
+                        let scale = this.apply_font_scale(next);
+                        window.set_rem_size(px(BASE_FONT_SIZE * scale));
+                        cx.notify();
+                    });
+                });
+            });
+            cx.on_action(move |_: &ZoomReset, cx| {
+                let _ = any_window.update(cx, |_, window, cx| {
+                    let _ = workspace_reset.update(cx, |this, cx| {
+                        let scale = this.apply_font_scale(1.0);
+                        window.set_rem_size(px(BASE_FONT_SIZE * scale));
+                        cx.notify();
+                    });
+                });
+            });
             cx.activate(true);
         });
 }

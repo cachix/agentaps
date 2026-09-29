@@ -1078,3 +1078,52 @@ fn shell_mode_requires_first_character_and_preserves_command_text() {
         "Run this shell command exactly as written, then report its output:\n\n  printf 'hello'\nnext"
     );
 }
+
+#[gpui_kit::test]
+fn zoom_shortcuts_and_menu_actions_change_the_font_scale(cx: &mut gpui_kit::TestAppContext) {
+    let temp = tempfile::tempdir().unwrap();
+    // SAFETY: no other test in this process reads the config directory while this
+    // test runs; Workspace::new is only constructed here.
+    unsafe { std::env::set_var("XDG_CONFIG_HOME", temp.path()) };
+    cx.update(|cx| {
+        gpui_kit::init(cx);
+        theme::apply(cx);
+        cx.bind_keys([
+            KeyBinding::new("cmd-=", ZoomIn, None),
+            KeyBinding::new("cmd--", ZoomOut, None),
+            KeyBinding::new("cmd-0", ZoomReset, None),
+        ]);
+    });
+    let (workspace, cx) = cx.add_window_view(|window, cx| Workspace::new(window, cx));
+    let zoom_state = |cx: &mut gpui_kit::VisualTestContext| {
+        cx.update(|window, cx| (workspace.read(cx).font_scale, window.rem_size()))
+    };
+
+    let (scale, rem) = zoom_state(cx);
+    assert_eq!(scale, 1.0);
+    assert_eq!(rem, px(BASE_FONT_SIZE));
+    cx.simulate_keystrokes("cmd-=");
+    assert_eq!(
+        zoom_state(cx),
+        (1.1, px(BASE_FONT_SIZE * 1.1)),
+        "Cmd+= should zoom in"
+    );
+    cx.simulate_keystrokes("cmd--");
+    assert_eq!(
+        zoom_state(cx),
+        (1.0, px(BASE_FONT_SIZE)),
+        "Cmd+- should zoom out"
+    );
+    cx.dispatch_action(ZoomIn);
+    assert_eq!(
+        zoom_state(cx),
+        (1.1, px(BASE_FONT_SIZE * 1.1)),
+        "menu-dispatched ZoomIn should zoom in"
+    );
+    cx.dispatch_action(ZoomReset);
+    assert_eq!(
+        zoom_state(cx),
+        (1.0, px(BASE_FONT_SIZE)),
+        "menu-dispatched ZoomReset should reset"
+    );
+}

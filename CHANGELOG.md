@@ -12,6 +12,7 @@ Notable changes to Agentaps are recorded here.
 
 ### Fixed
 
+- Zoom In, Zoom Out, and Reset Zoom now reach the workspace regardless of which element has focus, and each zoom change shows a notice with the new percentage.
 - `devenv shell` evaluates on macOS again. The Linux-only graphics libraries (wayland, libxkbcommon, libxcb, vulkan-loader, fontconfig, freetype) are now installed only on Linux.
 - Claude ACP sessions retry once when another Claude Code process temporarily blocks OAuth token refresh.
 - Diff loading now uses a toolbar spinner without shifting the diff view.
