@@ -508,6 +508,8 @@ impl Workspace {
                             .gap_2()
                             .text_xs()
                             .text_color(rgb(MUTED))
+                            .children(self.render_mode_select(project_index, agent_index, cx))
+                            .children(self.render_plan_toggle(project_index, agent_index, cx))
                             .children(status)
                             .child(div().flex_1())
                             .child(self.render_session_settings(project_index, agent_index, cx)),
@@ -515,6 +517,148 @@ impl Workspace {
             ),
         );
         chat
+    }
+
+    /// The agent's session mode, shown at the bottom left of the composer
+    /// with the agent's own mode names. Hidden when the agent reports none.
+    fn render_mode_select(
+        &self,
+        project_index: usize,
+        agent_index: usize,
+        cx: &mut Context<Self>,
+    ) -> Option<impl IntoElement + use<>> {
+        let agent = &self.projects[project_index].agents[agent_index];
+        let option = agent.mode_option.as_ref()?;
+        if agent.session_id.is_none() || agent.status == Status::Error || option.choices.is_empty()
+        {
+            return None;
+        }
+        let pending = agent.setting_pending();
+        let choices = option.choices.clone();
+        let current = option.current.clone();
+        let view = cx.entity().clone();
+        Some(
+            Button::new(format!("mode-select-{}", agent.config.id))
+                .ghost()
+                .xsmall()
+                .label(option.label())
+                .icon(IconName::ChevronDown)
+                .tooltip("Mode")
+                .disabled(pending)
+                .dropdown_menu_with_anchor(Anchor::BottomLeft, move |mut menu, _, _| {
+                    for choice in &choices {
+                        let value = choice.value.clone();
+                        let view = view.clone();
+                        menu = menu.item(
+                            PopupMenuItem::new(choice.label.clone())
+                                .checked(choice.value == current)
+                                .on_click(move |_, _, cx| {
+                                    view.update(cx, |this, cx| {
+                                        this.select_config_option(
+                                            project_index,
+                                            agent_index,
+                                            ConfigOptionKind::Mode,
+                                            value.clone(),
+                                            cx,
+                                        );
+                                    });
+                                }),
+                        );
+                    }
+                    menu.min_w(px(160.)).max_h(px(320.)).scrollable(true)
+                }),
+        )
+    }
+
+    /// Switches planning on and off for agents that report it as a
+    /// collaboration mode, such as Codex. A small switch shows the state:
+    /// muted and empty when off, accent and filled when on.
+    fn render_plan_toggle(
+        &self,
+        project_index: usize,
+        agent_index: usize,
+        cx: &mut Context<Self>,
+    ) -> Option<impl IntoElement + use<>> {
+        let agent = &self.projects[project_index].agents[agent_index];
+        if agent.session_id.is_none() || agent.status == Status::Error {
+            return None;
+        }
+        let plan = agent.plan_toggle()?;
+        let active = plan.active;
+        let pending = agent.setting_pending();
+        let track = div()
+            .w(px(20.))
+            .h(px(12.))
+            .flex_shrink_0()
+            .flex()
+            .items_center()
+            .px(px(2.))
+            .rounded_full()
+            .border_1()
+            .map(|track| {
+                if active {
+                    track
+                        .justify_end()
+                        .bg(rgb(ACCENT))
+                        .border_color(rgb(ACCENT))
+                } else {
+                    track.justify_start().border_color(rgb(MUTED))
+                }
+            })
+            .child(
+                div()
+                    .size(px(6.))
+                    .rounded_full()
+                    .bg(rgb(if active { BG } else { MUTED })),
+            );
+        let view = cx.entity().clone();
+        // The label and switch explain themselves, so there is no tooltip.
+        // Assistive technology hears "Plan, switch" with its on/off state.
+        Some(
+            gpui_kit::base::Switch::new(("plan-toggle", agent.config.id as usize))
+                .checked(active)
+                .disabled(pending)
+                .accessibility_label("Plan")
+                .flex()
+                .items_center()
+                .gap_1p5()
+                .px_1p5()
+                .py_0p5()
+                .rounded_md()
+                .text_xs()
+                .text_color(rgb(if active { ACCENT } else { MUTED }))
+                .child(track)
+                .child("Plan")
+                .map(|toggle| {
+                    if pending {
+                        toggle.opacity(0.5)
+                    } else {
+                        toggle.cursor_pointer().hover(|style| {
+                            style
+                                .bg(rgb(HOVER))
+                                .text_color(rgb(if active { ACCENT } else { TEXT }))
+                        })
+                    }
+                })
+                .on_change(move |_, event, window, cx| {
+                    let value = plan.next.clone();
+                    view.update(cx, |this, cx| {
+                        this.select_config_option(
+                            project_index,
+                            agent_index,
+                            ConfigOptionKind::Collaboration,
+                            value,
+                            cx,
+                        );
+                        // A mouse click returns to typing; keyboard users keep
+                        // their place in the tab order.
+                        if !event.is_keyboard() {
+                            this.composer
+                                .update(cx, |input, cx| input.focus(window, cx));
+                        }
+                    });
+                }),
+        )
     }
 
     /// Model, effort and context usage, shown under the composer. Only the
@@ -527,7 +671,7 @@ impl Workspace {
     ) -> Div {
         let agent = &self.projects[project_index].agents[agent_index];
         let selectable = agent.session_id.is_some() && agent.status != Status::Error;
-        let pending = agent.pending_model.is_some() || agent.pending_effort.is_some();
+        let pending = agent.setting_pending();
         let mut row = div().flex().min_w(px(0.)).items_center().gap_1();
         if let Some(model) = agent.model.as_ref() {
             row = match &agent.model_option {

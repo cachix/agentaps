@@ -711,6 +711,98 @@ fn model_options_support_grouped_choices_and_acp_selection() {
 }
 
 #[test]
+fn mode_follows_agent_config_option_and_mode_updates() {
+    let mut agent = agent(ProtocolVersion::V2);
+    let options = json!([
+        {"id":"mode","name":"Mode","category":"mode","type":"select","currentValue":"default",
+            "options":[{"value":"default","name":"Manual"},{"value":"acceptEdits","name":"Accept edits"},
+                {"value":"auto","name":"Auto"}]}
+    ]);
+    Workspace::handle_update(
+        &mut agent,
+        &json!({"params":{"sessionId":"session-1","update":{
+            "sessionUpdate":"config_option_update","configOptions":options
+        }}}),
+    );
+    let mode = agent.mode_option.as_ref().unwrap();
+    assert_eq!(mode.label(), "Manual");
+    assert_eq!(mode.choices.len(), 3);
+    assert_eq!(
+        mode_request(7, "session-1", mode, false, "auto"),
+        json!({"jsonrpc":"2.0","id":7,"method":"session/set_config_option","params":{
+            "sessionId":"session-1","configId":"mode","type":"id","value":"auto"
+        }})
+    );
+    Workspace::handle_update(
+        &mut agent,
+        &json!({"params":{"sessionId":"session-1","update":{
+            "sessionUpdate":"current_mode_update","currentModeId":"acceptEdits"
+        }}}),
+    );
+    assert_eq!(agent.mode_option.as_ref().unwrap().label(), "Accept edits");
+}
+
+#[test]
+fn plan_toggle_follows_collaboration_mode_option() {
+    let mut agent = agent(ProtocolVersion::V2);
+    let options = json!([
+        {"id":"mode","category":"mode","type":"select","currentValue":"agent",
+            "options":[{"value":"read-only","name":"Read-only"},{"value":"agent","name":"Auto review"}]},
+        {"id":"collaboration_mode","name":"Collaboration mode","category":"collaboration_mode",
+            "type":"select","currentValue":"default",
+            "options":[{"value":"default","name":"Default"},{"value":"plan","name":"Plan"}]}
+    ]);
+    Workspace::handle_update(
+        &mut agent,
+        &json!({"params":{"sessionId":"session-1","update":{
+            "sessionUpdate":"config_option_update","configOptions":options
+        }}}),
+    );
+    assert_eq!(agent.mode_option.as_ref().unwrap().label(), "Auto review");
+    let plan = agent.plan_toggle().unwrap();
+    assert!(!plan.active);
+    assert_eq!(plan.next, "plan");
+    agent.collaboration_option.as_mut().unwrap().current = "plan".into();
+    let plan = agent.plan_toggle().unwrap();
+    assert!(plan.active);
+    assert_eq!(plan.next, "default");
+    // Agents without a plan choice get no toggle.
+    agent.collaboration_option = collaboration_option(&json!([
+        {"id":"collaboration_mode","category":"collaboration_mode","currentValue":"pair",
+            "options":[{"value":"pair","name":"Pair"}]}
+    ]));
+    assert!(agent.plan_toggle().is_none());
+}
+
+#[test]
+fn session_modes_are_used_when_agent_has_no_mode_config_option() {
+    let mut agent = agent(ProtocolVersion::V1);
+    update_session_modes(
+        &mut agent,
+        &json!({"currentModeId":"default","availableModes":[
+            {"id":"default","name":"Default"},{"id":"yolo","name":"YOLO"}
+        ]}),
+    );
+    assert!(agent.legacy_modes);
+    let mode = agent.mode_option.as_ref().unwrap();
+    assert_eq!(mode.label(), "Default");
+    assert_eq!(
+        mode_request(3, "session-1", mode, true, "yolo"),
+        json!({"jsonrpc":"2.0","id":3,"method":"session/set_mode","params":{
+            "sessionId":"session-1","modeId":"yolo"
+        }})
+    );
+    // Config options without a mode keep the session's mode list.
+    Workspace::handle_update(
+        &mut agent,
+        &json!({"params":{"sessionId":"session-1","update":{
+            "sessionUpdate":"config_option_update","configOptions":[]
+        }}}),
+    );
+    assert_eq!(agent.mode_option.as_ref().unwrap().label(), "Default");
+}
+
+#[test]
 fn reasoning_effort_is_detected_in_model_config_options() {
     let options = json!([
         {"configId":"temperature","category":"model_config","name":"Temperature",

@@ -22,6 +22,19 @@ fn update_config_options(agent: &mut AgentView, options: &Value) {
         agent.model_option = None;
     }
     agent.effort_option = effort_option(options);
+    if let Some(option) = mode_option(options) {
+        agent.mode_option = Some(option);
+        agent.legacy_modes = false;
+    } else if !agent.legacy_modes {
+        agent.mode_option = None;
+    }
+    agent.collaboration_option = collaboration_option(options);
+}
+
+/// Applies the config options and session modes from a session response.
+fn update_session_settings(agent: &mut AgentView, result: &Value) {
+    update_config_options(agent, &result["configOptions"]);
+    update_session_modes(agent, &result["modes"]);
 }
 
 impl Workspace {
@@ -34,32 +47,29 @@ impl Workspace {
         cx: &mut Context<Self>,
     ) {
         let agent = &mut self.projects[project_index].agents[agent_index];
-        let option = match kind {
-            ConfigOptionKind::Model => &agent.model_option,
-            ConfigOptionKind::Effort => &agent.effort_option,
-        };
-        let Some(option) = option else {
+        if agent.setting_pending() {
+            return;
+        }
+        let Some(option) = agent.setting_option(kind).clone() else {
             return;
         };
-        if agent.pending_model.is_some()
-            || agent.pending_effort.is_some()
-            || option.current == value
-            || !option.choices.iter().any(|choice| choice.value == value)
-        {
+        if option.current == value || !option.choices.iter().any(|choice| choice.value == value) {
             return;
         }
         let Some(session_id) = &agent.session_id else {
             return;
         };
         let id = agent.next_request_id;
-        let request = set_config_option_request(id, session_id, option, &value);
+        let request = match kind {
+            ConfigOptionKind::Mode => {
+                mode_request(id, session_id, &option, agent.legacy_modes, &value)
+            }
+            _ => set_config_option_request(id, session_id, &option, &value),
+        };
         match agent.send(request) {
             Ok(()) => {
                 agent.next_request_id += 1;
-                match kind {
-                    ConfigOptionKind::Model => agent.pending_model = Some((id, value)),
-                    ConfigOptionKind::Effort => agent.pending_effort = Some((id, value)),
-                }
+                *agent.pending_setting(kind) = Some((id, value));
             }
             Err(error) => agent.log(Role::System, format!("Could not change setting: {error}")),
         }
@@ -551,8 +561,7 @@ impl Workspace {
                     if let Some((agent, _)) = self.agent_mut(agent_id) {
                         agent.oauth_retry = None;
                         agent.awaiting_response = false;
-                        agent.pending_model = None;
-                        agent.pending_effort = None;
+                        agent.clear_pending_settings();
                         agent.cancel_requested = false;
                         agent.elicitations.clear();
                         agent.permissions.clear();
@@ -729,44 +738,30 @@ impl Workspace {
         let Some(id) = value.get("id").and_then(Value::as_u64) else {
             return;
         };
-        let config_kind = if agent
-            .pending_model
-            .as_ref()
-            .is_some_and(|(pending_id, _)| *pending_id == id)
-        {
-            Some(ConfigOptionKind::Model)
-        } else if agent
-            .pending_effort
-            .as_ref()
-            .is_some_and(|(pending_id, _)| *pending_id == id)
-        {
-            Some(ConfigOptionKind::Effort)
-        } else {
-            None
-        };
+        let config_kind = [
+            ConfigOptionKind::Model,
+            ConfigOptionKind::Effort,
+            ConfigOptionKind::Mode,
+            ConfigOptionKind::Collaboration,
+        ]
+        .into_iter()
+        .find(|kind| {
+            agent
+                .pending_setting(*kind)
+                .as_ref()
+                .is_some_and(|(pending_id, _)| *pending_id == id)
+        });
         if let Some(kind) = config_kind {
-            let (_, selected) = match kind {
-                ConfigOptionKind::Model => agent.pending_model.take().unwrap(),
-                ConfigOptionKind::Effort => agent.pending_effort.take().unwrap(),
-            };
+            let (_, selected) = agent.pending_setting(kind).take().unwrap();
             if let Some(error) = value.get("error") {
                 let message = error["message"].as_str().unwrap_or("unknown error");
                 agent.log(Role::System, format!("Could not change setting: {message}"));
             } else if value["result"]["configOptions"].is_array() {
                 update_config_options(agent, &value["result"]["configOptions"]);
-            } else {
-                match kind {
-                    ConfigOptionKind::Model => {
-                        if let Some(option) = &mut agent.model_option {
-                            option.current = selected;
-                            agent.model = Some(option.label());
-                        }
-                    }
-                    ConfigOptionKind::Effort => {
-                        if let Some(option) = &mut agent.effort_option {
-                            option.current = selected;
-                        }
-                    }
+            } else if let Some(option) = agent.setting_option(kind) {
+                option.current = selected;
+                if kind == ConfigOptionKind::Model {
+                    agent.model = Some(option.label());
                 }
             }
             return;
@@ -879,7 +874,7 @@ impl Workspace {
             }
             2 => {
                 if agent.restoring.take().is_some() {
-                    update_config_options(agent, &value["result"]["configOptions"]);
+                    update_session_settings(agent, &value["result"]);
                     if agent.status == Status::Connecting {
                         agent.status = Status::Idle;
                     }
@@ -890,7 +885,7 @@ impl Workspace {
                 } else if let Some(session_id) = value["result"]["sessionId"].as_str() {
                     agent.session_id = Some(session_id.to_owned());
                     agent.config.session_id = agent.session_id.clone();
-                    update_config_options(agent, &value["result"]["configOptions"]);
+                    update_session_settings(agent, &value["result"]);
                     agent.status = Status::Idle;
                 } else {
                     agent.status = Status::Error;
@@ -946,6 +941,13 @@ impl Workspace {
             }
             Some("config_option_update") => {
                 update_config_options(agent, &update["configOptions"]);
+            }
+            Some("current_mode_update") => {
+                if let (Some(option), Some(mode)) =
+                    (agent.mode_option.as_mut(), update["currentModeId"].as_str())
+                {
+                    option.current = mode.to_owned();
+                }
             }
             Some("available_commands_update") => {
                 agent.config.available_commands = parse_available_commands(update);
