@@ -497,7 +497,41 @@ impl Workspace {
             changed = true;
             match event {
                 Event::Message { agent_id, value } => {
-                    self.handle_message(agent_id, value, window, cx)
+                    let may_finish = value["params"]["update"]["sessionUpdate"] == "state_update"
+                        && value["params"]["update"]["state"] == "idle"
+                        || value["id"].as_u64().is_some_and(|id| id >= 3);
+                    let running_project = may_finish
+                        .then(|| {
+                            self.projects.iter().find_map(|project| {
+                                project
+                                    .agents
+                                    .iter()
+                                    .any(|agent| agent.config.id == agent_id && agent.active_work)
+                                    .then(|| (project.path.clone(), project.ssh_host.clone()))
+                            })
+                        })
+                        .flatten();
+                    self.handle_message(agent_id, value, window, cx);
+                    if let Some((path, host)) = running_project
+                        && self.projects.iter().any(|project| {
+                            project.path == path
+                                && project.ssh_host == host
+                                && project
+                                    .agents
+                                    .iter()
+                                    .any(|agent| agent.config.id == agent_id && !agent.active_work)
+                        })
+                    {
+                        self.sync_refresh_pending
+                            .insert((path.clone(), host.clone()));
+                        if let Some(project) = self
+                            .projects
+                            .iter_mut()
+                            .find(|project| project.path == path && project.ssh_host == host)
+                        {
+                            project.sync_counts = None;
+                        }
+                    }
                 }
                 Event::Disconnected { agent_id, reason } => {
                     if let Some((agent, _)) = self.agent_mut(agent_id) {
@@ -526,6 +560,7 @@ impl Workspace {
             self.dirty = true;
             cx.notify();
         }
+        self.refresh_pending_sync_counts(cx);
         self.poll_mobile(cx);
         if self.dirty && self.last_saved.elapsed() >= Duration::from_secs(1) {
             self.persist();
@@ -972,6 +1007,17 @@ impl Workspace {
         }
     }
 
+    fn refresh_pending_sync_counts(&mut self, cx: &mut Context<Self>) {
+        if !self.sync_loading
+            && self
+                .sync_refresh_pending
+                .iter()
+                .any(|key| !self.sync_in_progress.contains(key))
+        {
+            self.refresh_branches(cx);
+        }
+    }
+
     pub(super) fn refresh_branches(&mut self, cx: &mut Context<Self>) {
         let mut changed = false;
         for project in &mut self.projects {
@@ -997,30 +1043,35 @@ impl Workspace {
             if refresh_remote {
                 self.last_remote_sync = Instant::now();
             }
-            let mut projects: Vec<_> = self
-                .projects
-                .iter()
-                .filter(|project| refresh_remote || project.ssh_host.is_none())
-                .filter(|project| {
-                    !self
-                        .sync_in_progress
-                        .contains(&(project.path.clone(), project.ssh_host.clone()))
-                })
-                .map(|project| (project.path.clone(), project.ssh_host.clone()))
-                .collect();
-            projects.sort_by_key(|(_, host)| host.is_some());
+            let mut projects = Vec::new();
+            for project in &self.projects {
+                let path = project.path.clone();
+                let host = project.ssh_host.clone();
+                let key = (path.clone(), host.clone());
+                if self.sync_in_progress.contains(&key)
+                    || !(refresh_remote
+                        || host.is_none()
+                        || self.sync_refresh_pending.contains(&key))
+                {
+                    continue;
+                }
+                let forced_fetch = self.sync_refresh_pending.remove(&key);
+                projects.push((path, host, fetch_upstream || forced_fetch));
+            }
+            projects.sort_by_key(|(_, host, _)| host.is_some());
             self.sync_loading = true;
             let tx = self.sync_tx.clone();
             std::thread::spawn(move || {
-                for (path, host) in projects {
+                for (path, host, fetch) in projects {
                     let counts = host.as_ref().map_or_else(
                         || {
-                            if fetch_upstream {
-                                crate::git_sync::fetch(&path);
+                            if fetch && !crate::git_sync::fetch(&path) {
+                                None
+                            } else {
+                                crate::git_sync::counts(&path)
                             }
-                            crate::git_sync::counts(&path)
                         },
-                        |host| crate::git_sync::remote_counts(host, &path, fetch_upstream),
+                        |host| crate::git_sync::remote_counts(host, &path, fetch),
                     );
                     if tx.send(SyncUpdate::Counts(path, host, counts)).is_err() {
                         return;
@@ -1084,6 +1135,9 @@ impl Workspace {
                     if self
                         .sync_in_progress
                         .contains(&(path.clone(), host.clone()))
+                        || self
+                            .sync_refresh_pending
+                            .contains(&(path.clone(), host.clone()))
                     {
                         continue;
                     }
@@ -1104,11 +1158,13 @@ impl Workspace {
                     result,
                     counts,
                 } => {
-                    self.sync_in_progress.remove(&(path.clone(), host.clone()));
-                    if let Some(project) = self
-                        .projects
-                        .iter_mut()
-                        .find(|project| project.ssh_host == host && project.path == path)
+                    let key = (path.clone(), host.clone());
+                    self.sync_in_progress.remove(&key);
+                    if !self.sync_refresh_pending.contains(&key)
+                        && let Some(project) = self
+                            .projects
+                            .iter_mut()
+                            .find(|project| project.ssh_host == host && project.path == path)
                     {
                         project.sync_counts = counts;
                     }
@@ -1127,6 +1183,7 @@ impl Workspace {
         if changed {
             cx.notify();
         }
+        self.refresh_pending_sync_counts(cx);
     }
 }
 

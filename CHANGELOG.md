@@ -4,6 +4,10 @@ Notable changes to Agentaps are recorded here.
 
 ## [Unreleased]
 
+### Fixed
+
+- Sidebar upstream counts refresh when an agent finishes, so successful pushes do not appear to need pushing again.
+
 ### Changed
 
 - The website's direct download links and release label now show Agentaps 0.3.1.

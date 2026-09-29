@@ -158,27 +158,28 @@ pub fn counts(path: &Path) -> Option<(usize, usize)> {
 }
 
 /// Refresh the tracking refs for the current branch without prompting for credentials.
-pub fn fetch(path: &Path) {
+pub fn fetch(path: &Path) -> bool {
     let Ok(repo) = gix::discover(path) else {
-        return;
+        return false;
     };
     let Ok(Some(head)) = repo.head_ref() else {
-        return;
+        return false;
     };
     if repo
         .branch_remote_ref_name(head.name(), gix::remote::Direction::Fetch)
         .and_then(Result::ok)
         .is_none()
     {
-        return;
+        return false;
     }
-    let _ = Command::new("git")
+    Command::new("git")
         .arg("-C")
         .arg(path)
         .args(["fetch", "--no-tags", "--quiet"])
         .env("GIT_TERMINAL_PROMPT", "0")
         .env("SSH_ASKPASS_REQUIRE", "never")
-        .output();
+        .output()
+        .is_ok_and(|output| output.status.success())
 }
 
 pub fn remote_counts(host: &str, path: &Path, fetch: bool) -> Option<(usize, usize)> {
@@ -186,7 +187,7 @@ pub fn remote_counts(host: &str, path: &Path, fetch: bool) -> Option<(usize, usi
     let path = crate::remote::quote_shell(path);
     let fetch = if fetch {
         format!(
-            "if git -C {path} rev-parse --verify '@{{upstream}}' >/dev/null 2>&1; then GIT_TERMINAL_PROMPT=0 SSH_ASKPASS_REQUIRE=never git -C {path} fetch --no-tags --quiet >/dev/null 2>&1; fi; "
+            "if git -C {path} rev-parse --verify '@{{upstream}}' >/dev/null 2>&1; then GIT_TERMINAL_PROMPT=0 SSH_ASKPASS_REQUIRE=never git -C {path} fetch --no-tags --quiet >/dev/null 2>&1 || exit 1; fi; "
         )
     } else {
         String::new()
@@ -353,8 +354,30 @@ mod tests {
         git(&other, &["push", "-q", "origin", "main"]);
 
         assert_eq!(counts(&local), Some((0, 0)));
-        fetch(&local);
+        assert!(fetch(&local));
         assert_eq!(counts(&local), Some((0, 1)));
+
+        git(&local, &["merge", "--ff-only", "origin/main"]);
+        git(
+            &local,
+            &[
+                "-c",
+                "user.name=Agentaps",
+                "-c",
+                "user.email=agentaps@example.invalid",
+                "commit",
+                "--allow-empty",
+                "-qm",
+                "pushed directly",
+            ],
+        );
+        git(
+            &local,
+            &["push", "-q", remote.to_str().unwrap(), "HEAD:main"],
+        );
+        assert_eq!(counts(&local), Some((1, 0)));
+        assert!(fetch(&local));
+        assert_eq!(counts(&local), Some((0, 0)));
     }
 
     #[test]
