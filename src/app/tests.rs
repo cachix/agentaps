@@ -844,6 +844,130 @@ fn queued_prompt_stays_saved_when_agent_cannot_send_it() {
     assert_eq!(agent.config.pending_prompts, vec!["Next request"]);
 }
 
+#[cfg(unix)]
+#[test]
+fn claude_refresh_lock_retries_prompt_once_without_duplicating_user_message() {
+    let mut agent = agent(ProtocolVersion::V1);
+    let command = vec![
+        "/bin/sh".into(),
+        "-c".into(),
+        "while IFS= read -r line; do printf '%s\\n' \"$line\"; done".into(),
+    ];
+    let (events_tx, events_rx) = mpsc::channel();
+    agent.connection =
+        Some(Connection::spawn(1, &command, Path::new("/"), None, events_tx).unwrap());
+    agent.start_prompt("Please help".into()).unwrap();
+    let Event::Message { value: first, .. } =
+        events_rx.recv_timeout(Duration::from_secs(2)).unwrap()
+    else {
+        panic!("agent did not receive first prompt");
+    };
+    let lock_error = "Failed to refresh OAuth token: another Claude Code process is refreshing it or exited mid-refresh";
+    assert!(agent.defer_oauth_retry(3, lock_error));
+    assert!(!agent.retry_oauth_request());
+    agent.oauth_retry.as_mut().unwrap().due = Some(Instant::now() - Duration::from_secs(1));
+    assert!(agent.retry_oauth_request());
+    let Event::Message { value: second, .. } =
+        events_rx.recv_timeout(Duration::from_secs(2)).unwrap()
+    else {
+        panic!("agent did not receive retried prompt");
+    };
+    assert_eq!(second["params"], first["params"]);
+    assert_ne!(second["id"], first["id"]);
+    assert_eq!(agent.config.active_prompt.as_deref(), Some("Please help"));
+    assert_eq!(
+        agent
+            .messages
+            .iter()
+            .filter(|entry| entry.role == Role::User)
+            .count(),
+        1
+    );
+    assert!(!agent.defer_oauth_retry(4, lock_error));
+}
+
+#[test]
+fn claude_refresh_lock_does_not_retry_after_agent_output() {
+    let mut agent = agent(ProtocolVersion::V2);
+    agent.remember_auth_request(json!({"jsonrpc":"2.0","id":3,"method":"session/prompt"}));
+    agent.awaiting_response = false;
+    assert!(!agent.defer_oauth_retry(
+        3,
+        "Failed to refresh OAuth token: another Claude Code process is refreshing it or exited mid-refresh"
+    ));
+    assert!(agent.oauth_retry.as_ref().unwrap().due.is_none());
+}
+
+#[test]
+fn claude_refresh_lock_does_not_replay_accepted_v2_message() {
+    let mut agent = agent(ProtocolVersion::V2);
+    agent.awaiting_response = true;
+    agent.remember_auth_request(json!({"jsonrpc":"2.0","id":3,"method":"session/prompt"}));
+    Workspace::handle_update(
+        &mut agent,
+        &json!({"params":{"sessionId":"session-1","update":{
+            "sessionUpdate":"user_message","messageId":"user-1","content":[{"type":"text","text":"Please help"}]
+        }}}),
+    );
+    assert!(!agent.defer_oauth_retry(
+        3,
+        "Failed to refresh OAuth token: another Claude Code process is refreshing it or exited mid-refresh"
+    ));
+}
+
+#[cfg(unix)]
+#[test]
+fn claude_refresh_lock_retries_session_setup() {
+    let mut agent = agent(ProtocolVersion::V2);
+    agent.status = Status::Connecting;
+    let command = vec![
+        "/bin/sh".into(),
+        "-c".into(),
+        "while IFS= read -r line; do printf '%s\\n' \"$line\"; done".into(),
+    ];
+    let (events_tx, events_rx) = mpsc::channel();
+    agent.connection =
+        Some(Connection::spawn(1, &command, Path::new("/"), None, events_tx).unwrap());
+    Workspace::start_new_session(&mut agent, Path::new("/"));
+    let Event::Message { value: first, .. } =
+        events_rx.recv_timeout(Duration::from_secs(2)).unwrap()
+    else {
+        panic!("agent did not receive session setup");
+    };
+    assert!(agent.defer_oauth_retry(
+        2,
+        "Failed to refresh OAuth token: another Claude Code process is refreshing it or exited mid-refresh"
+    ));
+    agent.oauth_retry.as_mut().unwrap().due = Some(Instant::now() - Duration::from_secs(1));
+    assert!(agent.retry_oauth_request());
+    let Event::Message { value: second, .. } =
+        events_rx.recv_timeout(Duration::from_secs(2)).unwrap()
+    else {
+        panic!("agent did not receive retried session setup");
+    };
+    assert_eq!(second, first);
+    assert_eq!(agent.status, Status::Connecting);
+}
+
+#[test]
+fn claude_refresh_lock_wait_ignores_failed_turn_idle_update() {
+    let mut agent = agent(ProtocolVersion::V2);
+    agent.awaiting_response = true;
+    agent.remember_auth_request(json!({"jsonrpc":"2.0","id":3,"method":"session/prompt"}));
+    assert!(agent.defer_oauth_retry(
+        3,
+        "Failed to refresh OAuth token: another Claude Code process is refreshing it or exited mid-refresh"
+    ));
+    Workspace::handle_update(
+        &mut agent,
+        &json!({"params":{"sessionId":"session-1","update":{
+            "sessionUpdate":"state_update","state":"idle","stopReason":"end_turn"
+        }}}),
+    );
+    assert!(agent.active_work);
+    assert!(agent.awaiting_response);
+}
+
 #[test]
 fn queued_prompts_reach_the_agent_in_order_after_each_turn() {
     let mut agent = agent(ProtocolVersion::V1);

@@ -61,6 +61,13 @@ pub(super) struct Permission {
     pub(super) options: Vec<(String, String)>,
 }
 
+pub(super) struct OAuthRetry {
+    pub(super) request: Value,
+    pub(super) due: Option<Instant>,
+    pub(super) attempted: bool,
+    pub(super) accepted: bool,
+}
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(super) struct ConfigChoice {
     pub(super) value: String,
@@ -107,6 +114,7 @@ pub(super) struct AgentView {
     pub(super) session_id: Option<String>,
     pub(super) restoring: Option<RestoreMode>,
     pub(super) recovery_due: Option<Instant>,
+    pub(super) oauth_retry: Option<OAuthRetry>,
     pub(super) next_request_id: u64,
     pub(super) messages: Vec<ChatEntry>,
     pub(super) permissions: Vec<Permission>,
@@ -324,6 +332,7 @@ impl AgentView {
             session_id: None,
             restoring: None,
             recovery_due: None,
+            oauth_retry: None,
             next_request_id: 3,
             messages,
             permissions: Vec::new(),
@@ -406,6 +415,100 @@ impl AgentView {
             .and_then(|connection| connection.send(value))
     }
 
+    pub(super) fn remember_auth_request(&mut self, request: Value) {
+        self.oauth_retry = Some(OAuthRetry {
+            request,
+            due: None,
+            attempted: false,
+            accepted: false,
+        });
+    }
+
+    pub(super) fn mark_auth_request_accepted(&mut self) {
+        let Some(retry) = &mut self.oauth_retry else {
+            return;
+        };
+        if retry.request["method"] != "session/prompt" {
+            return;
+        }
+        retry.accepted = true;
+        if retry.due.take().is_some() {
+            self.oauth_retry = None;
+            self.active_work = false;
+            self.awaiting_response = false;
+            self.config.active_prompt = None;
+            self.status = Status::Error;
+            self.log(
+                Role::System,
+                "Claude accepted the message after the authentication error. Review the session before retrying.",
+            );
+        }
+    }
+
+    pub(super) fn defer_oauth_retry(&mut self, id: u64, message: &str) -> bool {
+        const LOCK_ERROR: &str = "Failed to refresh OAuth token: another Claude Code process is refreshing it or exited mid-refresh";
+        if !message.contains(LOCK_ERROR) || self.cancel_requested {
+            return false;
+        }
+        let Some(retry) = &mut self.oauth_retry else {
+            return false;
+        };
+        if retry.request["id"].as_u64() != Some(id)
+            || retry.attempted
+            || (id >= 3 && (!self.awaiting_response || retry.accepted))
+        {
+            return false;
+        }
+        retry.attempted = true;
+        retry.due = Some(Instant::now() + Duration::from_secs(60));
+        self.log(
+            Role::System,
+            "Claude Code authentication is busy. Retrying this request in one minute.",
+        );
+        true
+    }
+
+    pub(super) fn retry_oauth_request(&mut self) -> bool {
+        let Some(retry) = self.oauth_retry.as_ref() else {
+            return false;
+        };
+        if !retry.due.is_some_and(|due| Instant::now() >= due) {
+            return false;
+        }
+        if self.status == Status::Error || self.connection.is_none() {
+            self.oauth_retry = None;
+            return false;
+        }
+        let mut request = retry.request.clone();
+        let prompt = request["method"] == "session/prompt";
+        if prompt {
+            request["id"] = json!(self.next_request_id);
+        }
+        match self.send(request.clone()) {
+            Ok(()) => {
+                if prompt {
+                    self.next_request_id += 1;
+                    self.active_work = true;
+                    self.awaiting_response = true;
+                    self.status = Status::Working;
+                }
+                if let Some(retry) = &mut self.oauth_retry {
+                    retry.request = request;
+                    retry.due = None;
+                }
+            }
+            Err(error) => {
+                self.oauth_retry = None;
+                self.status = Status::Error;
+                self.log(
+                    Role::System,
+                    format!("Could not retry Claude request: {error}"),
+                );
+            }
+        }
+        true
+    }
+
     pub(super) fn start_prompt(&mut self, prompt: String) -> Result<(), String> {
         let session_id = self.session_id.clone().ok_or("Agent is still connecting")?;
         let id = self.next_request_id;
@@ -415,11 +518,11 @@ impl AgentView {
         } else {
             agent_prompt
         };
-        self.send(
-            json!({"jsonrpc":"2.0","id":id,"method":"session/prompt","params":{
-                "sessionId":session_id,"prompt":[{"type":"text","text":agent_prompt}]
-            }}),
-        )?;
+        let request = json!({"jsonrpc":"2.0","id":id,"method":"session/prompt","params":{
+            "sessionId":session_id,"prompt":[{"type":"text","text":agent_prompt}]
+        }});
+        self.send(request.clone())?;
+        self.remember_auth_request(request);
         self.next_request_id += 1;
         self.config.fork_pending = false;
         self.config.was_working = false;

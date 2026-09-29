@@ -248,6 +248,20 @@ impl Workspace {
         }) = self.view.displayed_session()
         {
             let agent = &mut self.projects[project_index].agents[agent_index];
+            if agent
+                .oauth_retry
+                .as_ref()
+                .is_some_and(|retry| retry.due.is_some())
+            {
+                agent.oauth_retry = None;
+                agent.active_work = false;
+                agent.awaiting_response = false;
+                agent.config.active_prompt = None;
+                agent.status = Status::Idle;
+                agent.log(Role::System, "Turn cancelled");
+                cx.notify();
+                return;
+            }
             if agent.active_work
                 && !agent.cancel_requested
                 && let Some(session_id) = &agent.session_id
@@ -535,6 +549,7 @@ impl Workspace {
                 }
                 Event::Disconnected { agent_id, reason } => {
                     if let Some((agent, _)) = self.agent_mut(agent_id) {
+                        agent.oauth_retry = None;
                         agent.awaiting_response = false;
                         agent.pending_model = None;
                         agent.pending_effort = None;
@@ -552,6 +567,7 @@ impl Workspace {
         self.mark_displayed_agent_viewed();
         for project in &mut self.projects {
             for agent in &mut project.agents {
+                changed |= agent.retry_oauth_request();
                 changed |= agent.auto_continue_interrupted_turn();
                 changed |= agent.start_next_queued_prompt();
             }
@@ -572,16 +588,18 @@ impl Workspace {
         agent.recovery_due = None;
         agent.config.was_working = false;
         agent.config.active_prompt = None;
+        agent.oauth_retry = None;
         agent.session_id = None;
         agent.config.session_id = None;
         agent.config.session_has_activity = false;
-        if let Err(error) = agent.send(
-            json!({"jsonrpc":"2.0","id":2,"method":"session/new","params":{
-                "cwd":path,"mcpServers":[]
-            }}),
-        ) {
+        let request = json!({"jsonrpc":"2.0","id":2,"method":"session/new","params":{
+            "cwd":path,"mcpServers":[]
+        }});
+        if let Err(error) = agent.send(request.clone()) {
             agent.status = Status::Error;
             agent.log(Role::System, error);
+        } else {
+            agent.remember_auth_request(request);
         }
     }
 
@@ -597,11 +615,14 @@ impl Workspace {
             RestoreMode::Resume => "session/resume",
             RestoreMode::Load => "session/load",
         };
-        if let Err(error) = agent.send(json!({"jsonrpc":"2.0","id":2,"method":method,"params":{
+        let request = json!({"jsonrpc":"2.0","id":2,"method":method,"params":{
             "sessionId":session_id,"cwd":path,"mcpServers":[]
-        }})) {
+        }});
+        if let Err(error) = agent.send(request.clone()) {
             agent.status = Status::Error;
             agent.log(Role::System, error);
+        } else {
+            agent.remember_auth_request(request);
         }
     }
 
@@ -752,6 +773,16 @@ impl Workspace {
         }
         if let Some(error) = value.get("error") {
             let message = error["message"].as_str().unwrap_or("unknown error");
+            if agent.defer_oauth_retry(id, message) {
+                return;
+            }
+            if agent
+                .oauth_retry
+                .as_ref()
+                .is_some_and(|retry| retry.request["id"] == id)
+            {
+                agent.oauth_retry = None;
+            }
             if id == 2 && agent.restoring.take().is_some() {
                 agent.log(
                     Role::System,
@@ -782,6 +813,13 @@ impl Workspace {
                 },
             );
             return;
+        }
+        if agent
+            .oauth_retry
+            .as_ref()
+            .is_some_and(|retry| retry.request["id"] == id)
+        {
+            agent.oauth_retry = None;
         }
         match id {
             1 => {
@@ -879,6 +917,14 @@ impl Workspace {
             agent.log(Role::System, format!("Invalid ACP v2 update: {error}"));
             return;
         }
+        if agent.protocol == Some(ProtocolVersion::V2)
+            && matches!(
+                update["sessionUpdate"].as_str(),
+                Some("user_message" | "user_message_chunk")
+            )
+        {
+            agent.mark_auth_request_accepted();
+        }
         match update["sessionUpdate"].as_str() {
             Some("session_info_update") => {
                 if let Some(title) = update.get("title") {
@@ -919,6 +965,11 @@ impl Workspace {
                         agent.recovery_due = None;
                     }
                     Some("idle") => {
+                        if agent.oauth_retry.as_ref().is_some_and(|retry| {
+                            retry.due.is_some() && retry.request["method"] == "session/prompt"
+                        }) {
+                            return;
+                        }
                         agent.status = if agent.active_work {
                             Status::Done
                         } else {
