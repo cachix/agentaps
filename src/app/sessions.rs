@@ -18,6 +18,7 @@ fn initialize_params() -> Value {
 enum InitializeProbe {
     V2,
     V1,
+    V1Fallback,
     V2WithoutSessions,
     InvalidV2(String),
     Unsupported,
@@ -28,7 +29,19 @@ fn probe_initialize_protocol(result: &Value) -> InitializeProbe {
         Some(2) => match serde_json::from_value::<v2::InitializeResponse>(result.clone()) {
             Ok(response) if response.capabilities.session.is_some() => InitializeProbe::V2,
             Ok(_) => InitializeProbe::V2WithoutSessions,
-            Err(error) => InitializeProbe::InvalidV2(error.to_string()),
+            Err(error) => {
+                // goose acp echoes the requested v2 version but answers with a
+                // v1-shaped body. Trust the payload shape over the version stamp.
+                if serde_json::from_value::<agent_client_protocol_schema::v1::InitializeResponse>(
+                    result.clone(),
+                )
+                .is_ok()
+                {
+                    InitializeProbe::V1Fallback
+                } else {
+                    InitializeProbe::InvalidV2(error.to_string())
+                }
+            }
         },
         Some(1) => InitializeProbe::V1,
         _ => InitializeProbe::Unsupported,
@@ -861,6 +874,13 @@ impl Workspace {
                         None
                     }
                     InitializeProbe::V1 => Some(ProtocolVersion::V1),
+                    InitializeProbe::V1Fallback => {
+                        agent.log(
+                            Role::System,
+                            "Agent advertised ACP v2 but sent a v1 response. Using ACP v1.",
+                        );
+                        Some(ProtocolVersion::V1)
+                    }
                     InitializeProbe::Unsupported => {
                         agent.log(Role::System, "Agent does not support ACP v1 or v2");
                         None
@@ -1290,7 +1310,7 @@ mod tests {
     fn v1_shaped_v2_stamp_falls_back_to_v1() {
         assert_eq!(
             probe_initialize_protocol(&goose_initialize_result()),
-            InitializeProbe::V1
+            InitializeProbe::V1Fallback
         );
     }
 

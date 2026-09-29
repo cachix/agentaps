@@ -10,6 +10,7 @@ Notable changes to Agentaps are recorded here.
 
 ### Fixed
 
+- Custom agents that answer an ACP v2 initialize offer with a v1-shaped response, such as `goose acp`, now connect over ACP v1 instead of failing initialization.
 - Claude ACP sessions retry once when another Claude Code process temporarily blocks OAuth token refresh.
 - Diff loading now uses a toolbar spinner without shifting the diff view.
 - Split diffs keep both code panes aligned around a vertical divider.
