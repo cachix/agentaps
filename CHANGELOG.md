@@ -4,6 +4,10 @@ Notable changes to Agentaps are recorded here.
 
 ## [Unreleased]
 
+### Changed
+
+- The website's direct download links and release label now show Agentaps 0.3.1.
+
 ## [0.3.1] - 2026-09-29
 
 ### Added
