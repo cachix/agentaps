@@ -1095,35 +1095,46 @@ fn zoom_shortcuts_and_menu_actions_change_the_font_scale(cx: &mut gpui_kit::Test
         ]);
     });
     let (workspace, cx) = cx.add_window_view(|window, cx| Workspace::new(window, cx));
+    // The zoom must land on the theme: in the real app the gpui-component
+    // Root plugin resets window.rem_size to theme.font_size before every
+    // frame, so theme.font_size is what actually reaches the paint.
     let zoom_state = |cx: &mut gpui_kit::VisualTestContext| {
-        cx.update(|window, cx| (workspace.read(cx).font_scale, window.rem_size()))
+        cx.update(|_, cx| {
+            let theme = Theme::global(cx);
+            (
+                workspace.read(cx).font_scale,
+                theme.font_size,
+                theme.mono_font_size,
+            )
+        })
     };
 
-    let (scale, rem) = zoom_state(cx);
-    assert_eq!(scale, 1.0);
-    assert_eq!(rem, px(BASE_FONT_SIZE));
+    assert_eq!(
+        zoom_state(cx),
+        (1.0, px(BASE_FONT_SIZE), px(BASE_MONO_FONT_SIZE))
+    );
     cx.simulate_keystrokes("cmd-=");
     assert_eq!(
         zoom_state(cx),
-        (1.1, px(BASE_FONT_SIZE * 1.1)),
+        (1.1, px(BASE_FONT_SIZE * 1.1), px(BASE_MONO_FONT_SIZE * 1.1)),
         "Cmd+= should zoom in"
     );
     cx.simulate_keystrokes("cmd--");
     assert_eq!(
         zoom_state(cx),
-        (1.0, px(BASE_FONT_SIZE)),
+        (1.0, px(BASE_FONT_SIZE), px(BASE_MONO_FONT_SIZE)),
         "Cmd+- should zoom out"
     );
     cx.dispatch_action(ZoomIn);
     assert_eq!(
         zoom_state(cx),
-        (1.1, px(BASE_FONT_SIZE * 1.1)),
+        (1.1, px(BASE_FONT_SIZE * 1.1), px(BASE_MONO_FONT_SIZE * 1.1)),
         "menu-dispatched ZoomIn should zoom in"
     );
     cx.dispatch_action(ZoomReset);
     assert_eq!(
         zoom_state(cx),
-        (1.0, px(BASE_FONT_SIZE)),
+        (1.0, px(BASE_FONT_SIZE), px(BASE_MONO_FONT_SIZE)),
         "menu-dispatched ZoomReset should reset"
     );
 }

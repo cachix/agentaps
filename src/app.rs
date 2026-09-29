@@ -17,6 +17,7 @@ use gpui_kit::component::{
     menu::{DropdownMenu, PopupMenuItem},
     scroll::ScrollableElement,
     text::{TextView, TextViewStyle},
+    theme::Theme,
     tooltip::Tooltip,
 };
 use gpui_kit::{
@@ -116,10 +117,20 @@ fn move_sidebar_id(order: &mut Vec<u64>, dragged: u64, target: u64) -> bool {
 
 actions!(workspace, [QuickOpen, ZoomIn, ZoomOut, ZoomReset, Quit]);
 
+// Font sizes of the gpui-component dark theme that theme::apply installs.
+// Zoom scales the UI by editing these on the global Theme, because the
+// gpui-component Root plugin resets window rem_size to theme.font_size
+// before every frame, discarding direct window.set_rem_size calls.
 const BASE_FONT_SIZE: f32 = 16.;
+const BASE_MONO_FONT_SIZE: f32 = 13.;
 const MIN_FONT_SCALE: f32 = 0.75;
 const MAX_FONT_SCALE: f32 = 2.0;
 const FONT_SCALE_STEP: f32 = 0.1;
+
+fn set_theme_font_scale(theme: &mut Theme, scale: f32) {
+    theme.font_size = px(BASE_FONT_SIZE * scale);
+    theme.mono_font_size = px(BASE_MONO_FONT_SIZE * scale);
+}
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 struct SessionLocation {
@@ -1009,7 +1020,9 @@ impl Workspace {
         } else {
             1.0
         };
-        window.set_rem_size(px(BASE_FONT_SIZE * font_scale));
+        // Edit the theme directly (no window refresh): the first frame picks
+        // the scaled sizes up when the Root plugin applies theme.font_size.
+        set_theme_font_scale(Theme::global_mut(cx), font_scale);
         let projects: Vec<ProjectView> = config
             .projects
             .into_iter()
@@ -1738,16 +1751,16 @@ impl Workspace {
         self.open_picker(PickerStep::Folders, window, cx);
     }
 
-    fn zoom_in(&mut self, _: &ZoomIn, window: &mut Window, cx: &mut Context<Self>) {
-        self.set_font_scale(self.font_scale + FONT_SCALE_STEP, window, cx);
+    fn zoom_in(&mut self, _: &ZoomIn, _window: &mut Window, cx: &mut Context<Self>) {
+        self.set_font_scale(self.font_scale + FONT_SCALE_STEP, cx);
     }
 
-    fn zoom_out(&mut self, _: &ZoomOut, window: &mut Window, cx: &mut Context<Self>) {
-        self.set_font_scale(self.font_scale - FONT_SCALE_STEP, window, cx);
+    fn zoom_out(&mut self, _: &ZoomOut, _window: &mut Window, cx: &mut Context<Self>) {
+        self.set_font_scale(self.font_scale - FONT_SCALE_STEP, cx);
     }
 
-    fn zoom_reset(&mut self, _: &ZoomReset, window: &mut Window, cx: &mut Context<Self>) {
-        self.set_font_scale(1.0, window, cx);
+    fn zoom_reset(&mut self, _: &ZoomReset, _window: &mut Window, cx: &mut Context<Self>) {
+        self.set_font_scale(1.0, cx);
     }
 
     fn apply_font_scale(&mut self, scale: f32) -> f32 {
@@ -1760,9 +1773,11 @@ impl Workspace {
         scale
     }
 
-    fn set_font_scale(&mut self, scale: f32, window: &mut Window, cx: &mut Context<Self>) {
+    fn set_font_scale(&mut self, scale: f32, cx: &mut Context<Self>) {
         let scale = self.apply_font_scale(scale);
-        window.set_rem_size(px(BASE_FONT_SIZE * scale));
+        // Theme::update also refreshes every window, so the next frame lays
+        // text out at the new sizes.
+        Theme::update(cx, |theme| set_theme_font_scale(theme, scale));
         cx.notify();
     }
 
@@ -2124,36 +2139,22 @@ pub(crate) fn run() {
             .expect("Could not open GPUI window");
             // App-level handlers so View menu items and shortcuts reach the
             // workspace regardless of which element holds focus.
-            let (any_window, workspace) = window_handle;
+            let (_, workspace) = window_handle;
             let workspace_out = workspace.clone();
             let workspace_reset = workspace.clone();
             cx.on_action(move |_: &ZoomIn, cx| {
-                let _ = any_window.update(cx, |_, window, cx| {
-                    let _ = workspace.update(cx, |this, cx| {
-                        let next = this.font_scale + FONT_SCALE_STEP;
-                        let scale = this.apply_font_scale(next);
-                        window.set_rem_size(px(BASE_FONT_SIZE * scale));
-                        cx.notify();
-                    });
+                let _ = workspace.update(cx, |this, cx| {
+                    this.set_font_scale(this.font_scale + FONT_SCALE_STEP, cx);
                 });
             });
             cx.on_action(move |_: &ZoomOut, cx| {
-                let _ = any_window.update(cx, |_, window, cx| {
-                    let _ = workspace_out.update(cx, |this, cx| {
-                        let next = this.font_scale - FONT_SCALE_STEP;
-                        let scale = this.apply_font_scale(next);
-                        window.set_rem_size(px(BASE_FONT_SIZE * scale));
-                        cx.notify();
-                    });
+                let _ = workspace_out.update(cx, |this, cx| {
+                    this.set_font_scale(this.font_scale - FONT_SCALE_STEP, cx);
                 });
             });
             cx.on_action(move |_: &ZoomReset, cx| {
-                let _ = any_window.update(cx, |_, window, cx| {
-                    let _ = workspace_reset.update(cx, |this, cx| {
-                        let scale = this.apply_font_scale(1.0);
-                        window.set_rem_size(px(BASE_FONT_SIZE * scale));
-                        cx.notify();
-                    });
+                let _ = workspace_reset.update(cx, |this, cx| {
+                    this.set_font_scale(1.0, cx);
                 });
             });
             cx.activate(true);
