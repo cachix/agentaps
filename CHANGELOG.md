@@ -8,6 +8,10 @@ Notable changes to Agentaps are recorded here.
 
 - The website's direct download links and release label now show Agentaps 0.3.1.
 
+### Fixed
+
+- Session archive and restore buttons stay vertically centered in the sidebar.
+
 ## [0.3.1] - 2026-09-29
 
 ### Added

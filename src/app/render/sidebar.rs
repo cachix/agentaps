@@ -260,39 +260,52 @@ impl Workspace {
                         .id(("archive-action", agent_id))
                         .absolute()
                         .right(px(4.))
-                        .top(px(2.))
+                        .top(px(0.))
+                        .bottom(px(0.))
                         .invisible()
                         .group_hover(row_group, |style| style.visible())
-                        .rounded_sm()
-                        .bg(rgb(HOVER))
-                        .size(px(22.))
                         .flex()
                         .items_center()
-                        .justify_center()
-                        .text_color(rgb(TEXT))
-                        .cursor_pointer()
                         .child(
-                            Icon::new(if archived {
-                                IconName::Undo2
-                            } else {
-                                IconName::Inbox
-                            })
-                            .size(px(14.))
-                            .text_color(rgb(TEXT)),
-                        )
-                        .tooltip(move |window, cx| {
-                            Tooltip::new(if archived {
-                                "Restore session"
-                            } else {
-                                "Archive session"
-                            })
-                            .build(window, cx)
-                        })
-                        .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
-                        .on_click(cx.listener(move |this, _, window, cx| {
-                            cx.stop_propagation();
-                            this.set_archived(project_index, agent_index, !archived, window, cx);
-                        })),
+                            div()
+                                .id(("archive-button", agent_id))
+                                .rounded_sm()
+                                .bg(rgb(HOVER))
+                                .size(px(22.))
+                                .flex()
+                                .items_center()
+                                .justify_center()
+                                .text_color(rgb(TEXT))
+                                .cursor_pointer()
+                                .child(
+                                    Icon::new(if archived {
+                                        IconName::Undo2
+                                    } else {
+                                        IconName::Inbox
+                                    })
+                                    .size(px(14.))
+                                    .text_color(rgb(TEXT)),
+                                )
+                                .tooltip(move |window, cx| {
+                                    Tooltip::new(if archived {
+                                        "Restore session"
+                                    } else {
+                                        "Archive session"
+                                    })
+                                    .build(window, cx)
+                                })
+                                .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
+                                .on_click(cx.listener(move |this, _, window, cx| {
+                                    cx.stop_propagation();
+                                    this.set_archived(
+                                        project_index,
+                                        agent_index,
+                                        !archived,
+                                        window,
+                                        cx,
+                                    );
+                                })),
+                        ),
                 );
             if archived {
                 archived_list = archived_list.child(row);
