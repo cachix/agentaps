@@ -7,6 +7,7 @@ Notable changes to Agentaps are recorded here.
 ### Added
 
 - CI checks that the devenv shell starts on Linux and macOS.
+- A View menu offers Zoom In, Zoom Out, and Reset Zoom (Cmd+=, Cmd+-, Cmd+0 on macOS, Ctrl on other platforms) to enlarge or shrink the app font size, remembered across restarts.
 - `agentaps --version` prints the installed version without opening the desktop app.
 
 ### Fixed

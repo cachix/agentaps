@@ -114,7 +114,12 @@ fn move_sidebar_id(order: &mut Vec<u64>, dragged: u64, target: u64) -> bool {
     true
 }
 
-actions!(workspace, [QuickOpen]);
+actions!(workspace, [QuickOpen, ZoomIn, ZoomOut, ZoomReset, Quit]);
+
+const BASE_FONT_SIZE: f32 = 16.;
+const MIN_FONT_SCALE: f32 = 0.75;
+const MAX_FONT_SCALE: f32 = 2.0;
+const FONT_SCALE_STEP: f32 = 0.1;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 struct SessionLocation {
@@ -416,6 +421,7 @@ struct Workspace {
     view: WorkspaceView,
     sidebar_order: Vec<u64>,
     sidebar_fraction: f32,
+    font_scale: f32,
     collapsed_tool_groups: HashSet<(u64, usize)>,
     expanded_tool_history: HashSet<(u64, usize)>,
     expanded_tool_rows: HashSet<(u64, usize)>,
@@ -998,6 +1004,12 @@ impl Workspace {
         } else {
             0.2
         };
+        let font_scale = if config.font_scale.is_finite() {
+            config.font_scale.clamp(MIN_FONT_SCALE, MAX_FONT_SCALE)
+        } else {
+            1.0
+        };
+        window.set_rem_size(px(BASE_FONT_SIZE * font_scale));
         let projects: Vec<ProjectView> = config
             .projects
             .into_iter()
@@ -1038,6 +1050,7 @@ impl Workspace {
             view: WorkspaceView::Empty,
             sidebar_order,
             sidebar_fraction,
+            font_scale,
             collapsed_tool_groups: HashSet::new(),
             expanded_tool_history: HashSet::new(),
             expanded_tool_rows: HashSet::new(),
@@ -1270,6 +1283,7 @@ impl Workspace {
                 .collect(),
             sidebar_order: self.sidebar_order.clone(),
             sidebar_fraction: self.sidebar_fraction,
+            font_scale: self.font_scale,
         }
     }
 
@@ -1724,6 +1738,29 @@ impl Workspace {
         self.open_picker(PickerStep::Folders, window, cx);
     }
 
+    fn zoom_in(&mut self, _: &ZoomIn, window: &mut Window, cx: &mut Context<Self>) {
+        self.set_font_scale(self.font_scale + FONT_SCALE_STEP, window, cx);
+    }
+
+    fn zoom_out(&mut self, _: &ZoomOut, window: &mut Window, cx: &mut Context<Self>) {
+        self.set_font_scale(self.font_scale - FONT_SCALE_STEP, window, cx);
+    }
+
+    fn zoom_reset(&mut self, _: &ZoomReset, window: &mut Window, cx: &mut Context<Self>) {
+        self.set_font_scale(1.0, window, cx);
+    }
+
+    fn set_font_scale(&mut self, scale: f32, window: &mut Window, cx: &mut Context<Self>) {
+        let scale = ((scale * 10.).round() / 10.).clamp(MIN_FONT_SCALE, MAX_FONT_SCALE);
+        if scale == self.font_scale {
+            return;
+        }
+        self.font_scale = scale;
+        window.set_rem_size(px(BASE_FONT_SIZE * scale));
+        self.persist();
+        cx.notify();
+    }
+
     fn workspace_key_down(
         &mut self,
         event: &KeyDownEvent,
@@ -2037,9 +2074,35 @@ pub(crate) fn run() {
                 Some("Input"),
             )]);
             #[cfg(target_os = "macos")]
-            cx.bind_keys([KeyBinding::new("cmd-p", QuickOpen, None)]);
+            {
+                cx.bind_keys([
+                    KeyBinding::new("cmd-p", QuickOpen, None),
+                    KeyBinding::new("cmd-=", ZoomIn, None),
+                    KeyBinding::new("cmd-+", ZoomIn, None),
+                    KeyBinding::new("cmd--", ZoomOut, None),
+                    KeyBinding::new("cmd-0", ZoomReset, None),
+                    KeyBinding::new("cmd-q", Quit, None),
+                ]);
+                cx.on_action(|_: &Quit, cx| cx.quit());
+                cx.set_menus(vec![
+                    gpui_kit::Menu::new("Agentaps")
+                        .items([gpui_kit::MenuItem::action("Quit Agentaps", Quit)]),
+                    gpui_kit::Menu::new("View").items([
+                        gpui_kit::MenuItem::action("Zoom In", ZoomIn),
+                        gpui_kit::MenuItem::action("Zoom Out", ZoomOut),
+                        gpui_kit::MenuItem::separator(),
+                        gpui_kit::MenuItem::action("Reset Zoom", ZoomReset),
+                    ]),
+                ]);
+            }
             #[cfg(not(target_os = "macos"))]
-            cx.bind_keys([KeyBinding::new("ctrl-p", QuickOpen, None)]);
+            cx.bind_keys([
+                KeyBinding::new("ctrl-p", QuickOpen, None),
+                KeyBinding::new("ctrl-=", ZoomIn, None),
+                KeyBinding::new("ctrl-+", ZoomIn, None),
+                KeyBinding::new("ctrl--", ZoomOut, None),
+                KeyBinding::new("ctrl-0", ZoomReset, None),
+            ]);
             theme::apply(cx);
             let bounds = Bounds::centered(None, size(px(1200.), px(760.)), cx);
             gpui_kit::open_window(
