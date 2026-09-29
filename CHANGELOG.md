@@ -4,10 +4,6 @@ Notable changes to Agentaps are recorded here.
 
 ## [Unreleased]
 
-### Fixed
-
-- Local Claude ACP sessions use the installed Claude Code CLI and its configured authentication outside NixOS.
-
 ## [0.3.1] - 2026-09-29
 
 ### Added
@@ -25,6 +21,7 @@ Notable changes to Agentaps are recorded here.
 
 ### Fixed
 
+- Local Claude ACP sessions use the installed Claude Code CLI and its configured authentication outside NixOS.
 - Agents installed in user paths such as Homebrew, `~/.local/bin`, or Nix profiles are found when Agentaps is opened from the Dock, Finder, or a desktop launcher.
 
 ## [0.3.0] - 2026-09-28
