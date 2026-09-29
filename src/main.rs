@@ -15,6 +15,14 @@ mod shell_env;
 mod theme;
 
 fn main() {
+    if std::env::args_os()
+        .nth(1)
+        .is_some_and(|arg| arg == "--version")
+    {
+        println!("agentaps {}", env!("CARGO_PKG_VERSION"));
+        return;
+    }
+
     #[cfg(unix)]
     shell_env::import_login_path();
     app::run();

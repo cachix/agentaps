@@ -4,6 +4,10 @@ Notable changes to Agentaps are recorded here.
 
 ## [Unreleased]
 
+### Added
+
+- `agentaps --version` prints the installed version without opening the desktop app.
+
 ### Fixed
 
 - Sidebar upstream counts refresh when an agent finishes, so successful pushes do not appear to need pushing again.
