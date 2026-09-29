@@ -19,8 +19,7 @@ enum Change<'a> {
     Note(&'static str),
 }
 
-/// Read the selected checkout's current files against HEAD. Includes staged,
-/// unstaged, and untracked paths reported by Git, while respecting ignore rules.
+/// Read the selected checkout's tracked and staged files against HEAD.
 pub fn load(path: &Path) -> Result<Vec<File>, String> {
     scan(path, |path, change| match change {
         Change::Note(note) => Some(File {
@@ -84,7 +83,7 @@ fn scan<T>(
     let changes = repo
         .status(gix::progress::Discard)
         .map_err(|error| error.to_string())?
-        .untracked_files(gix::status::UntrackedFiles::Files)
+        .untracked_files(gix::status::UntrackedFiles::None)
         .into_iter(Vec::new())
         .map_err(|error| error.to_string())?;
     for change in changes {
@@ -334,7 +333,7 @@ mod tests {
     }
 
     #[test]
-    fn loads_staged_unstaged_and_untracked_files() {
+    fn loads_staged_and_unstaged_files_without_untracked_files() {
         let stamp = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .unwrap()
@@ -359,8 +358,9 @@ mod tests {
         fs::write(path.join("staged.txt"), "before\n").unwrap();
         fs::write(path.join("unstaged.txt"), "before\n").unwrap();
         fs::write(path.join(".gitignore"), "ignored.txt\n").unwrap();
-        assert_eq!(load(&path).unwrap().len(), 3);
+        assert!(load(&path).unwrap().is_empty());
         git(&["add", "."]);
+        assert_eq!(load(&path).unwrap().len(), 3);
         git(&[
             "-c",
             "user.name=Agentaps",
@@ -371,14 +371,16 @@ mod tests {
             "initial",
         ]);
         assert_eq!(line_counts(&path).unwrap(), None);
+        fs::write(path.join("untracked.txt"), "new\n").unwrap();
+        assert!(load(&path).unwrap().is_empty());
+        assert_eq!(line_counts(&path).unwrap(), None);
         fs::write(path.join("staged.txt"), "after\n").unwrap();
         git(&["add", "staged.txt"]);
         fs::write(path.join("unstaged.txt"), "after\n").unwrap();
-        fs::write(path.join("untracked.txt"), "new\n").unwrap();
         fs::write(path.join("ignored.txt"), "skip\n").unwrap();
         let files = load(&path).unwrap();
         let names: Vec<_> = files.iter().map(|file| file.path.as_str()).collect();
-        assert_eq!(names, ["staged.txt", "unstaged.txt", "untracked.txt"]);
+        assert_eq!(names, ["staged.txt", "unstaged.txt"]);
         assert!(files.iter().all(|file| !file.hunks.is_empty()));
         let expected = files.iter().map(crate::diff_view::stats).fold(
             (0, 0),

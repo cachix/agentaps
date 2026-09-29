@@ -64,11 +64,6 @@ type DiffLoadResult = Result<DiffData, String>;
 
 #[derive(Clone)]
 enum DiffListRow {
-    Summary {
-        files: usize,
-        added: usize,
-        removed: usize,
-    },
     File {
         path: String,
         note: Option<String>,
@@ -500,20 +495,13 @@ fn diff_list_rows(
     path: Option<&str>,
     presentation: DiffPresentation,
 ) -> Vec<DiffListRow> {
-    let (added, removed) = stats.iter().copied().fold((0, 0), |total, count| {
-        (total.0 + count.0, total.1 + count.1)
-    });
     let max_changed = stats
         .iter()
         .map(|(added, removed)| added + removed)
         .max()
         .unwrap_or(1)
         .max(1);
-    let mut rows = vec![DiffListRow::Summary {
-        files: files.len(),
-        added,
-        removed,
-    }];
+    let mut rows = Vec::new();
     for (file, &(added, removed)) in files.iter().zip(stats) {
         let changed = added + removed;
         let bar_width = if changed == 0 {

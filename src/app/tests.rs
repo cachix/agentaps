@@ -28,23 +28,22 @@ fn diff_file_expands_beneath_its_row_without_hiding_other_files() {
     ];
     let stats = [(1, 0), (0, 0)];
     let rows = diff_list_rows(&files, &stats, Some("first.txt"), DiffPresentation::Unified);
-    assert!(matches!(rows[0], DiffListRow::Summary { files: 2, .. }));
     assert!(
-        matches!(&rows[1], DiffListRow::File { path, expanded: true, .. } if path == "first.txt")
+        matches!(&rows[0], DiffListRow::File { path, expanded: true, .. } if path == "first.txt")
     );
     assert!(
-        matches!(&rows[2], DiffListRow::Content(DiffRow::Hunk(header)) if header == "@@ -0,0 +1 @@")
+        matches!(&rows[1], DiffListRow::Content(DiffRow::Hunk(header)) if header == "@@ -0,0 +1 @@")
     );
     assert!(
-        matches!(&rows[3], DiffListRow::Content(DiffRow::Unified { side, .. }) if side.text == "added line")
+        matches!(&rows[2], DiffListRow::Content(DiffRow::Unified { side, .. }) if side.text == "added line")
     );
     assert!(
-        matches!(&rows[4], DiffListRow::File { path, expanded: false, .. } if path == "second.txt")
+        matches!(&rows[3], DiffListRow::File { path, expanded: false, .. } if path == "second.txt")
     );
-    assert_eq!(rows.len(), 5);
+    assert_eq!(rows.len(), 4);
 
     let collapsed = diff_list_rows(&files, &stats, None, DiffPresentation::Unified);
-    assert_eq!(collapsed.len(), 3);
+    assert_eq!(collapsed.len(), 2);
 }
 
 #[test]

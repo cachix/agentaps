@@ -15,7 +15,8 @@ impl Workspace {
         let (added, removed) = self.diff_counts.unwrap_or_default();
         let viewport_width = f32::from(window.viewport_size().width);
         let sidebar_width = (viewport_width * self.sidebar_fraction).max(180.);
-        let chat_width = viewport_width - sidebar_width - 6.;
+        let chat_width =
+            (viewport_width - sidebar_width - 6.) / if self.diff_visible { 2. } else { 1. };
         let compact_header = chat_width < 1050.;
         let stacked_header = chat_width < 560.;
         let available_agents = self.available_agents.clone();
@@ -315,24 +316,37 @@ impl Workspace {
                     .text_color(rgb(TEXT))
                     .cursor_pointer()
                     .hover(|style| style.bg(rgb(HOVER)))
-                    .child(div().flex().items_center().gap_2().child("Diff").when(
-                        self.diff_counts.is_some(),
-                        |element| {
-                            element
-                                .child(
-                                    div()
-                                        .text_color(rgb(diff_view::ADDED_TEXT))
-                                        .child(format!("+{added}")),
-                                )
-                                .child(
-                                    div()
-                                        .text_color(rgb(diff_view::REMOVED_TEXT))
-                                        .child(format!("-{removed}")),
-                                )
-                        },
-                    ))
+                    .child(
+                        div()
+                            .flex()
+                            .items_center()
+                            .gap_2()
+                            .child(if self.diff_visible {
+                                "Hide diff"
+                            } else {
+                                "Diff"
+                            })
+                            .when(self.diff_counts.is_some(), |element| {
+                                element
+                                    .child(
+                                        div()
+                                            .text_color(rgb(diff_view::ADDED_TEXT))
+                                            .child(format!("+{added}")),
+                                    )
+                                    .child(
+                                        div()
+                                            .text_color(rgb(diff_view::REMOVED_TEXT))
+                                            .child(format!("-{removed}")),
+                                    )
+                            }),
+                    )
                     .on_click(cx.listener(move |this, _, _, cx| {
-                        this.open_diff(project_index, cx);
+                        if this.diff_visible {
+                            this.close_diff();
+                            cx.notify();
+                        } else {
+                            this.open_diff(project_index, cx);
+                        }
                     })),
             );
         chat = chat.child(
