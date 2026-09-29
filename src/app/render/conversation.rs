@@ -17,7 +17,6 @@ impl Workspace {
         let sidebar_width = (viewport_width * self.sidebar_fraction).max(180.);
         let chat_width =
             (viewport_width - sidebar_width - 6.) / if self.diff_visible { 2. } else { 1. };
-        let compact_header = chat_width < 1050.;
         let stacked_header = chat_width < 560.;
         let available_agents = self.available_agents.clone();
         let current_command = agent.config.command.clone();
@@ -93,216 +92,97 @@ impl Workspace {
                         .scrollable(true)
                 }),
         );
-        let metadata = div()
-            .flex()
-            .flex_wrap()
-            .min_w(px(0.))
-            .when(!compact_header, |element| element.max_w(relative(0.6)))
-            .items_center()
-            .when(compact_header, |element| element.gap_2())
-            .when(!compact_header, |element| element.gap_3())
-            .when_some(agent.model.as_ref(), |element, model| {
-                if let Some(option) = &agent.model_option
-                    && !option.choices.is_empty()
-                    && agent.session_id.is_some()
-                    && agent.status != Status::Error
-                {
-                    let choices = option.choices.clone();
-                    let current = option.current.clone();
-                    let pending = agent.pending_model.is_some() || agent.pending_effort.is_some();
-                    let view = cx.entity().clone();
-                    element.child(
-                        Button::new(format!("model-select-{}", agent.config.id))
-                            .ghost()
-                            .compact()
-                            .label(model.clone())
-                            .icon(IconName::ChevronDown)
-                            .disabled(pending)
-                            .dropdown_menu(move |mut menu, _, _| {
-                                for choice in &choices {
-                                    let value = choice.value.clone();
-                                    let view = view.clone();
-                                    menu = menu.item(
-                                        PopupMenuItem::new(choice.label.clone())
-                                            .checked(choice.value == current)
-                                            .on_click(move |_, _, cx| {
-                                                view.update(cx, |this, cx| {
-                                                    this.select_config_option(
-                                                        project_index,
-                                                        agent_index,
-                                                        ConfigOptionKind::Model,
-                                                        value.clone(),
-                                                        cx,
-                                                    );
-                                                });
-                                            }),
-                                    );
-                                }
-                                menu.min_w(px(160.)).max_h(px(320.)).scrollable(true)
-                            }),
-                    )
-                } else {
-                    element.child(
-                        div()
-                            .flex_1()
-                            .min_w(px(0.))
-                            .truncate()
-                            .text_xs()
-                            .text_color(rgb(ACCENT))
-                            .child(model.clone()),
-                    )
-                }
-            })
-            .when_some(agent.effort_option.as_ref(), |element, option| {
-                if option.choices.is_empty()
-                    || agent.session_id.is_none()
-                    || agent.status == Status::Error
-                {
-                    return element;
-                }
-                let choices = option.choices.clone();
-                let current = option.current.clone();
-                let pending = agent.pending_model.is_some() || agent.pending_effort.is_some();
-                let view = cx.entity().clone();
-                element.child(
-                    Button::new(format!("effort-select-{}", agent.config.id))
-                        .ghost()
-                        .compact()
-                        .tooltip("Reasoning effort")
-                        .label(option.label())
-                        .icon(IconName::ChevronDown)
-                        .disabled(pending)
-                        .dropdown_menu(move |mut menu, _, _| {
-                            for choice in &choices {
-                                let value = choice.value.clone();
-                                let view = view.clone();
-                                menu = menu.item(
-                                    PopupMenuItem::new(choice.label.clone())
-                                        .checked(choice.value == current)
-                                        .on_click(move |_, _, cx| {
-                                            view.update(cx, |this, cx| {
-                                                this.select_config_option(
-                                                    project_index,
-                                                    agent_index,
-                                                    ConfigOptionKind::Effort,
-                                                    value.clone(),
-                                                    cx,
-                                                );
-                                            });
-                                        }),
-                                );
-                            }
-                            menu.min_w(px(140.)).max_h(px(320.)).scrollable(true)
-                        }),
-                )
-            });
+        let project_name = project
+            .path
+            .file_name()
+            .map(|name| name.to_string_lossy().into_owned())
+            .unwrap_or_else(|| project.display_path());
+        let location = if project.branch.is_empty() {
+            project_name
+        } else {
+            format!("{project_name} · {}", project.branch)
+        };
+        let can_reset = agent
+            .context
+            .is_some_and(|(used, size)| used > 0 && size > 0);
         let agent_controls = div()
             .flex()
-            .flex_wrap()
+            .flex_1()
             .min_w(px(0.))
             .items_center()
-            .when(compact_header, |element| element.gap_2())
-            .when(!compact_header, |element| element.gap_3())
-            .when(!stacked_header, |element| element.flex_1())
-            .when(stacked_header, |element| element.w_full())
+            .gap_2()
+            .child(status_badge(agent))
             .child(agent_selector)
-            .when(
-                agent.model.is_some() || agent.effort_option.is_some(),
-                |element| element.child(metadata),
-            )
-            .when_some(agent.context, |element, (used, size)| {
-                let can_reset = used > 0 && size > 0;
-                let context_label = format!(
-                    "Context {} / {}",
-                    compact_tokens(used),
-                    compact_tokens(size)
-                );
-                let tooltip = if can_reset {
-                    format!("{context_label}. Click to start fresh. Earlier messages stay visible.")
-                } else {
-                    context_label.clone()
-                };
-                element.child(
-                    div()
-                        .id("reset-context")
-                        .flex_shrink_0()
-                        .flex()
-                        .items_center()
-                        .gap_2()
-                        .px_2()
-                        .py_1()
-                        .rounded_md()
-                        .border_1()
-                        .border_color(rgb(BORDER))
-                        .text_sm()
-                        .text_color(rgb(if can_reset { TEXT } else { MUTED }))
-                        .child(div().whitespace_nowrap().child(format!(
-                            "{} / {}",
-                            compact_tokens(used),
-                            compact_tokens(size)
-                        )))
-                        .when(can_reset, |control| {
-                            control
-                                .child(div().w(px(1.)).h(px(14.)).bg(rgb(BORDER)))
-                                .child(Icon::new(IconName::Redo2).size(px(14.)))
-                                .when(!compact_header, |control| control.child("Reset"))
-                                .cursor_pointer()
-                                .hover(|style| style.bg(rgb(HOVER)))
-                                .on_click(cx.listener(move |this, _, _, cx| {
-                                    this.reset_context(project_index, agent_index, cx);
-                                }))
-                        })
-                        .tooltip(move |window, cx| Tooltip::new(tooltip.clone()).build(window, cx)),
-                )
-            })
             .when_some(agent.config.title.as_ref(), |element, title| {
                 element.child(
                     div()
                         .min_w(px(0.))
                         .max_w(px(360.))
-                        .flex_1()
                         .truncate()
                         .text_sm()
                         .font_weight(gpui_kit::FontWeight::MEDIUM)
                         .text_color(rgb(TEXT))
                         .child(title.clone()),
                 )
+            })
+            .when(!stacked_header, |element| {
+                element.child(
+                    div()
+                        .id("project-path")
+                        .min_w(px(0.))
+                        .truncate()
+                        .text_xs()
+                        .text_color(rgb(MUTED))
+                        .child(location)
+                        .tooltip({
+                            let path = project.display_path();
+                            move |window, cx| Tooltip::new(path.clone()).build(window, cx)
+                        }),
+                )
+            });
+        let menu_view = cx.entity().clone();
+        let session_menu = Button::new(format!("session-menu-{}", agent.config.id))
+            .ghost()
+            .compact()
+            .icon(IconName::Ellipsis)
+            .tooltip("Session")
+            .dropdown_menu_with_anchor(Anchor::TopRight, move |menu, _, _| {
+                let reset_view = menu_view.clone();
+                let agent_view = menu_view.clone();
+                let archive_view = menu_view.clone();
+                menu.item(
+                    PopupMenuItem::new("Reset context")
+                        .disabled(!can_reset)
+                        .on_click(move |_, _, cx| {
+                            reset_view.update(cx, |this, cx| {
+                                this.reset_context(project_index, agent_index, cx);
+                            });
+                        }),
+                )
+                .item(
+                    PopupMenuItem::new("New session with another agent…").on_click(
+                        move |_, window, cx| {
+                            agent_view.update(cx, |this, cx| {
+                                this.open_picker(PickerStep::Agents { project_index }, window, cx);
+                            });
+                        },
+                    ),
+                )
+                .item(PopupMenuItem::separator())
+                .item(
+                    PopupMenuItem::new("Archive session").on_click(move |_, window, cx| {
+                        archive_view.update(cx, |this, cx| {
+                            this.set_archived(project_index, agent_index, true, window, cx);
+                        });
+                    }),
+                )
+                .min_w(px(220.))
             });
         let project_controls = div()
             .flex()
-            .min_w(px(0.))
+            .flex_shrink_0()
             .items_center()
-            .when(compact_header, |element| element.gap_2())
-            .when(!compact_header, |element| element.gap_3())
-            .when(stacked_header, |element| element.w_full().justify_end())
-            .child(
-                div()
-                    .id("project-path")
-                    .min_w(px(0.))
-                    .max_w(px(if stacked_header {
-                        180.
-                    } else if compact_header {
-                        75.
-                    } else {
-                        300.
-                    }))
-                    .truncate()
-                    .text_xs()
-                    .text_color(rgb(MUTED))
-                    .child(if compact_header {
-                        project
-                            .path
-                            .file_name()
-                            .map(|name| name.to_string_lossy().into_owned())
-                            .unwrap_or_else(|| project.display_path())
-                    } else {
-                        project.display_path()
-                    })
-                    .tooltip({
-                        let path = project.display_path();
-                        move |window, cx| Tooltip::new(path.clone()).build(window, cx)
-                    }),
-            )
+            .gap_2()
             .child(
                 div()
                     .id("open-diff")
@@ -348,18 +228,17 @@ impl Workspace {
                             this.open_diff(project_index, cx);
                         }
                     })),
-            );
+            )
+            .child(session_menu);
         chat = chat.child(
             div()
-                .when(compact_header, |element| element.px_3().py_2())
-                .when(!compact_header, |element| element.px_4().py_3())
+                .px_4()
+                .py_2()
                 .border_b_1()
                 .border_color(rgb(BORDER))
                 .flex()
-                .when(compact_header, |element| element.gap_2())
-                .when(!compact_header, |element| element.gap_3())
-                .when(stacked_header, |element| element.flex_col())
-                .when(!stacked_header, |element| element.items_center())
+                .items_center()
+                .gap_3()
                 .child(agent_controls)
                 .child(project_controls),
         );
@@ -391,51 +270,11 @@ impl Workspace {
                 .child(div().id("chat-scroll").size_full().px_4().child(history))
                 .vertical_scrollbar(&self.chat_list),
         );
-        if agent.active_work {
-            chat = chat.child(
-                div()
-                    .px_4()
-                    .pb_1()
-                    .flex()
-                    .items_center()
-                    .gap_2()
-                    .text_xs()
-                    .text_color(rgb(MUTED))
-                    .child(status_dot(Status::Working.color()))
-                    .child(if agent.cancel_requested {
-                        "Stopping agent"
-                    } else if agent.awaiting_response {
-                        "Waiting for agent"
-                    } else {
-                        "Agent is working"
-                    })
-                    .when(!agent.cancel_requested, |row| {
-                        row.child(
-                            Button::new("stop-agent")
-                                .ghost()
-                                .compact()
-                                .accessibility_label("Stop agent")
-                                .tooltip("Stop agent")
-                                .child(
-                                    div()
-                                        .size(px(16.))
-                                        .rounded_full()
-                                        .border_1()
-                                        .border_color(rgb(TEXT))
-                                        .flex()
-                                        .items_center()
-                                        .justify_center()
-                                        .child(div().size(px(7.)).rounded_sm().bg(rgb(TEXT))),
-                                )
-                                .on_click(cx.listener(|this, _, _, cx| this.cancel_prompt(cx))),
-                        )
-                    }),
-            );
-        }
         let file_results = self.file_results(cx);
         if self.file_mention_active(cx) {
             let mut menu = div()
-                .mx_4()
+                .w_full()
+                .max_w(px(CHAT_COLUMN_WIDTH))
                 .mb_1()
                 .p_1()
                 .rounded_md()
@@ -482,12 +321,13 @@ impl Workspace {
                         })),
                 );
             }
-            chat = chat.child(menu);
+            chat = chat.child(div().px_4().flex().justify_center().child(menu));
         }
         let slash_commands = self.slash_results(cx);
         if !slash_commands.is_empty() {
             let mut menu = div()
-                .mx_4()
+                .w_full()
+                .max_w(px(CHAT_COLUMN_WIDTH))
                 .mb_1()
                 .p_1()
                 .rounded_md()
@@ -543,17 +383,84 @@ impl Workspace {
                         })),
                 );
             }
-            chat = chat.child(menu);
+            chat = chat.child(div().px_4().flex().justify_center().child(menu));
         }
         let shell_mode = self.composer.read(cx).value().starts_with('!');
-        chat = chat.child(
-            div().p_4().flex().min_w(px(0.)).child(
+        let has_text = !self.composer.read(cx).value().trim().is_empty();
+        let focused = self.composer.read(cx).focus_handle(cx).is_focused(window);
+        let action_button = if agent.active_work {
+            let stopping = agent.cancel_requested;
+            div()
+                .id("stop-agent")
+                .h(px(28.))
+                .px_2()
+                .flex()
+                .items_center()
+                .gap_2()
+                .rounded_md()
+                .border_1()
+                .border_color(rgb(BORDER))
+                .bg(rgb(SURFACE))
+                .text_xs()
+                .text_color(rgb(if stopping { MUTED } else { TEXT }))
+                .child(
+                    div()
+                        .size(px(8.))
+                        .rounded_sm()
+                        .bg(rgb(if stopping { MUTED } else { TEXT })),
+                )
+                .child(if stopping { "Stopping…" } else { "Stop" })
+                .tooltip(|window, cx| Tooltip::new("Stop agent (Esc)").build(window, cx))
+                .when(!stopping, |button| {
+                    button
+                        .cursor_pointer()
+                        .hover(|style| style.bg(rgb(HOVER)))
+                        .on_click(cx.listener(|this, _, _, cx| this.cancel_prompt(cx)))
+                })
+        } else {
+            div()
+                .id("send-prompt")
+                .size(px(28.))
+                .flex()
+                .items_center()
+                .justify_center()
+                .rounded_md()
+                .bg(rgb(if has_text { ACCENT_SURFACE } else { SURFACE }))
+                .child(
+                    Icon::new(IconName::ArrowUp)
+                        .size(px(14.))
+                        .text_color(rgb(if has_text { TEXT } else { MUTED })),
+                )
+                .tooltip(|window, cx| Tooltip::new("Send (Enter)").build(window, cx))
+                .when(has_text, |button| {
+                    button
+                        .cursor_pointer()
+                        .hover(|style| style.bg(rgb(SELECTED)))
+                        .on_click(cx.listener(|this, _, window, cx| this.send_prompt(window, cx)))
+                })
+        };
+        // A plain border that turns to the accent colour on focus, in place
+        // of the text area's own focus ring.
+        let composer = div()
+            .w_full()
+            .min_w(px(0.))
+            .flex()
+            .items_end()
+            .gap_1()
+            .pr_1p5()
+            .py_1p5()
+            .rounded_lg()
+            .border_1()
+            .border_color(rgb(if focused { ACCENT } else { BORDER }))
+            .bg(rgb(SIDEBAR))
+            .child(
                 div()
                     .flex_1()
                     .min_w(px(0.))
                     .relative()
                     .child(
                         Textarea::new(&self.composer)
+                            .appearance(false)
                             .when(shell_mode, |textarea| textarea.pr(px(48.))),
                     )
                     .when(shell_mode, |element| {
@@ -561,14 +468,183 @@ impl Workspace {
                             div()
                                 .absolute()
                                 .right(px(12.))
-                                .bottom(px(8.))
+                                .bottom(px(6.))
                                 .text_xs()
                                 .text_color(rgb(MUTED))
                                 .child("shell"),
                         )
                     }),
+            )
+            .child(div().flex_shrink_0().child(action_button));
+        let status = agent.active_work.then(|| {
+            div()
+                .flex()
+                .items_center()
+                .gap_2()
+                .child(status_dot(Status::Working.color()))
+                .child(if agent.cancel_requested {
+                    "Stopping agent"
+                } else if agent.awaiting_response {
+                    "Waiting for agent · Esc to stop"
+                } else {
+                    "Agent is working · Esc to stop"
+                })
+        });
+        chat = chat.child(
+            div().px_4().pb_3().flex().justify_center().child(
+                div()
+                    .w_full()
+                    .max_w(px(CHAT_COLUMN_WIDTH))
+                    .min_w(px(0.))
+                    .flex()
+                    .flex_col()
+                    .gap_1()
+                    .child(composer)
+                    .child(
+                        div()
+                            .min_h(px(24.))
+                            .flex()
+                            .items_center()
+                            .gap_2()
+                            .text_xs()
+                            .text_color(rgb(MUTED))
+                            .children(status)
+                            .child(div().flex_1())
+                            .child(self.render_session_settings(project_index, agent_index, cx)),
+                    ),
             ),
         );
         chat
+    }
+
+    /// Model, effort and context usage, shown under the composer. Only the
+    /// options the agent reports are shown.
+    fn render_session_settings(
+        &self,
+        project_index: usize,
+        agent_index: usize,
+        cx: &mut Context<Self>,
+    ) -> Div {
+        let agent = &self.projects[project_index].agents[agent_index];
+        let selectable = agent.session_id.is_some() && agent.status != Status::Error;
+        let pending = agent.pending_model.is_some() || agent.pending_effort.is_some();
+        let mut row = div().flex().min_w(px(0.)).items_center().gap_1();
+        if let Some(model) = agent.model.as_ref() {
+            row = match &agent.model_option {
+                Some(option) if selectable && !option.choices.is_empty() => {
+                    let choices = option.choices.clone();
+                    let current = option.current.clone();
+                    let view = cx.entity().clone();
+                    row.child(
+                        Button::new(format!("model-select-{}", agent.config.id))
+                            .ghost()
+                            .xsmall()
+                            .label(model.clone())
+                            .icon(IconName::ChevronDown)
+                            .tooltip("Model")
+                            .disabled(pending)
+                            .dropdown_menu_with_anchor(
+                                Anchor::BottomLeft,
+                                move |mut menu, _, _| {
+                                    for choice in &choices {
+                                        let value = choice.value.clone();
+                                        let view = view.clone();
+                                        menu = menu.item(
+                                            PopupMenuItem::new(choice.label.clone())
+                                                .checked(choice.value == current)
+                                                .on_click(move |_, _, cx| {
+                                                    view.update(cx, |this, cx| {
+                                                        this.select_config_option(
+                                                            project_index,
+                                                            agent_index,
+                                                            ConfigOptionKind::Model,
+                                                            value.clone(),
+                                                            cx,
+                                                        );
+                                                    });
+                                                }),
+                                        );
+                                    }
+                                    menu.min_w(px(180.)).max_h(px(320.)).scrollable(true)
+                                },
+                            ),
+                    )
+                }
+                _ => row.child(div().px_1().truncate().child(model.clone())),
+            };
+        }
+        if let Some(option) = agent.effort_option.as_ref()
+            && selectable
+            && !option.choices.is_empty()
+        {
+            let choices = option.choices.clone();
+            let current = option.current.clone();
+            let view = cx.entity().clone();
+            row = row.child(
+                Button::new(format!("effort-select-{}", agent.config.id))
+                    .ghost()
+                    .xsmall()
+                    .label(option.label())
+                    .icon(IconName::ChevronDown)
+                    .tooltip("Reasoning effort")
+                    .disabled(pending)
+                    .dropdown_menu_with_anchor(Anchor::BottomRight, move |mut menu, _, _| {
+                        for choice in &choices {
+                            let value = choice.value.clone();
+                            let view = view.clone();
+                            menu = menu.item(
+                                PopupMenuItem::new(choice.label.clone())
+                                    .checked(choice.value == current)
+                                    .on_click(move |_, _, cx| {
+                                        view.update(cx, |this, cx| {
+                                            this.select_config_option(
+                                                project_index,
+                                                agent_index,
+                                                ConfigOptionKind::Effort,
+                                                value.clone(),
+                                                cx,
+                                            );
+                                        });
+                                    }),
+                            );
+                        }
+                        menu.min_w(px(140.)).max_h(px(320.)).scrollable(true)
+                    }),
+            );
+        }
+        if let Some((used, size)) = agent.context
+            && size > 0
+        {
+            let percent = (used.saturating_mul(100) / size).min(100);
+            let usage = format!(
+                "{} of {} tokens used",
+                compact_tokens(used),
+                compact_tokens(size)
+            );
+            let can_reset = used > 0;
+            let view = cx.entity().clone();
+            row = row.child(
+                Button::new(format!("context-{}", agent.config.id))
+                    .ghost()
+                    .xsmall()
+                    .label(format!("Context {percent}%"))
+                    .dropdown_menu_with_anchor(Anchor::BottomRight, move |menu, _, _| {
+                        let view = view.clone();
+                        menu.item(PopupMenuItem::label(usage.clone()))
+                            .item(PopupMenuItem::separator())
+                            .item(
+                                PopupMenuItem::new("Reset context")
+                                    .disabled(!can_reset)
+                                    .on_click(move |_, _, cx| {
+                                        view.update(cx, |this, cx| {
+                                            this.reset_context(project_index, agent_index, cx);
+                                        });
+                                    }),
+                            )
+                            .min_w(px(200.))
+                    }),
+            );
+        }
+        row
     }
 }
