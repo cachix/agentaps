@@ -443,6 +443,7 @@ struct Workspace {
     sidebar_search: Entity<InputState>,
     mobile_provider_input: Entity<InputState>,
     composer: Entity<TextareaState>,
+    composer_max_rows: usize,
     session_composers: HashMap<u64, Entity<TextareaState>>,
     chat_list: ListState,
     chat_list_agent: Option<u64>,
@@ -669,10 +670,18 @@ fn completed_slash_text(command: &SlashCommand) -> String {
 }
 
 impl Workspace {
+    fn composer_max_rows(window: &Window) -> usize {
+        // Keep room for the header, controls, and some conversation above the draft.
+        let available_height = f32::from(window.viewport_size().height) - 200.;
+        (available_height / f32::from(window.line_height()))
+            .floor()
+            .max(1.) as usize
+    }
+
     fn new_composer(window: &mut Window, cx: &mut Context<Self>) -> Entity<TextareaState> {
         cx.new(|cx| {
             TextareaState::new(window, cx)
-                .auto_grow(1, 6)
+                .auto_grow(1, Self::composer_max_rows(window))
                 .submit_on_enter(true)
                 .placeholder("Ask your agent…")
         })
@@ -897,6 +906,7 @@ impl Workspace {
             InputState::new(window, cx).placeholder("keyring, onepassword, or provider URI")
         });
         let composer = Self::new_composer(window, cx);
+        let composer_max_rows = Self::composer_max_rows(window);
         let _subscriptions = vec![
             cx.subscribe_in(
                 &mobile_provider_input,
@@ -1055,6 +1065,7 @@ impl Workspace {
             sidebar_search,
             mobile_provider_input,
             composer,
+            composer_max_rows,
             session_composers: HashMap::new(),
             chat_list: ListState::new(0, ListAlignment::Bottom, px(300.)),
             chat_list_agent: None,
@@ -1106,6 +1117,21 @@ impl Workspace {
         };
         let composer = this.composer.clone();
         this.subscribe_composer(&composer, window, cx);
+        this._subscriptions
+            .push(cx.observe_window_bounds(window, |this, window, cx| {
+                let max_rows = Self::composer_max_rows(window);
+                if max_rows == this.composer_max_rows {
+                    return;
+                }
+                this.composer_max_rows = max_rows;
+                this.composer
+                    .update(cx, |input, cx| input.set_auto_grow(1, max_rows, cx));
+                for composer in this.session_composers.values() {
+                    if composer.entity_id() != this.composer.entity_id() {
+                        composer.update(cx, |input, cx| input.set_auto_grow(1, max_rows, cx));
+                    }
+                }
+            }));
         let mut selected = None;
         for project_index in 0..this.projects.len() {
             for agent_index in 0..this.projects[project_index].agents.len() {
