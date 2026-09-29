@@ -12,7 +12,7 @@ Notable changes to Agentaps are recorded here.
 
 ### Fixed
 
-- Zoom In, Zoom Out, and Reset Zoom now reach the workspace regardless of which element has focus, and each zoom change shows a notice with the new percentage.
+- Zoom In, Zoom Out, and Reset Zoom now reach the workspace regardless of which element has focus, and each zoom change shows a notice with the new percentage that hides itself after a second and a half.
 - Zooming now visibly resizes the UI. The zoom level is written to the UI theme, whose font size the window applies on every frame; writing the window's rem size directly was overwritten before the next paint. Code text in the composer scales along.
 - `devenv shell` evaluates on macOS again. The Linux-only graphics libraries (wayland, libxkbcommon, libxcb, vulkan-loader, fontconfig, freetype) are now installed only on Linux.
 - Claude ACP sessions retry once when another Claude Code process temporarily blocks OAuth token refresh.

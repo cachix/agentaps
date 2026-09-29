@@ -1141,4 +1141,17 @@ fn zoom_shortcuts_and_menu_actions_change_the_font_scale(cx: &mut gpui_kit::Test
     );
     let (saved, _) = config::load().expect("zooming should save the config");
     assert_eq!(saved.font_scale, 1.0, "ZoomReset should persist the reset");
+
+    // The acknowledgement notice hides itself after ZOOM_NOTICE_TIMEOUT.
+    let notice =
+        |cx: &mut gpui_kit::VisualTestContext| cx.update(|_, cx| workspace.read(cx).notice.clone());
+    cx.update(|_, cx| workspace.update(cx, |this, cx| this.set_font_scale(1.2, cx)));
+    assert_eq!(notice(cx), Some("Zoom 120%".to_string()));
+    cx.executor().advance_clock(ZOOM_NOTICE_TIMEOUT);
+    cx.run_until_parked();
+    assert_eq!(
+        notice(cx),
+        None,
+        "zoom notice should hide after the timeout"
+    );
 }

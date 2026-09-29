@@ -126,6 +126,7 @@ const BASE_MONO_FONT_SIZE: f32 = 13.;
 const MIN_FONT_SCALE: f32 = 0.75;
 const MAX_FONT_SCALE: f32 = 2.0;
 const FONT_SCALE_STEP: f32 = 0.1;
+const ZOOM_NOTICE_TIMEOUT: Duration = Duration::from_millis(1500);
 
 fn set_theme_font_scale(theme: &mut Theme, scale: f32) {
     theme.font_size = px(BASE_FONT_SIZE * scale);
@@ -498,6 +499,7 @@ struct Workspace {
     dirty: bool,
     last_saved: Instant,
     notice: Option<String>,
+    zoom_notice_generation: u64,
     mobile: Option<crate::mobile::Server>,
     mobile_start_tx: Sender<Result<crate::mobile::Server, String>>,
     mobile_start_rx: Receiver<Result<crate::mobile::Server, String>>,
@@ -1129,6 +1131,7 @@ impl Workspace {
             dirty: migrate_config,
             last_saved: Instant::now(),
             notice,
+            zoom_notice_generation: 0,
             mobile: None,
             mobile_start_tx,
             mobile_start_rx,
@@ -1778,6 +1781,21 @@ impl Workspace {
         // Theme::update also refreshes every window, so the next frame lays
         // text out at the new sizes.
         Theme::update(cx, |theme| set_theme_font_scale(theme, scale));
+        // The acknowledgement hides itself after a moment. The generation
+        // guard keeps an older timer from clearing a newer notice early.
+        self.zoom_notice_generation += 1;
+        let generation = self.zoom_notice_generation;
+        cx.spawn(async move |this, cx| {
+            cx.background_executor().timer(ZOOM_NOTICE_TIMEOUT).await;
+            this.update(cx, |this, cx| {
+                if this.zoom_notice_generation == generation {
+                    this.notice = None;
+                    cx.notify();
+                }
+            })
+            .ok();
+        })
+        .detach();
         cx.notify();
     }
 
