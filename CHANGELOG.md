@@ -6,6 +6,7 @@ Notable changes to Agentaps are recorded here.
 
 ### Added
 
+- CI checks that the devenv shell starts on Linux and macOS.
 - `agentaps --version` prints the installed version without opening the desktop app.
 
 ### Fixed
