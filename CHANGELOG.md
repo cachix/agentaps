@@ -11,6 +11,7 @@ Notable changes to Agentaps are recorded here.
 ### Fixed
 
 - Diff loading now uses a toolbar spinner without shifting the diff view.
+- Split diffs keep both code panes aligned around a vertical divider.
 - Sidebar upstream counts refresh when an agent finishes, so successful pushes do not appear to need pushing again.
 
 ### Changed

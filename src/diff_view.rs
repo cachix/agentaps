@@ -192,19 +192,19 @@ pub(crate) fn render_row(row: &Row) -> AnyElement {
             .child(code(&side.text))
             .into_any_element(),
         Row::Split { old, new } => div()
+            .w_full()
             .h(px(24.))
             .flex()
             .items_center()
             .font_family("monospace")
             .text_xs()
-            .child(split_side(old.as_ref()))
-            .child(div().h_full().w(px(1.)).bg(rgb(BORDER)))
-            .child(split_side(new.as_ref()))
+            .child(split_side(old.as_ref(), true))
+            .child(split_side(new.as_ref(), false))
             .into_any_element(),
     }
 }
 
-fn split_side(side: Option<&Side>) -> impl IntoElement {
+fn split_side(side: Option<&Side>, divider: bool) -> impl IntoElement {
     let mark = side.map_or(Mark::Context, |side| side.mark);
     div()
         .flex()
@@ -213,6 +213,7 @@ fn split_side(side: Option<&Side>) -> impl IntoElement {
         .h_full()
         .items_center()
         .bg(rgb(mark_bg(mark)))
+        .when(divider, |side| side.border_r_1().border_color(rgb(BORDER)))
         .child(number(side.map(|side| side.number)))
         .child(prefix(mark))
         .child(code(side.map_or("", |side| side.text.as_str())))
