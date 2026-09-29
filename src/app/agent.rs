@@ -91,10 +91,20 @@ impl ConfigSelectOption {
     }
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, PartialEq, Eq)]
 pub(super) enum ConfigOptionKind {
     Model,
     Effort,
+    Mode,
+    Collaboration,
+}
+
+/// A two-state Plan control for agents, such as Codex, that report planning
+/// as a collaboration mode separate from their permission modes.
+pub(super) struct PlanToggle {
+    pub(super) active: bool,
+    /// The value that selecting the toggle sends.
+    pub(super) next: String,
 }
 
 pub(super) struct AgentView {
@@ -105,6 +115,13 @@ pub(super) struct AgentView {
     pub(super) pending_model: Option<(u64, String)>,
     pub(super) effort_option: Option<ConfigSelectOption>,
     pub(super) pending_effort: Option<(u64, String)>,
+    pub(super) mode_option: Option<ConfigSelectOption>,
+    /// The modes came from the session's `modes` field rather than a config
+    /// option, so they change through `session/set_mode`.
+    pub(super) legacy_modes: bool,
+    pub(super) pending_mode: Option<(u64, String)>,
+    pub(super) collaboration_option: Option<ConfigSelectOption>,
+    pub(super) pending_collaboration: Option<(u64, String)>,
     pub(super) context: Option<(u64, u64)>,
     pub(super) status: Status,
     pub(super) protocol: Option<ProtocolVersion>,
@@ -153,6 +170,70 @@ pub(super) fn effort_option(config_options: &Value) -> Option<ConfigSelectOption
                     .is_some_and(|name| name.to_lowercase().contains("reasoning")))
     })?;
     parse_config_select_option(option)
+}
+
+pub(super) fn mode_option(config_options: &Value) -> Option<ConfigSelectOption> {
+    let option = config_options.as_array()?.iter().find(|option| {
+        option["category"].as_str() == Some("mode")
+            || option["configId"].as_str() == Some("mode")
+            || option["id"].as_str() == Some("mode")
+    })?;
+    parse_config_select_option(option)
+}
+
+pub(super) fn collaboration_option(config_options: &Value) -> Option<ConfigSelectOption> {
+    let option = config_options.as_array()?.iter().find(|option| {
+        option["category"].as_str() == Some("collaboration_mode")
+            || option["configId"].as_str() == Some("collaboration_mode")
+            || option["id"].as_str() == Some("collaboration_mode")
+    })?;
+    parse_config_select_option(option)
+}
+
+/// Reads the session's `modes` field, which agents without a mode config
+/// option use to report their modes. A mode config option takes precedence.
+pub(super) fn update_session_modes(agent: &mut AgentView, modes: &Value) {
+    if agent.mode_option.is_some() && !agent.legacy_modes {
+        return;
+    }
+    let (Some(current), Some(available)) = (
+        modes["currentModeId"].as_str(),
+        modes["availableModes"].as_array(),
+    ) else {
+        return;
+    };
+    let choices = available
+        .iter()
+        .filter_map(|mode| {
+            let value = mode["id"].as_str()?;
+            Some(ConfigChoice {
+                value: value.to_owned(),
+                label: mode["name"].as_str().unwrap_or(value).to_owned(),
+            })
+        })
+        .collect();
+    agent.mode_option = Some(ConfigSelectOption {
+        id: "mode".into(),
+        current: current.to_owned(),
+        choices,
+    });
+    agent.legacy_modes = true;
+}
+
+pub(super) fn mode_request(
+    id: u64,
+    session_id: &str,
+    option: &ConfigSelectOption,
+    legacy: bool,
+    value: &str,
+) -> Value {
+    if legacy {
+        json!({"jsonrpc":"2.0","id":id,"method":"session/set_mode","params":{
+            "sessionId":session_id,"modeId":value
+        }})
+    } else {
+        set_config_option_request(id, session_id, option, value)
+    }
 }
 
 fn parse_config_select_option(option: &Value) -> Option<ConfigSelectOption> {
@@ -204,6 +285,62 @@ pub(super) fn set_config_option_request(
 }
 
 impl AgentView {
+    /// A setting change is waiting for the agent's reply.
+    pub(super) fn setting_pending(&self) -> bool {
+        self.pending_model.is_some()
+            || self.pending_effort.is_some()
+            || self.pending_mode.is_some()
+            || self.pending_collaboration.is_some()
+    }
+
+    pub(super) fn clear_pending_settings(&mut self) {
+        self.pending_model = None;
+        self.pending_effort = None;
+        self.pending_mode = None;
+        self.pending_collaboration = None;
+    }
+
+    pub(super) fn setting_option(
+        &mut self,
+        kind: ConfigOptionKind,
+    ) -> &mut Option<ConfigSelectOption> {
+        match kind {
+            ConfigOptionKind::Model => &mut self.model_option,
+            ConfigOptionKind::Effort => &mut self.effort_option,
+            ConfigOptionKind::Mode => &mut self.mode_option,
+            ConfigOptionKind::Collaboration => &mut self.collaboration_option,
+        }
+    }
+
+    pub(super) fn pending_setting(&mut self, kind: ConfigOptionKind) -> &mut Option<(u64, String)> {
+        match kind {
+            ConfigOptionKind::Model => &mut self.pending_model,
+            ConfigOptionKind::Effort => &mut self.pending_effort,
+            ConfigOptionKind::Mode => &mut self.pending_mode,
+            ConfigOptionKind::Collaboration => &mut self.pending_collaboration,
+        }
+    }
+
+    /// The Plan toggle, when the collaboration mode offers `plan` and another
+    /// value to return to.
+    pub(super) fn plan_toggle(&self) -> Option<PlanToggle> {
+        let option = self.collaboration_option.as_ref()?;
+        let plan = option
+            .choices
+            .iter()
+            .find(|choice| choice.value == "plan")?;
+        let other = option
+            .choices
+            .iter()
+            .find(|choice| choice.value == "default")
+            .or_else(|| option.choices.iter().find(|choice| choice.value != "plan"))?;
+        let active = option.current == plan.value;
+        Some(PlanToggle {
+            active,
+            next: if active { &other.value } else { &plan.value }.clone(),
+        })
+    }
+
     pub(super) fn reset_config(&self, id: u64, mut messages: Vec<ChatEntry>) -> AgentConfig {
         for entry in &mut messages {
             entry.key = None;
@@ -323,6 +460,11 @@ impl AgentView {
             pending_model: None,
             effort_option: None,
             pending_effort: None,
+            mode_option: None,
+            legacy_modes: false,
+            pending_mode: None,
+            collaboration_option: None,
+            pending_collaboration: None,
             context,
             status: Status::Connecting,
             protocol: None,

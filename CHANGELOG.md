@@ -8,6 +8,8 @@ Notable changes to Agentaps are recorded here.
 
 - CI checks that the devenv shell starts on Linux and macOS.
 - `agentaps --version` prints the installed version without opening the desktop app.
+- A Mode button at the bottom left of the composer shows the agent's current mode and switches between the modes the agent offers, such as Claude's Manual, Accept edits, Plan, and Auto. It is hidden for agents that report no modes.
+- A Plan toggle next to the Mode button switches planning on and off for agents that offer it separately from their modes, such as Codex.
 
 ### Fixed
 
