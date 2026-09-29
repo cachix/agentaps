@@ -14,6 +14,27 @@ fn initialize_params() -> Value {
     params
 }
 
+#[derive(Debug, PartialEq)]
+enum InitializeProbe {
+    V2,
+    V1,
+    V2WithoutSessions,
+    InvalidV2(String),
+    Unsupported,
+}
+
+fn probe_initialize_protocol(result: &Value) -> InitializeProbe {
+    match result["protocolVersion"].as_u64() {
+        Some(2) => match serde_json::from_value::<v2::InitializeResponse>(result.clone()) {
+            Ok(response) if response.capabilities.session.is_some() => InitializeProbe::V2,
+            Ok(_) => InitializeProbe::V2WithoutSessions,
+            Err(error) => InitializeProbe::InvalidV2(error.to_string()),
+        },
+        Some(1) => InitializeProbe::V1,
+        _ => InitializeProbe::Unsupported,
+    }
+}
+
 fn update_config_options(agent: &mut AgentView, options: &Value) {
     if let Some(option) = model_option(options) {
         agent.model = Some(option.label());
@@ -823,32 +844,24 @@ impl Workspace {
         }
         match id {
             1 => {
-                let protocol = match value["result"]["protocolVersion"].as_u64() {
-                    Some(2) => {
-                        match serde_json::from_value::<v2::InitializeResponse>(
-                            value["result"].clone(),
-                        ) {
-                            Ok(response) if response.capabilities.session.is_some() => {
-                                Some(ProtocolVersion::V2)
-                            }
-                            Ok(_) => {
-                                agent.log(
-                                    Role::System,
-                                    "ACP v2 agent did not advertise session support",
-                                );
-                                None
-                            }
-                            Err(error) => {
-                                agent.log(
-                                    Role::System,
-                                    format!("Invalid ACP v2 initialization: {error}"),
-                                );
-                                None
-                            }
-                        }
+                let protocol = match probe_initialize_protocol(&value["result"]) {
+                    InitializeProbe::V2 => Some(ProtocolVersion::V2),
+                    InitializeProbe::V2WithoutSessions => {
+                        agent.log(
+                            Role::System,
+                            "ACP v2 agent did not advertise session support",
+                        );
+                        None
                     }
-                    Some(1) => Some(ProtocolVersion::V1),
-                    _ => {
+                    InitializeProbe::InvalidV2(error) => {
+                        agent.log(
+                            Role::System,
+                            format!("Invalid ACP v2 initialization: {error}"),
+                        );
+                        None
+                    }
+                    InitializeProbe::V1 => Some(ProtocolVersion::V1),
+                    InitializeProbe::Unsupported => {
                         agent.log(Role::System, "Agent does not support ACP v1 or v2");
                         None
                     }
@@ -1250,5 +1263,44 @@ mod tests {
         let v1: agent_client_protocol_schema::v1::InitializeRequest =
             serde_json::from_value(params).unwrap();
         assert!(v1.client_capabilities.elicitation.unwrap().supports_form());
+    }
+
+    // Captured from `goose acp` 1.52.0, which stamps v2 on a v1-shaped body.
+    fn goose_initialize_result() -> Value {
+        json!({
+            "protocolVersion": 2,
+            "agentCapabilities": {
+                "loadSession": true,
+                "promptCapabilities": {"image": true, "audio": false, "embeddedContext": true},
+                "mcpCapabilities": {"http": true, "sse": false},
+                "sessionCapabilities": {"list": {}, "delete": {}, "close": {}},
+                "auth": {},
+                "_meta": {"goose": {"recipeParameterScopes": {}, "localInference": {}}}
+            },
+            "authMethods": [{
+                "id": "goose-provider",
+                "name": "Configure Provider",
+                "description": "Run `goose configure` to set up your AI provider and API key"
+            }],
+            "agentInfo": {"name": "goose", "version": "1.52.0"}
+        })
+    }
+
+    #[test]
+    fn v1_shaped_v2_stamp_falls_back_to_v1() {
+        assert_eq!(
+            probe_initialize_protocol(&goose_initialize_result()),
+            InitializeProbe::V1
+        );
+    }
+
+    #[test]
+    fn v2_shaped_response_stays_v2() {
+        let result = json!({
+            "protocolVersion": 2,
+            "info": {"name": "agent", "version": "1.0"},
+            "capabilities": {"session": {}}
+        });
+        assert_eq!(probe_initialize_protocol(&result), InitializeProbe::V2);
     }
 }
