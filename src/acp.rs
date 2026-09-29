@@ -52,13 +52,13 @@ impl Connection {
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .stderr(Stdio::inherit());
-        if ssh_host.is_none()
-            && Path::new("/etc/NIXOS").exists()
-            && command.iter().any(|part| part.contains("claude-agent-acp"))
-            && std::env::var_os("CLAUDE_CODE_EXECUTABLE").is_none()
-            && let Some(claude) = find_executable("claude")
-        {
-            process.env("CLAUDE_CODE_EXECUTABLE", claude);
+        if ssh_host.is_none() && uses_claude_agent_acp(command) {
+            let claude = std::env::var_os("CLAUDE_CODE_EXECUTABLE")
+                .map(std::path::PathBuf::from)
+                .or_else(|| find_executable("claude"));
+            if let Some(claude) = claude {
+                configure_claude_code_env(&mut process, claude);
+            }
         }
         let mut child = process.spawn().map_err(|error| {
             format!(
@@ -133,6 +133,16 @@ impl Drop for Connection {
     }
 }
 
+fn uses_claude_agent_acp(command: &[String]) -> bool {
+    command.iter().any(|part| part.contains("claude-agent-acp"))
+}
+
+fn configure_claude_code_env(process: &mut Command, executable: std::path::PathBuf) {
+    process
+        .env("CLAUDE_CODE_EXECUTABLE", executable)
+        .env_remove("ANTHROPIC_API_KEY");
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -156,5 +166,30 @@ mod tests {
             }
             Event::Disconnected { reason, .. } => panic!("Disconnected before reply: {reason}"),
         }
+    }
+
+    #[test]
+    fn detects_claude_agent_acp_wrappers() {
+        assert!(uses_claude_agent_acp(&[
+            "npx".into(),
+            "-y".into(),
+            "@agentclientprotocol/claude-agent-acp".into(),
+        ]));
+        assert!(uses_claude_agent_acp(&["claude-agent-acp".into()]));
+        assert!(!uses_claude_agent_acp(&["claude-code-acp".into()]));
+    }
+
+    #[test]
+    fn configures_claude_code_auth_for_the_adapter() {
+        let mut process = Command::new("claude-agent-acp");
+        configure_claude_code_env(&mut process, "/opt/homebrew/bin/claude".into());
+        let envs: Vec<_> = process.get_envs().collect();
+        assert!(envs.iter().any(|(name, value)| {
+            *name == std::ffi::OsStr::new("CLAUDE_CODE_EXECUTABLE")
+                && *value == Some(std::ffi::OsStr::new("/opt/homebrew/bin/claude"))
+        }));
+        assert!(envs.iter().any(|(name, value)| {
+            *name == std::ffi::OsStr::new("ANTHROPIC_API_KEY") && value.is_none()
+        }));
     }
 }

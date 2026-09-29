@@ -54,7 +54,7 @@ devenv shell -- bash web/build.sh
 
 The output is in `web/dist/`. See the [web deployment guide](docs/web-deployment.md) for hosting and local testing, and the [desktop build guide](docs/releasing.md) for package builds and releases.
 
-On NixOS, Agentaps points `claude-agent-acp` at an installed `claude` executable. Set `CLAUDE_CODE_EXECUTABLE` to override this.
+For local Claude ACP sessions, Agentaps uses the Claude Code CLI found on `PATH` or at `CLAUDE_CODE_EXECUTABLE`. When a CLI path is available, Agentaps omits the inherited `ANTHROPIC_API_KEY` so Claude Code can use its configured authentication.
 
 ## Current limitations
 

@@ -4,6 +4,10 @@ Notable changes to Agentaps are recorded here.
 
 ## [Unreleased]
 
+### Fixed
+
+- Local Claude ACP sessions use the installed Claude Code CLI and its configured authentication outside NixOS.
+
 ## [0.3.1] - 2026-09-29
 
 ### Added
