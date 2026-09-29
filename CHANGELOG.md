@@ -22,6 +22,7 @@ Notable changes to Agentaps are recorded here.
 
 - Diff review opens beside the conversation with one compact row for the comparison and change totals, keeping chat and its composer available.
 - The message composer grows with pasted or typed multiline text up to most of the window height, then scrolls within the composer.
+- The conversation and composer sit in a centered, width-limited column. The composer has an inline Send or Stop button, and model, effort, and context usage (with Reset) moved beneath it. The header is a single row with the project and branch, and a session menu for reset, new agent session, and archive. Agent reply actions (Copy, Fork from here) appear under the reply on hover.
 - The README shows a recent desktop conversation and task activity screenshot.
 - The website's direct download links and release label now show Agentaps 0.3.1.
 

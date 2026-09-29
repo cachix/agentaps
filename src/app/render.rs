@@ -1,6 +1,7 @@
 use super::*;
-use gpui_kit::Div;
+use gpui_kit::component::Sizable;
 use gpui_kit::component::progress::Progress;
+use gpui_kit::{Anchor, Div};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 mod conversation;
@@ -9,6 +10,9 @@ mod entries;
 mod picker;
 mod sidebar;
 mod tool_group;
+
+/// Maximum width of the conversation and composer, for comfortable line length.
+const CHAT_COLUMN_WIDTH: f32 = 760.;
 
 fn status_dot(color: u32) -> Div {
     div().size(px(7.)).rounded_full().bg(rgb(color))
