@@ -10,6 +10,7 @@ Notable changes to Agentaps are recorded here.
 
 ### Fixed
 
+- Diff loading now uses a toolbar spinner without shifting the diff view.
 - Sidebar upstream counts refresh when an agent finishes, so successful pushes do not appear to need pushing again.
 
 ### Changed

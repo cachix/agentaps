@@ -1,6 +1,6 @@
 use super::*;
 use crate::diff_view::{self, Presentation};
-use gpui_kit::component::progress::Progress;
+use gpui_kit::component::{Sizable, spinner::Spinner};
 
 impl Workspace {
     pub(super) fn render_diff(
@@ -79,6 +79,21 @@ impl Workspace {
             .child("Checkout changes vs HEAD")
             .child(
                 div()
+                    .id("diff-loading-spinner")
+                    .size(px(16.))
+                    .flex_shrink_0()
+                    .flex()
+                    .items_center()
+                    .justify_center()
+                    .when(self.diff_loading, |slot| {
+                        slot.child(Spinner::new().small().color(rgb(MUTED).into()))
+                            .tooltip(|window, cx| {
+                                Tooltip::new("Loading checkout changes").build(window, cx)
+                            })
+                    }),
+            )
+            .child(
+                div()
                     .flex_1()
                     .min_w(px(0.))
                     .truncate()
@@ -87,26 +102,6 @@ impl Workspace {
             .child(self.presentation_button(Presentation::Unified, "Unified", cx))
             .child(self.presentation_button(Presentation::Split, "Split", cx));
         panel = panel.child(toolbar);
-        if self.diff_loading {
-            panel = panel.child(
-                div()
-                    .px_4()
-                    .py_2()
-                    .border_b_1()
-                    .border_color(rgb(BORDER))
-                    .flex()
-                    .flex_col()
-                    .gap_2()
-                    .text_xs()
-                    .text_color(rgb(MUTED))
-                    .child("Loading changes…")
-                    .child(
-                        Progress::new("diff-loading")
-                            .loading(true)
-                            .accessibility_label("Loading checkout changes"),
-                    ),
-            );
-        }
         let body = if let Some(error) = &self.diff_error {
             div()
                 .flex_1()
