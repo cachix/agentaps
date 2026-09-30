@@ -4,6 +4,8 @@ Notable changes to Agentaps are recorded here.
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-09-30
+
 ### Added
 
 - Pull requests and main branch changes run formatting, strict lint checks, and desktop tests on Linux, macOS, and Windows, plus browser protection tests and a complete WASM website build.
@@ -15,6 +17,8 @@ Notable changes to Agentaps are recorded here.
 
 ### Fixed
 
+- File-search regression checks accept native path separators on Windows.
+- Session archive and restore buttons stay vertically centered in the sidebar.
 - Informational notices, including Git sync confirmations, use a soft blue style, while errors stay red. All notices have a dismiss button.
 - Windows saves sessions in its platform configuration directory without requiring `HOME`; existing configurations remain available through migration.
 - Saving conversation history no longer blocks the UI on serialization or disk writes, coalesces waiting saves, and backs off after storage errors.
@@ -40,10 +44,6 @@ Notable changes to Agentaps are recorded here.
 - The conversation and composer sit in a centered, width-limited column. The composer has an inline Send or Stop button, and model, effort, and context usage (with Reset) moved beneath it. The header is a single row with the project and branch, and a session menu for reset, new agent session, and archive. Agent reply actions (Copy, Fork from here) appear under the reply on hover.
 - The README shows a recent desktop conversation and task activity screenshot.
 - The website's direct download links and release label now show Agentaps 0.3.1.
-
-### Fixed
-
-- Session archive and restore buttons stay vertically centered in the sidebar.
 
 ## [0.3.1] - 2026-09-29
 
@@ -210,7 +210,8 @@ Notable changes to Agentaps are recorded here.
 - Added chat controls for queued messages, stopping turns, resetting agent context, and completing agent slash commands.
 - Added ACP form questions with answer, decline, and cancel actions.
 
-[Unreleased]: https://github.com/domenkozar/agentaps/compare/v0.3.1...HEAD
+[Unreleased]: https://github.com/domenkozar/agentaps/compare/v0.4.0...HEAD
+[0.4.0]: https://github.com/domenkozar/agentaps/compare/v0.3.1...v0.4.0
 [0.3.1]: https://github.com/domenkozar/agentaps/compare/v0.3.0...v0.3.1
 [0.3.0]: https://github.com/domenkozar/agentaps/compare/v0.2.1...v0.3.0
 [0.2.1]: https://github.com/domenkozar/agentaps/compare/v0.2.0...v0.2.1

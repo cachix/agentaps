@@ -210,7 +210,8 @@ mod tests {
             search.tick();
             std::thread::sleep(Duration::from_millis(1));
         }
-        assert_eq!(search.results(), &["src/main.rs"]);
+        let expected_path = Path::new("src").join("main.rs");
+        assert_eq!(search.results(), &[expected_path.to_string_lossy()]);
         search.set_query("src");
         let deadline = Instant::now() + Duration::from_secs(2);
         while search.loading() && Instant::now() < deadline {
