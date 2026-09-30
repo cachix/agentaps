@@ -30,3 +30,5 @@ codegen-units = 1
 [patch.crates-io]
 # Keep GPUI Kit asset downloads on the same reqwest version as Iroh on WASM.
 gpui-pre-reqwest = { path = "../crates/gpui-kit-reqwest-compat" }
+# Upstream fix for the 0.7.0 touch panic on WASM (longbridge/gpui-kit#3271); drop once released.
+gpui-base = { git = "https://github.com/longbridge/gpui-kit", rev = "5a3892ce7fb23f056462b9391b4e523a8a5f3623" }
