@@ -124,6 +124,7 @@ impl Workspace {
             let sync_counts = project
                 .sync_counts
                 .filter(|(ahead, behind)| *ahead > 0 || *behind > 0);
+            let show_agent_status = agent.status != Status::Idle || !agent.elicitations.is_empty();
             let show_sync_button = sync_counts.is_some()
                 && !project_working
                 && !matches!(agent.status, Status::Working | Status::Done);
@@ -199,19 +200,17 @@ impl Workspace {
                         .flex()
                         .items_center()
                         .justify_start()
-                        .child(status_badge(agent)),
+                        .when(show_agent_status, |slot| slot.child(status_badge(agent)))
+                        .when(!show_agent_status, |slot| {
+                            slot.when_some(sync_counts, |slot, (ahead, behind)| {
+                                slot.child(sync_counts_badge(
+                                    ("sync", agent_id).into(),
+                                    ahead,
+                                    behind,
+                                ))
+                            })
+                        }),
                 )
-                .when_some(sync_counts, |row, (ahead, behind)| {
-                    row.child(
-                        div()
-                            .w(px(16.))
-                            .h(px(20.))
-                            .flex_shrink_0()
-                            .flex()
-                            .items_center()
-                            .child(sync_counts_badge(("sync", agent_id).into(), ahead, behind)),
-                    )
-                })
                 .child(
                     div()
                         .flex_shrink_0()
