@@ -462,6 +462,8 @@ struct Workspace {
     mobile_provider_input: Entity<InputState>,
     composer: Entity<TextareaState>,
     composer_max_rows: usize,
+    composer_viewport_height: f32,
+    composer_base_line_height: f32,
     session_composers: HashMap<u64, Entity<TextareaState>>,
     chat_list: ListState,
     chat_list_agent: Option<u64>,
@@ -689,18 +691,34 @@ fn completed_slash_text(command: &SlashCommand) -> String {
 }
 
 impl Workspace {
-    fn composer_max_rows(window: &Window) -> usize {
+    fn composer_geometry(window: &Window) -> (f32, f32) {
+        (
+            f32::from(window.viewport_size().height),
+            f32::from(
+                window
+                    .text_style()
+                    .line_height_in_pixels(px(BASE_FONT_SIZE)),
+            ),
+        )
+    }
+
+    fn composer_max_rows(viewport_height: f32, base_line_height: f32, font_scale: f32) -> usize {
         // Keep room for the header, controls, and some conversation above the draft.
-        let available_height = f32::from(window.viewport_size().height) - 200.;
-        (available_height / f32::from(window.line_height()))
+        let available_height = viewport_height - 200.;
+        (available_height / (base_line_height * font_scale))
             .floor()
             .max(1.) as usize
     }
 
     fn new_composer(window: &mut Window, cx: &mut Context<Self>) -> Entity<TextareaState> {
+        let font_scale = f32::from(Theme::global(cx).font_size) / BASE_FONT_SIZE;
+        let (viewport_height, base_line_height) = Self::composer_geometry(window);
         cx.new(|cx| {
             TextareaState::new(window, cx)
-                .auto_grow(1, Self::composer_max_rows(window))
+                .auto_grow(
+                    1,
+                    Self::composer_max_rows(viewport_height, base_line_height, font_scale),
+                )
                 .submit_on_enter(true)
                 .placeholder("Ask your agent…")
         })
@@ -925,7 +943,6 @@ impl Workspace {
             InputState::new(window, cx).placeholder("keyring, onepassword, or provider URI")
         });
         let composer = Self::new_composer(window, cx);
-        let composer_max_rows = Self::composer_max_rows(window);
         let _subscriptions = vec![
             cx.subscribe_in(
                 &mobile_provider_input,
@@ -1022,9 +1039,16 @@ impl Workspace {
         } else {
             1.0
         };
-        // Edit the theme directly (no window refresh): the first frame picks
-        // the scaled sizes up when the Root plugin applies theme.font_size.
-        set_theme_font_scale(Theme::global_mut(cx), font_scale);
+        Theme::update(cx, |theme| set_theme_font_scale(theme, font_scale));
+        let (composer_viewport_height, composer_base_line_height) = Self::composer_geometry(window);
+        let composer_max_rows = Self::composer_max_rows(
+            composer_viewport_height,
+            composer_base_line_height,
+            font_scale,
+        );
+        composer.update(cx, |input, cx| {
+            input.set_auto_grow(1, composer_max_rows, cx)
+        });
         let projects: Vec<ProjectView> = config
             .projects
             .into_iter()
@@ -1094,6 +1118,8 @@ impl Workspace {
             mobile_provider_input,
             composer,
             composer_max_rows,
+            composer_viewport_height,
+            composer_base_line_height,
             session_composers: HashMap::new(),
             chat_list: ListState::new(0, ListAlignment::Bottom, px(300.)),
             chat_list_agent: None,
@@ -1148,18 +1174,11 @@ impl Workspace {
         this.subscribe_composer(&composer, window, cx);
         this._subscriptions
             .push(cx.observe_window_bounds(window, |this, window, cx| {
-                let max_rows = Self::composer_max_rows(window);
-                if max_rows == this.composer_max_rows {
-                    return;
-                }
-                this.composer_max_rows = max_rows;
-                this.composer
-                    .update(cx, |input, cx| input.set_auto_grow(1, max_rows, cx));
-                for composer in this.session_composers.values() {
-                    if composer.entity_id() != this.composer.entity_id() {
-                        composer.update(cx, |input, cx| input.set_auto_grow(1, max_rows, cx));
-                    }
-                }
+                (
+                    this.composer_viewport_height,
+                    this.composer_base_line_height,
+                ) = Self::composer_geometry(window);
+                this.refresh_composer_row_limit(cx);
             }));
         let mut selected = None;
         for project_index in 0..this.projects.len() {
@@ -1754,6 +1773,25 @@ impl Workspace {
         self.open_picker(PickerStep::Folders, window, cx);
     }
 
+    fn refresh_composer_row_limit(&mut self, cx: &mut Context<Self>) {
+        let max_rows = Self::composer_max_rows(
+            self.composer_viewport_height,
+            self.composer_base_line_height,
+            self.font_scale,
+        );
+        if max_rows == self.composer_max_rows {
+            return;
+        }
+        self.composer_max_rows = max_rows;
+        self.composer
+            .update(cx, |input, cx| input.set_auto_grow(1, max_rows, cx));
+        for composer in self.session_composers.values() {
+            if composer.entity_id() != self.composer.entity_id() {
+                composer.update(cx, |input, cx| input.set_auto_grow(1, max_rows, cx));
+            }
+        }
+    }
+
     fn zoom_in(&mut self, _: &ZoomIn, _window: &mut Window, cx: &mut Context<Self>) {
         self.set_font_scale(self.font_scale + FONT_SCALE_STEP, cx);
     }
@@ -1766,36 +1804,36 @@ impl Workspace {
         self.set_font_scale(1.0, cx);
     }
 
-    fn apply_font_scale(&mut self, scale: f32) -> f32 {
-        let scale = ((scale * 10.).round() / 10.).clamp(MIN_FONT_SCALE, MAX_FONT_SCALE);
-        if scale != self.font_scale {
-            self.font_scale = scale;
-            self.notice = Some(format!("Zoom {:.0}%", scale * 100.));
-            self.persist();
-        }
-        scale
-    }
-
     fn set_font_scale(&mut self, scale: f32, cx: &mut Context<Self>) {
-        let scale = self.apply_font_scale(scale);
+        let scale = ((scale * 10.).round() / 10.).clamp(MIN_FONT_SCALE, MAX_FONT_SCALE);
+        if scale == self.font_scale {
+            return;
+        }
+        self.font_scale = scale;
+        let acknowledgement = format!("Zoom {:.0}%", scale * 100.);
+        self.notice = Some(acknowledgement.clone());
+        self.persist();
         // Theme::update also refreshes every window, so the next frame lays
         // text out at the new sizes.
         Theme::update(cx, |theme| set_theme_font_scale(theme, scale));
-        // The acknowledgement hides itself after a moment. The generation
-        // guard keeps an older timer from clearing a newer notice early.
+        self.refresh_composer_row_limit(cx);
         self.zoom_notice_generation += 1;
         let generation = self.zoom_notice_generation;
-        cx.spawn(async move |this, cx| {
-            cx.background_executor().timer(ZOOM_NOTICE_TIMEOUT).await;
-            this.update(cx, |this, cx| {
-                if this.zoom_notice_generation == generation {
-                    this.notice = None;
-                    cx.notify();
-                }
+        if self.notice.as_deref() == Some(acknowledgement.as_str()) {
+            cx.spawn(async move |this, cx| {
+                cx.background_executor().timer(ZOOM_NOTICE_TIMEOUT).await;
+                this.update(cx, |this, cx| {
+                    if this.zoom_notice_generation == generation
+                        && this.notice.as_deref() == Some(acknowledgement.as_str())
+                    {
+                        this.notice = None;
+                        cx.notify();
+                    }
+                })
+                .ok();
             })
-            .ok();
-        })
-        .detach();
+            .detach();
+        }
         cx.notify();
     }
 
