@@ -17,6 +17,7 @@ use gpui_kit::component::{
     menu::{DropdownMenu, PopupMenuItem},
     scroll::ScrollableElement,
     text::{TextView, TextViewStyle},
+    theme::Theme,
     tooltip::Tooltip,
 };
 use gpui_kit::{
@@ -109,7 +110,23 @@ fn move_sidebar_id(order: &mut Vec<u64>, dragged: u64, target: u64) -> bool {
     true
 }
 
-actions!(workspace, [QuickOpen]);
+actions!(workspace, [QuickOpen, ZoomIn, ZoomOut, ZoomReset, Quit]);
+
+// Font sizes of the gpui-component dark theme that theme::apply installs.
+// Zoom scales the UI by editing these on the global Theme, because the
+// gpui-component Root plugin resets window rem_size to theme.font_size
+// before every frame, discarding direct window.set_rem_size calls.
+const BASE_FONT_SIZE: f32 = 16.;
+const BASE_MONO_FONT_SIZE: f32 = 13.;
+const MIN_FONT_SCALE: f32 = 0.75;
+const MAX_FONT_SCALE: f32 = 2.0;
+const FONT_SCALE_STEP: f32 = 0.1;
+const ZOOM_NOTICE_TIMEOUT: Duration = Duration::from_millis(1500);
+
+fn set_theme_font_scale(theme: &mut Theme, scale: f32) {
+    theme.font_size = px(BASE_FONT_SIZE * scale);
+    theme.mono_font_size = px(BASE_MONO_FONT_SIZE * scale);
+}
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 struct SessionLocation {
@@ -411,6 +428,7 @@ struct Workspace {
     view: WorkspaceView,
     sidebar_order: Vec<u64>,
     sidebar_fraction: f32,
+    font_scale: f32,
     collapsed_tool_groups: HashSet<(u64, usize)>,
     expanded_tool_history: HashSet<(u64, usize)>,
     expanded_tool_rows: HashSet<(u64, usize)>,
@@ -439,6 +457,8 @@ struct Workspace {
     mobile_provider_input: Entity<InputState>,
     composer: Entity<TextareaState>,
     composer_max_rows: usize,
+    composer_viewport_height: f32,
+    composer_base_line_height: f32,
     session_composers: HashMap<u64, Entity<TextareaState>>,
     chat_list: ListState,
     chat_list_agent: Option<u64>,
@@ -476,6 +496,7 @@ struct Workspace {
     dirty: bool,
     last_saved: Instant,
     notice: Option<String>,
+    zoom_notice_generation: u64,
     mobile: Option<crate::mobile::Server>,
     mobile_start_tx: Sender<Result<crate::mobile::Server, String>>,
     mobile_start_rx: Receiver<Result<crate::mobile::Server, String>>,
@@ -658,18 +679,34 @@ fn completed_slash_text(command: &SlashCommand) -> String {
 }
 
 impl Workspace {
-    fn composer_max_rows(window: &Window) -> usize {
+    fn composer_geometry(window: &Window) -> (f32, f32) {
+        (
+            f32::from(window.viewport_size().height),
+            f32::from(
+                window
+                    .text_style()
+                    .line_height_in_pixels(px(BASE_FONT_SIZE)),
+            ),
+        )
+    }
+
+    fn composer_max_rows(viewport_height: f32, base_line_height: f32, font_scale: f32) -> usize {
         // Keep room for the header, controls, and some conversation above the draft.
-        let available_height = f32::from(window.viewport_size().height) - 200.;
-        (available_height / f32::from(window.line_height()))
+        let available_height = viewport_height - 200.;
+        (available_height / (base_line_height * font_scale))
             .floor()
             .max(1.) as usize
     }
 
     fn new_composer(window: &mut Window, cx: &mut Context<Self>) -> Entity<TextareaState> {
+        let font_scale = f32::from(Theme::global(cx).font_size) / BASE_FONT_SIZE;
+        let (viewport_height, base_line_height) = Self::composer_geometry(window);
         cx.new(|cx| {
             TextareaState::new(window, cx)
-                .auto_grow(1, Self::composer_max_rows(window))
+                .auto_grow(
+                    1,
+                    Self::composer_max_rows(viewport_height, base_line_height, font_scale),
+                )
                 .submit_on_enter(true)
                 .placeholder("Ask your agent…")
         })
@@ -894,7 +931,6 @@ impl Workspace {
             InputState::new(window, cx).placeholder("keyring, onepassword, or provider URI")
         });
         let composer = Self::new_composer(window, cx);
-        let composer_max_rows = Self::composer_max_rows(window);
         let _subscriptions = vec![
             cx.subscribe_in(
                 &mobile_provider_input,
@@ -986,6 +1022,21 @@ impl Workspace {
         } else {
             0.2
         };
+        let font_scale = if config.font_scale.is_finite() {
+            config.font_scale.clamp(MIN_FONT_SCALE, MAX_FONT_SCALE)
+        } else {
+            1.0
+        };
+        Theme::update(cx, |theme| set_theme_font_scale(theme, font_scale));
+        let (composer_viewport_height, composer_base_line_height) = Self::composer_geometry(window);
+        let composer_max_rows = Self::composer_max_rows(
+            composer_viewport_height,
+            composer_base_line_height,
+            font_scale,
+        );
+        composer.update(cx, |input, cx| {
+            input.set_auto_grow(1, composer_max_rows, cx)
+        });
         let projects: Vec<ProjectView> = config
             .projects
             .into_iter()
@@ -1026,6 +1077,7 @@ impl Workspace {
             view: WorkspaceView::Empty,
             sidebar_order,
             sidebar_fraction,
+            font_scale,
             collapsed_tool_groups: HashSet::new(),
             expanded_tool_history: HashSet::new(),
             expanded_tool_rows: HashSet::new(),
@@ -1054,6 +1106,8 @@ impl Workspace {
             mobile_provider_input,
             composer,
             composer_max_rows,
+            composer_viewport_height,
+            composer_base_line_height,
             session_composers: HashMap::new(),
             chat_list: ListState::new(0, ListAlignment::Bottom, px(300.)),
             chat_list_agent: None,
@@ -1091,6 +1145,7 @@ impl Workspace {
             dirty: migrate_config,
             last_saved: Instant::now(),
             notice,
+            zoom_notice_generation: 0,
             mobile: None,
             mobile_start_tx,
             mobile_start_rx,
@@ -1107,18 +1162,11 @@ impl Workspace {
         this.subscribe_composer(&composer, window, cx);
         this._subscriptions
             .push(cx.observe_window_bounds(window, |this, window, cx| {
-                let max_rows = Self::composer_max_rows(window);
-                if max_rows == this.composer_max_rows {
-                    return;
-                }
-                this.composer_max_rows = max_rows;
-                this.composer
-                    .update(cx, |input, cx| input.set_auto_grow(1, max_rows, cx));
-                for composer in this.session_composers.values() {
-                    if composer.entity_id() != this.composer.entity_id() {
-                        composer.update(cx, |input, cx| input.set_auto_grow(1, max_rows, cx));
-                    }
-                }
+                (
+                    this.composer_viewport_height,
+                    this.composer_base_line_height,
+                ) = Self::composer_geometry(window);
+                this.refresh_composer_row_limit(cx);
             }));
         let mut selected = None;
         for project_index in 0..this.projects.len() {
@@ -1258,6 +1306,7 @@ impl Workspace {
                 .collect(),
             sidebar_order: self.sidebar_order.clone(),
             sidebar_fraction: self.sidebar_fraction,
+            font_scale: self.font_scale,
         }
     }
 
@@ -1712,6 +1761,70 @@ impl Workspace {
         self.open_picker(PickerStep::Folders, window, cx);
     }
 
+    fn refresh_composer_row_limit(&mut self, cx: &mut Context<Self>) {
+        let max_rows = Self::composer_max_rows(
+            self.composer_viewport_height,
+            self.composer_base_line_height,
+            self.font_scale,
+        );
+        if max_rows == self.composer_max_rows {
+            return;
+        }
+        self.composer_max_rows = max_rows;
+        self.composer
+            .update(cx, |input, cx| input.set_auto_grow(1, max_rows, cx));
+        for composer in self.session_composers.values() {
+            if composer.entity_id() != self.composer.entity_id() {
+                composer.update(cx, |input, cx| input.set_auto_grow(1, max_rows, cx));
+            }
+        }
+    }
+
+    fn zoom_in(&mut self, _: &ZoomIn, _window: &mut Window, cx: &mut Context<Self>) {
+        self.set_font_scale(self.font_scale + FONT_SCALE_STEP, cx);
+    }
+
+    fn zoom_out(&mut self, _: &ZoomOut, _window: &mut Window, cx: &mut Context<Self>) {
+        self.set_font_scale(self.font_scale - FONT_SCALE_STEP, cx);
+    }
+
+    fn zoom_reset(&mut self, _: &ZoomReset, _window: &mut Window, cx: &mut Context<Self>) {
+        self.set_font_scale(1.0, cx);
+    }
+
+    fn set_font_scale(&mut self, scale: f32, cx: &mut Context<Self>) {
+        let scale = ((scale * 10.).round() / 10.).clamp(MIN_FONT_SCALE, MAX_FONT_SCALE);
+        if scale == self.font_scale {
+            return;
+        }
+        self.font_scale = scale;
+        let acknowledgement = format!("Zoom {:.0}%", scale * 100.);
+        self.notice = Some(acknowledgement.clone());
+        self.persist();
+        // Theme::update also refreshes every window, so the next frame lays
+        // text out at the new sizes.
+        Theme::update(cx, |theme| set_theme_font_scale(theme, scale));
+        self.refresh_composer_row_limit(cx);
+        self.zoom_notice_generation += 1;
+        let generation = self.zoom_notice_generation;
+        if self.notice.as_deref() == Some(acknowledgement.as_str()) {
+            cx.spawn(async move |this, cx| {
+                cx.background_executor().timer(ZOOM_NOTICE_TIMEOUT).await;
+                this.update(cx, |this, cx| {
+                    if this.zoom_notice_generation == generation
+                        && this.notice.as_deref() == Some(acknowledgement.as_str())
+                    {
+                        this.notice = None;
+                        cx.notify();
+                    }
+                })
+                .ok();
+            })
+            .detach();
+        }
+        cx.notify();
+    }
+
     fn workspace_key_down(
         &mut self,
         event: &KeyDownEvent,
@@ -2025,12 +2138,38 @@ pub(crate) fn run() {
                 Some("Input"),
             )]);
             #[cfg(target_os = "macos")]
-            cx.bind_keys([KeyBinding::new("cmd-p", QuickOpen, None)]);
+            {
+                cx.bind_keys([
+                    KeyBinding::new("cmd-p", QuickOpen, None),
+                    KeyBinding::new("cmd-=", ZoomIn, None),
+                    KeyBinding::new("cmd-+", ZoomIn, None),
+                    KeyBinding::new("cmd--", ZoomOut, None),
+                    KeyBinding::new("cmd-0", ZoomReset, None),
+                    KeyBinding::new("cmd-q", Quit, None),
+                ]);
+                cx.on_action(|_: &Quit, cx| cx.quit());
+                cx.set_menus(vec![
+                    gpui_kit::Menu::new("Agentaps")
+                        .items([gpui_kit::MenuItem::action("Quit Agentaps", Quit)]),
+                    gpui_kit::Menu::new("View").items([
+                        gpui_kit::MenuItem::action("Zoom In", ZoomIn),
+                        gpui_kit::MenuItem::action("Zoom Out", ZoomOut),
+                        gpui_kit::MenuItem::separator(),
+                        gpui_kit::MenuItem::action("Reset Zoom", ZoomReset),
+                    ]),
+                ]);
+            }
             #[cfg(not(target_os = "macos"))]
-            cx.bind_keys([KeyBinding::new("ctrl-p", QuickOpen, None)]);
+            cx.bind_keys([
+                KeyBinding::new("ctrl-p", QuickOpen, None),
+                KeyBinding::new("ctrl-=", ZoomIn, None),
+                KeyBinding::new("ctrl-+", ZoomIn, None),
+                KeyBinding::new("ctrl--", ZoomOut, None),
+                KeyBinding::new("ctrl-0", ZoomReset, None),
+            ]);
             theme::apply(cx);
             let bounds = Bounds::centered(None, size(px(1200.), px(760.)), cx);
-            gpui_kit::open_window(
+            let window_handle = gpui_kit::open_window(
                 WindowOptions {
                     window_bounds: Some(WindowBounds::Windowed(bounds)),
                     ..Default::default()
@@ -2042,6 +2181,26 @@ pub(crate) fn run() {
                 },
             )
             .expect("Could not open GPUI window");
+            // App-level handlers so View menu items and shortcuts reach the
+            // workspace regardless of which element holds focus.
+            let (_, workspace) = window_handle;
+            let workspace_out = workspace.clone();
+            let workspace_reset = workspace.clone();
+            cx.on_action(move |_: &ZoomIn, cx| {
+                let _ = workspace.update(cx, |this, cx| {
+                    this.set_font_scale(this.font_scale + FONT_SCALE_STEP, cx);
+                });
+            });
+            cx.on_action(move |_: &ZoomOut, cx| {
+                let _ = workspace_out.update(cx, |this, cx| {
+                    this.set_font_scale(this.font_scale - FONT_SCALE_STEP, cx);
+                });
+            });
+            cx.on_action(move |_: &ZoomReset, cx| {
+                let _ = workspace_reset.update(cx, |this, cx| {
+                    this.set_font_scale(1.0, cx);
+                });
+            });
             cx.activate(true);
         });
 }

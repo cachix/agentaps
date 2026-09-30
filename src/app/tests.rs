@@ -1169,3 +1169,144 @@ fn shell_mode_requires_first_character_and_preserves_command_text() {
         "Run this shell command exactly as written, then report its output:\n\n  printf 'hello'\nnext"
     );
 }
+
+#[gpui_kit::test]
+fn zoom_shortcuts_and_menu_actions_change_the_font_scale(cx: &mut gpui_kit::TestAppContext) {
+    let temp = tempfile::tempdir().unwrap();
+    let original_config_home = std::env::var_os("XDG_CONFIG_HOME");
+    // SAFETY: no other test in this process reads the config directory while this
+    // test runs; Workspace::new is only constructed here.
+    unsafe { std::env::set_var("XDG_CONFIG_HOME", temp.path()) };
+    cx.update(|cx| {
+        gpui_kit::init(cx);
+        theme::apply(cx);
+        cx.bind_keys([
+            KeyBinding::new("cmd-=", ZoomIn, None),
+            KeyBinding::new("cmd--", ZoomOut, None),
+            KeyBinding::new("cmd-0", ZoomReset, None),
+        ]);
+    });
+    let (workspace, cx) = cx.add_window_view(|window, cx| Workspace::new(window, cx));
+    // The zoom must land on the theme: in the real app the gpui-component
+    // Root plugin resets window.rem_size to theme.font_size before every
+    // frame, so theme.font_size is what actually reaches the paint.
+    let zoom_state = |cx: &mut gpui_kit::VisualTestContext| {
+        cx.update(|_, cx| {
+            let theme = Theme::global(cx);
+            (
+                workspace.read(cx).font_scale,
+                theme.font_size,
+                theme.mono_font_size,
+            )
+        })
+    };
+
+    assert_eq!(
+        zoom_state(cx),
+        (1.0, px(BASE_FONT_SIZE), px(BASE_MONO_FONT_SIZE))
+    );
+    let default_max_rows = cx.update(|_, cx| workspace.read(cx).composer_max_rows);
+    cx.simulate_keystrokes("cmd-=");
+    assert_eq!(
+        zoom_state(cx),
+        (1.1, px(BASE_FONT_SIZE * 1.1), px(BASE_MONO_FONT_SIZE * 1.1)),
+        "Cmd+= should zoom in"
+    );
+    let (saved, _) = config::load().expect("zooming should save the config");
+    assert_eq!(saved.font_scale, 1.1, "Cmd+= should persist the zoom level");
+    assert!(
+        cx.update(|_, cx| workspace.read(cx).composer_max_rows) < default_max_rows,
+        "zooming in should reserve more room above a long draft"
+    );
+    cx.simulate_keystrokes("cmd--");
+    assert_eq!(
+        zoom_state(cx),
+        (1.0, px(BASE_FONT_SIZE), px(BASE_MONO_FONT_SIZE)),
+        "Cmd+- should zoom out"
+    );
+    cx.dispatch_action(ZoomIn);
+    assert_eq!(
+        zoom_state(cx),
+        (1.1, px(BASE_FONT_SIZE * 1.1), px(BASE_MONO_FONT_SIZE * 1.1)),
+        "menu-dispatched ZoomIn should zoom in"
+    );
+    cx.dispatch_action(ZoomReset);
+    assert_eq!(
+        zoom_state(cx),
+        (1.0, px(BASE_FONT_SIZE), px(BASE_MONO_FONT_SIZE)),
+        "menu-dispatched ZoomReset should reset"
+    );
+    let (saved, _) = config::load().expect("zooming should save the config");
+    assert_eq!(saved.font_scale, 1.0, "ZoomReset should persist the reset");
+
+    // The acknowledgement notice hides itself after ZOOM_NOTICE_TIMEOUT.
+    let notice =
+        |cx: &mut gpui_kit::VisualTestContext| cx.update(|_, cx| workspace.read(cx).notice.clone());
+    cx.dispatch_action(ZoomIn);
+    cx.dispatch_action(ZoomIn);
+    assert_eq!(notice(cx), Some("Zoom 120%".to_string()));
+    cx.executor().advance_clock(ZOOM_NOTICE_TIMEOUT);
+    cx.run_until_parked();
+    assert_eq!(
+        notice(cx),
+        None,
+        "zoom notice should hide after the timeout"
+    );
+
+    // A later error or unrelated notice must survive the zoom timer.
+    cx.dispatch_action(ZoomIn);
+    cx.update(|_, cx| workspace.update(cx, |this, _| this.notice = Some("Another notice".into())));
+    cx.executor().advance_clock(ZOOM_NOTICE_TIMEOUT);
+    cx.run_until_parked();
+    assert_eq!(notice(cx), Some("Another notice".to_string()));
+
+    let blocked = temp.path().join("blocked");
+    std::fs::write(&blocked, "").unwrap();
+    // SAFETY: this test is the only test constructing Workspace in this process.
+    unsafe { std::env::set_var("XDG_CONFIG_HOME", &blocked) };
+    cx.dispatch_action(ZoomIn);
+    assert!(notice(cx).unwrap().starts_with("Could not save config:"));
+    cx.executor().advance_clock(ZOOM_NOTICE_TIMEOUT);
+    cx.run_until_parked();
+    assert!(notice(cx).unwrap().starts_with("Could not save config:"));
+
+    // Restore the saved zoom in a fresh workspace after resetting the theme.
+    // SAFETY: this test is the only test constructing Workspace in this process.
+    unsafe { std::env::set_var("XDG_CONFIG_HOME", temp.path()) };
+    cx.update(|_, cx| theme::apply(cx));
+    let (restored, cx) = cx.add_window_view(|window, cx| Workspace::new(window, cx));
+    cx.update(|_, cx| {
+        let restored = restored.read(cx);
+        assert_eq!(restored.font_scale, 1.3);
+        assert_eq!(Theme::global(cx).font_size, px(BASE_FONT_SIZE * 1.3));
+        assert_eq!(
+            Theme::global(cx).mono_font_size,
+            px(BASE_MONO_FONT_SIZE * 1.3)
+        );
+        assert!(
+            restored.composer_max_rows < default_max_rows,
+            "restoring zoom should also limit the composer height"
+        );
+    });
+
+    // No-op reset must not schedule a timer that removes another notice.
+    cx.dispatch_action(ZoomReset);
+    cx.executor().advance_clock(ZOOM_NOTICE_TIMEOUT);
+    cx.run_until_parked();
+    cx.update(|_, cx| restored.update(cx, |this, _| this.notice = Some("Keep this notice".into())));
+    cx.dispatch_action(ZoomReset);
+    cx.executor().advance_clock(ZOOM_NOTICE_TIMEOUT);
+    cx.run_until_parked();
+    assert_eq!(
+        cx.update(|_, cx| restored.read(cx).notice.clone()),
+        Some("Keep this notice".to_string())
+    );
+    // SAFETY: restore the process environment modified for this test.
+    unsafe {
+        if let Some(original) = original_config_home {
+            std::env::set_var("XDG_CONFIG_HOME", original);
+        } else {
+            std::env::remove_var("XDG_CONFIG_HOME");
+        }
+    }
+}

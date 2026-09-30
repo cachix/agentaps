@@ -90,10 +90,16 @@ pub struct Config {
     pub sidebar_order: Vec<u64>,
     #[serde(default = "default_sidebar_fraction")]
     pub sidebar_fraction: f32,
+    #[serde(default = "default_font_scale")]
+    pub font_scale: f32,
 }
 
 fn default_sidebar_fraction() -> f32 {
     0.2
+}
+
+fn default_font_scale() -> f32 {
+    1.0
 }
 
 impl Default for Config {
@@ -102,6 +108,7 @@ impl Default for Config {
             projects: Vec::new(),
             sidebar_order: Vec::new(),
             sidebar_fraction: default_sidebar_fraction(),
+            font_scale: default_font_scale(),
         }
     }
 }
@@ -199,16 +206,19 @@ mod tests {
     fn sidebar_order_is_saved_and_old_configs_still_load() {
         let old: Config = serde_json::from_str(r#"{"projects":[]}"#).unwrap();
         assert!(old.sidebar_order.is_empty());
+        assert_eq!(old.font_scale, 1.0);
 
         let config = Config {
             projects: vec![],
             sidebar_order: vec![3, 1, 2],
             sidebar_fraction: 0.32,
+            font_scale: 1.25,
         };
         let restored: Config =
             serde_json::from_slice(&serde_json::to_vec(&config).unwrap()).unwrap();
         assert_eq!(restored.sidebar_order, vec![3, 1, 2]);
         assert_eq!(restored.sidebar_fraction, 0.32);
+        assert_eq!(restored.font_scale, 1.25);
     }
 
     #[test]
