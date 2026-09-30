@@ -422,3 +422,147 @@ impl Workspace {
         Ok(Response::Accepted)
     }
 }
+
+#[cfg(test)]
+pub(super) fn verify_session_switching_and_mobile_routing(
+    workspace: &Entity<Workspace>,
+    root: &Path,
+    cx: &mut gpui_kit::VisualTestContext,
+) {
+    use crate::session::test_agent;
+    use agentaps_control_protocol::{Command, Response};
+
+    let first = SessionLocation {
+        project_index: 0,
+        agent_index: 0,
+    };
+    let second = SessionLocation {
+        project_index: 0,
+        agent_index: 1,
+    };
+    cx.update(|window, cx| {
+        workspace.update(cx, |this, cx| {
+            let mut first_agent = test_agent(ProtocolVersion::V1);
+            first_agent.config.id = 101;
+            let mut second_agent = test_agent(ProtocolVersion::V2);
+            second_agent.config.id = 102;
+            this.projects = vec![ProjectView {
+                path: root.to_owned(),
+                ssh_host: None,
+                branch: String::new(),
+                sync_counts: None,
+                agents: vec![
+                    AgentView {
+                        controller: first_agent,
+                        elicitations: Vec::new(),
+                    },
+                    AgentView {
+                        controller: second_agent,
+                        elicitations: Vec::new(),
+                    },
+                ],
+            }];
+            this.set_view(WorkspaceView::Conversation(first), window, cx);
+            this.conversation.composer.update(cx, |input, cx| {
+                input.set_value("First draft", window, cx);
+                input.set_cursor_position(Position::new(0, 3), window, cx);
+            });
+            let first_composer = this.conversation.composer.clone();
+            this.conversation.prompt_recall = Some(PromptRecall {
+                agent_id: 101,
+                index: 0,
+                draft: "First draft".into(),
+                displayed: "Earlier".into(),
+            });
+            this.set_view(WorkspaceView::Conversation(second), window, cx);
+            assert_ne!(
+                first_composer.entity_id(),
+                this.conversation.composer.entity_id()
+            );
+            assert!(this.conversation.composer.read(cx).value().is_empty());
+            assert!(this.conversation.prompt_recall.is_none());
+            this.conversation
+                .composer
+                .update(cx, |input, cx| input.set_value("Second draft", window, cx));
+            let second_composer = this.conversation.composer.clone();
+            this.set_view(WorkspaceView::Conversation(first), window, cx);
+            assert_eq!(
+                this.conversation.composer.entity_id(),
+                first_composer.entity_id()
+            );
+            assert_eq!(
+                this.conversation.composer.read(cx).value().as_ref(),
+                "First draft"
+            );
+            assert_eq!(
+                this.conversation.composer.read(cx).cursor_position(),
+                Position::new(0, 3)
+            );
+            this.set_view(this.view.toggle_archive(), window, cx);
+            this.set_view(this.view.toggle_archive(), window, cx);
+            assert_eq!(
+                this.conversation.composer.entity_id(),
+                first_composer.entity_id()
+            );
+
+            // Web commands address their session ID even while another session is displayed.
+            let response = this
+                .apply_mobile_command(
+                    Command::Prompt {
+                        agent_id: 102,
+                        text: "Remote request".into(),
+                    },
+                    cx,
+                )
+                .unwrap();
+            assert!(matches!(response, Response::Accepted));
+            assert!(this.projects[0].agents[0].config.pending_prompts.is_empty());
+            assert_eq!(
+                this.projects[0].agents[1].config.pending_prompts,
+                ["Remote request"]
+            );
+            assert_eq!(second_composer.read(cx).value().as_ref(), "Second draft");
+            assert_eq!(this.view, WorkspaceView::Conversation(first));
+            assert!(
+                this.apply_mobile_command(
+                    Command::Prompt {
+                        agent_id: 999,
+                        text: "Missing".into()
+                    },
+                    cx
+                )
+                .is_err()
+            );
+            assert!(
+                this.apply_mobile_command(
+                    Command::Prompt {
+                        agent_id: 102,
+                        text: " ".into()
+                    },
+                    cx
+                )
+                .is_err()
+            );
+            this.projects[0].agents[1].config.archived = true;
+            assert!(
+                this.apply_mobile_command(
+                    Command::Prompt {
+                        agent_id: 102,
+                        text: "Archived".into()
+                    },
+                    cx
+                )
+                .is_err()
+            );
+            let Response::Snapshot { projects, .. } = this.mobile_snapshot() else {
+                panic!("expected snapshot")
+            };
+            assert_eq!(projects[0].agents.len(), 1);
+            assert_eq!(projects[0].agents[0].id, 101);
+            // Keep these disconnected fixtures out of the zoom test's saved configuration.
+            this.projects.clear();
+            this.view = WorkspaceView::Empty;
+            this.persistence.dirty = false;
+        })
+    });
+}

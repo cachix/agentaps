@@ -558,6 +558,7 @@ fn zoom_shortcuts_and_menu_actions_change_the_font_scale(cx: &mut gpui_kit::Test
         Some("Keep this notice".to_string())
     );
     cx.update(|_, cx| restored.update(cx, |this, _| this.persistence.wait().unwrap()));
+    mobile::verify_session_switching_and_mobile_routing(&restored, temp.path(), cx);
     // SAFETY: restore the process environment modified for this test.
     unsafe {
         if let Some(original) = original_config_home {

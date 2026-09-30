@@ -30,6 +30,7 @@ Notable changes to Agentaps are recorded here.
 
 ### Changed
 
+- Regression checks cover session draft and cursor preservation, zoom restoration, and Web Connect commands reaching the intended session while another is displayed.
 - Desktop sessions use a UI-independent controller with common ACP updates; workspace components own their related state, and browser protection, transport, actions, and rendering live in separate modules.
 - Session headers show the full project path beside Diff instead of the Git branch. Selecting the path lets you move the session to another folder and reconnect the agent there with fresh context while keeping earlier messages visible.
 - Sidebar sessions show Git upstream counts in the agent status position when the agent has no active status.
