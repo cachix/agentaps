@@ -9,12 +9,16 @@ Notable changes to Agentaps are recorded here.
 - CI checks that the devenv shell starts on Linux and macOS.
 - A View menu offers Zoom In, Zoom Out, and Reset Zoom (Cmd+=, Cmd+-, Cmd+0 on macOS, Ctrl on other platforms) to enlarge or shrink the app font size, remembered across restarts.
 - `agentaps --version` prints the installed version without opening the desktop app.
+- A Mode button at the bottom left of the composer shows the agent's current mode and switches between the modes the agent offers, such as Claude's Manual, Accept edits, Plan, and Auto. It is hidden for agents that report no modes.
+- A Plan toggle next to the Mode button switches planning on and off for agents that offer it separately from their modes, such as Codex.
 
 ### Fixed
 
 - Restored zoom now scales markdown code blocks, keeps multiline composers within the available space, and leaves other notices and save errors visible.
 - Zoom In, Zoom Out, and Reset Zoom now reach the workspace regardless of which element has focus, and each zoom change shows a notice with the new percentage that hides itself after a second and a half.
 - Zooming now visibly resizes the UI. The zoom level is written to the UI theme, whose font size the window applies on every frame; writing the window's rem size directly was overwritten before the next paint. Code text in the composer scales along.
+- The Send and Stop buttons stay vertically centered in the message composer.
+- Diff review and sidebar line counts exclude untracked files, so an otherwise unchanged checkout shows no diff.
 - `devenv shell` evaluates on macOS again. The Linux-only graphics libraries (wayland, libxkbcommon, libxcb, vulkan-loader, fontconfig, freetype) are now installed only on Linux.
 - Claude ACP sessions retry once when another Claude Code process temporarily blocks OAuth token refresh.
 - Diff loading now uses a toolbar spinner without shifting the diff view.
@@ -23,7 +27,10 @@ Notable changes to Agentaps are recorded here.
 
 ### Changed
 
+- Sidebar sessions show Git upstream counts in the agent status position when the agent has no active status.
+- Diff review opens beside the conversation with one compact row for the comparison and change totals, keeping chat and its composer available.
 - The message composer grows with pasted or typed multiline text up to most of the window height, then scrolls within the composer.
+- The conversation and composer sit in a centered, width-limited column. The composer has an inline Send or Stop button, and model, effort, and context usage (with Reset) moved beneath it. The header is a single row with the project and branch, and a session menu for reset, new agent session, and archive. Agent reply actions (Copy, Fork from here) appear under the reply on hover.
 - The README shows a recent desktop conversation and task activity screenshot.
 - The website's direct download links and release label now show Agentaps 0.3.1.
 

@@ -3,69 +3,16 @@ use crate::diff_view::{self, Presentation};
 use gpui_kit::component::{Sizable, spinner::Spinner};
 
 impl Workspace {
-    pub(super) fn render_diff(
-        &self,
-        mut panel: Div,
-        project_index: usize,
-        agent_index: usize,
-        cx: &mut Context<Self>,
-    ) -> Div {
-        let project = &self.projects[project_index];
-        let agent = &project.agents[agent_index];
-        let path = project.path.display().to_string();
-        panel = panel.child(
-            div()
-                .px_4()
-                .py_3()
-                .border_b_1()
-                .border_color(rgb(BORDER))
-                .flex()
-                .gap_3()
-                .items_center()
-                .child(
-                    div()
-                        .flex_1()
-                        .min_w(px(0.))
-                        .flex()
-                        .gap_3()
-                        .items_center()
-                        .child(
-                            div()
-                                .font_weight(gpui_kit::FontWeight::SEMIBOLD)
-                                .text_sm()
-                                .text_color(rgb(TEXT))
-                                .child(agent.name.clone()),
-                        )
-                        .child(
-                            div()
-                                .flex_1()
-                                .min_w(px(0.))
-                                .truncate()
-                                .text_xs()
-                                .text_color(rgb(MUTED))
-                                .child(path),
-                        ),
-                )
-                .child(
-                    div()
-                        .id("back-to-chat")
-                        .px_3()
-                        .py_1()
-                        .rounded_md()
-                        .cursor_pointer()
-                        .text_sm()
-                        .text_color(rgb(TEXT))
-                        .hover(|style| style.bg(rgb(HOVER)))
-                        .child("Chat")
-                        .on_click(cx.listener(|this, _, window, cx| {
-                            this.close_diff();
-                            this.composer
-                                .update(cx, |input, cx| input.focus(window, cx));
-                            cx.notify();
-                        })),
-                ),
-        );
-        let mut toolbar = div()
+    pub(super) fn render_diff(&self, panel: Div, cx: &mut Context<Self>) -> Div {
+        let (added, removed) = self
+            .diff_file_stats
+            .iter()
+            .copied()
+            .fold((0, 0), |total, count| {
+                (total.0 + count.0, total.1 + count.1)
+            });
+        let files = self.diff_files.len();
+        let toolbar = div()
             .px_4()
             .py_2()
             .flex()
@@ -74,9 +21,19 @@ impl Workspace {
             .border_b_1()
             .border_color(rgb(BORDER))
             .text_xs()
-            .text_color(rgb(MUTED));
-        toolbar = toolbar
-            .child("Checkout changes vs HEAD")
+            .text_color(rgb(MUTED))
+            .child(
+                div()
+                    .id("diff-comparison")
+                    .flex_1()
+                    .min_w(px(0.))
+                    .truncate()
+                    .text_color(rgb(TEXT))
+                    .child("Checkout vs HEAD")
+                    .tooltip(|window, cx| {
+                        Tooltip::new("Checkout changes compared with HEAD").build(window, cx)
+                    }),
+            )
             .child(
                 div()
                     .id("diff-loading-spinner")
@@ -94,14 +51,46 @@ impl Workspace {
             )
             .child(
                 div()
-                    .flex_1()
-                    .min_w(px(0.))
-                    .truncate()
-                    .child("Shared by agents in this folder"),
+                    .flex()
+                    .flex_shrink_0()
+                    .items_center()
+                    .gap_2()
+                    .font_family("monospace")
+                    .child(format!(
+                        "{files} {}",
+                        if files == 1 { "file" } else { "files" }
+                    ))
+                    .child(
+                        div()
+                            .text_color(rgb(diff_view::ADDED_TEXT))
+                            .child(format!("+{added}")),
+                    )
+                    .child(
+                        div()
+                            .text_color(rgb(diff_view::REMOVED_TEXT))
+                            .child(format!("-{removed}")),
+                    ),
             )
             .child(self.presentation_button(Presentation::Unified, "Unified", cx))
-            .child(self.presentation_button(Presentation::Split, "Split", cx));
-        panel = panel.child(toolbar);
+            .child(self.presentation_button(Presentation::Split, "Split", cx))
+            .child(
+                div()
+                    .id("close-diff")
+                    .px_2()
+                    .py_1()
+                    .rounded_md()
+                    .cursor_pointer()
+                    .text_color(rgb(TEXT))
+                    .hover(|style| style.bg(rgb(HOVER)))
+                    .child("Close")
+                    .on_click(cx.listener(|this, _, window, cx| {
+                        this.close_diff();
+                        this.composer
+                            .update(cx, |input, cx| input.focus(window, cx));
+                        cx.notify();
+                    })),
+            );
+        let panel = panel.child(toolbar);
         let body = if let Some(error) = &self.diff_error {
             div()
                 .flex_1()
@@ -146,36 +135,6 @@ impl Workspace {
         cx: &mut Context<Self>,
     ) -> gpui_kit::AnyElement {
         match row {
-            DiffListRow::Summary {
-                files,
-                added,
-                removed,
-            } => {
-                let summary = format!(
-                    "{files} {} changed, {added} {}(+), {removed} {}(-)",
-                    if *files == 1 { "file" } else { "files" },
-                    if *added == 1 {
-                        "insertion"
-                    } else {
-                        "insertions"
-                    },
-                    if *removed == 1 {
-                        "deletion"
-                    } else {
-                        "deletions"
-                    },
-                );
-                div()
-                    .px_4()
-                    .py_3()
-                    .border_b_1()
-                    .border_color(rgb(BORDER))
-                    .font_family("monospace")
-                    .text_xs()
-                    .text_color(rgb(MUTED))
-                    .child(summary)
-                    .into_any_element()
-            }
             DiffListRow::File {
                 path,
                 note,

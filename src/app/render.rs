@@ -1,6 +1,7 @@
 use super::*;
-use gpui_kit::Div;
+use gpui_kit::component::Sizable;
 use gpui_kit::component::progress::Progress;
+use gpui_kit::{Anchor, Div};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 mod conversation;
@@ -9,6 +10,9 @@ mod entries;
 mod picker;
 mod sidebar;
 mod tool_group;
+
+/// Maximum width of the conversation and composer, for comfortable line length.
+const CHAT_COLUMN_WIDTH: f32 = 760.;
 
 fn status_dot(color: u32) -> Div {
     div().size(px(7.)).rounded_full().bg(rgb(color))
@@ -453,10 +457,36 @@ impl Render for Workspace {
             agent_index,
         }) = self.view.displayed_session()
         {
+            self.sync_chat_rows(project_index, agent_index);
             if self.diff_visible {
-                chat = self.render_diff(chat, project_index, agent_index, cx);
+                let conversation = self.render_conversation(
+                    div().flex_1().min_w(px(0.)).h_full().flex().flex_col(),
+                    project_index,
+                    agent_index,
+                    window,
+                    cx,
+                );
+                let diff = self.render_diff(
+                    div()
+                        .flex_1()
+                        .min_w(px(0.))
+                        .h_full()
+                        .flex()
+                        .flex_col()
+                        .border_l_1()
+                        .border_color(rgb(BORDER)),
+                    cx,
+                );
+                chat = chat.child(
+                    div()
+                        .flex_1()
+                        .min_h(px(0.))
+                        .min_w(px(0.))
+                        .flex()
+                        .child(conversation)
+                        .child(diff),
+                );
             } else {
-                self.sync_chat_rows(project_index, agent_index);
                 chat = self.render_conversation(chat, project_index, agent_index, window, cx);
             }
         } else {
