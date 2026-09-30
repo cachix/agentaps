@@ -54,6 +54,20 @@ use self::{agent::*, elicitation::*, tool_activity::*};
 use crate::session::*;
 use assets::AppAssets;
 
+#[derive(Clone, Debug, PartialEq, Eq)]
+enum Notice {
+    Info(String),
+    Error(String),
+}
+
+impl Notice {
+    fn message(&self) -> &str {
+        match self {
+            Self::Info(message) | Self::Error(message) => message,
+        }
+    }
+}
+
 enum DiffData {
     Full(
         Vec<DiffFile>,
@@ -454,7 +468,7 @@ struct Workspace {
     diff: DiffState,
     sync: SyncState,
     persistence: crate::persistence::Persistence,
-    notice: Option<String>,
+    notice: Option<Notice>,
     zoom_notice_generation: u64,
     _subscriptions: Vec<Subscription>,
 }
@@ -686,7 +700,9 @@ impl Workspace {
 
     fn open_diff(&mut self, project_index: usize, cx: &mut Context<Self>) {
         if self.projects[project_index].ssh_host.is_some() {
-            self.notice = Some("Diff review for SSH projects is not available yet".into());
+            self.notice = Some(Notice::Info(
+                "Diff review for SSH projects is not available yet".into(),
+            ));
             cx.notify();
             return;
         }
@@ -866,7 +882,7 @@ impl Workspace {
             Err(error) => (
                 Config::default(),
                 false,
-                Some(format!("Could not load config: {error}")),
+                Some(Notice::Error(format!("Could not load config: {error}"))),
             ),
         };
         let next_agent_id = config
@@ -1192,6 +1208,11 @@ impl Workspace {
         self.persistence.submit(self.config());
     }
 
+    fn dismiss_notice(&mut self, cx: &mut Context<Self>) {
+        self.notice = None;
+        cx.notify();
+    }
+
     fn open_picker(&mut self, step: PickerStep, window: &mut Window, cx: &mut Context<Self>) {
         self.set_view(self.view.open_picker(step), window, cx);
         self.picker.open(step, window, cx);
@@ -1210,9 +1231,9 @@ impl Workspace {
             || agent.config.active_prompt.is_some()
             || !agent.config.pending_prompts.is_empty()
         {
-            self.notice = Some(
+            self.notice = Some(Notice::Info(
                 "Wait for the agent and queued prompts to finish before changing folders".into(),
-            );
+            ));
             cx.notify();
             return;
         }
@@ -1271,11 +1292,15 @@ impl Workspace {
                     }
                     Ok(Ok(None)) => {}
                     Ok(Err(error)) => {
-                        this.notice = Some(format!("Could not open folder chooser: {error}"));
+                        this.notice = Some(Notice::Error(format!(
+                            "Could not open folder chooser: {error}"
+                        )));
                         cx.notify();
                     }
                     Err(error) => {
-                        this.notice = Some(format!("Folder chooser closed unexpectedly: {error}"));
+                        this.notice = Some(Notice::Error(format!(
+                            "Folder chooser closed unexpectedly: {error}"
+                        )));
                         cx.notify();
                     }
                 }
@@ -1419,10 +1444,10 @@ impl Workspace {
                 || agent.config.active_prompt.is_some()
                 || !agent.config.pending_prompts.is_empty()
             {
-                self.notice = Some(
+                self.notice = Some(Notice::Info(
                     "Wait for the agent and queued prompts to finish before changing folders"
                         .into(),
-                );
+                ));
                 cx.notify();
                 return;
             }
@@ -1432,13 +1457,13 @@ impl Workspace {
             Ok(None) => match path.canonicalize() {
                 Ok(path) if path.is_dir() => (path, None),
                 _ => {
-                    self.notice = Some("Choose an existing folder".into());
+                    self.notice = Some(Notice::Error("Choose an existing folder".into()));
                     cx.notify();
                     return;
                 }
             },
             Err(error) => {
-                self.notice = Some(error);
+                self.notice = Some(Notice::Error(error));
                 cx.notify();
                 return;
             }
@@ -1488,7 +1513,7 @@ impl Workspace {
             ..
         } = self.view
         else {
-            self.notice = Some("Choose a project first".into());
+            self.notice = Some(Notice::Info("Choose a project first".into()));
             cx.notify();
             return;
         };
@@ -1638,8 +1663,9 @@ impl Workspace {
                 {
                     self.select_folder(path, window, cx);
                 } else {
-                    self.notice =
-                        Some("Enter a local absolute path or ssh://host/absolute/path.".into());
+                    self.notice = Some(Notice::Error(
+                        "Enter a local absolute path or ssh://host/absolute/path.".into(),
+                    ));
                     cx.notify();
                 }
             }
@@ -1662,7 +1688,9 @@ impl Workspace {
         match shell_words::split(value.trim()) {
             Ok(command) if !command.is_empty() => self.start_agent(command, None, window, cx),
             _ => {
-                self.notice = Some("Enter an ACP executable and its arguments".into());
+                self.notice = Some(Notice::Error(
+                    "Enter an ACP executable and its arguments".into(),
+                ));
                 cx.notify();
             }
         }
@@ -1691,7 +1719,7 @@ impl Workspace {
         }
         self.font_scale = scale;
         let acknowledgement = format!("Zoom {:.0}%", scale * 100.);
-        self.notice = Some(acknowledgement.clone());
+        self.notice = Some(Notice::Info(acknowledgement.clone()));
         self.persist();
         // Theme::update also refreshes every window, so the next frame lays
         // text out at the new sizes.
@@ -1699,12 +1727,13 @@ impl Workspace {
         self.conversation.resize_composers(self.font_scale, cx);
         self.zoom_notice_generation += 1;
         let generation = self.zoom_notice_generation;
-        if self.notice.as_deref() == Some(acknowledgement.as_str()) {
+        if self.notice.as_ref().map(Notice::message) == Some(acknowledgement.as_str()) {
             cx.spawn(async move |this, cx| {
                 cx.background_executor().timer(ZOOM_NOTICE_TIMEOUT).await;
                 this.update(cx, |this, cx| {
                     if this.zoom_notice_generation == generation
-                        && this.notice.as_deref() == Some(acknowledgement.as_str())
+                        && this.notice.as_ref().map(Notice::message)
+                            == Some(acknowledgement.as_str())
                     {
                         this.notice = None;
                         cx.notify();

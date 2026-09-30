@@ -65,6 +65,43 @@ fn paired_ago(paired_at: u64) -> String {
 }
 
 impl Workspace {
+    fn render_notice(
+        &self,
+        notice: &Notice,
+        id: &'static str,
+        cx: &mut Context<Self>,
+    ) -> impl IntoElement {
+        let (background, foreground) = match notice {
+            Notice::Info(_) => (ACCENT_SURFACE, ACCENT),
+            Notice::Error(_) => (ERROR_SURFACE, ERROR_TEXT),
+        };
+        div()
+            .id(id)
+            .flex()
+            .flex_shrink_0()
+            .items_center()
+            .gap_3()
+            .px_4()
+            .py_2()
+            .bg(rgb(background))
+            .text_sm()
+            .text_color(rgb(foreground))
+            .child(
+                div()
+                    .flex_1()
+                    .min_w(px(0.))
+                    .child(notice.message().to_owned()),
+            )
+            .child(
+                Button::new(format!("{id}-dismiss"))
+                    .ghost()
+                    .compact()
+                    .icon(IconName::Close)
+                    .tooltip("Dismiss notification")
+                    .on_click(cx.listener(|this, _, _, cx| this.dismiss_notice(cx))),
+            )
+    }
+
     fn render_mobile_loading(&self, cx: &mut Context<Self>) -> gpui_kit::Stateful<Div> {
         div()
             .id("mobile-loading-overlay")
@@ -413,7 +450,7 @@ impl Workspace {
                     .child(div().w_full().max_w(px(560.)).child(clients)),
             )
             .when_some(self.notice.as_ref(), |overlay, notice| {
-                overlay.child(div().text_color(rgb(MUTED)).child(notice.clone()))
+                overlay.child(self.render_notice(notice, "pairing-notice", cx))
             })
     }
 }
@@ -515,15 +552,7 @@ impl Render for Workspace {
             );
         }
         if let Some(notice) = &self.notice {
-            chat = chat.child(
-                div()
-                    .px_4()
-                    .py_2()
-                    .bg(rgb(ERROR_SURFACE))
-                    .text_sm()
-                    .text_color(rgb(ERROR_TEXT))
-                    .child(notice.clone()),
-            );
+            chat = chat.child(self.render_notice(notice, "workspace-notice", cx));
         }
         chat = chat
             .when_some(mobile_loading, |chat, loading| chat.child(loading))

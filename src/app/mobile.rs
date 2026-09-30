@@ -33,17 +33,17 @@ impl Workspace {
                     .collect()
             });
             self.mobile_access.pairing_visible = !self.mobile_access.pairing_visible;
-            self.notice = Some(
+            self.notice = Some(Notice::Info(
                 if self.mobile_access.pairing_visible {
                     "Mobile link copied. Scan the code or open the copied link on your phone."
                 } else {
                     "Mobile pairing code hidden. Mobile access is still on."
                 }
                 .into(),
-            );
+            ));
         } else {
             self.mobile_access.pairing_visible = !self.mobile_access.pairing_visible;
-            self.notice = Some("Mobile access is starting".into());
+            self.notice = Some(Notice::Info("Mobile access is starting".into()));
         }
         cx.notify();
     }
@@ -88,7 +88,9 @@ impl Workspace {
     pub(super) fn copy_mobile_link(&mut self, cx: &mut Context<Self>) {
         if let Some(link) = self.mobile_link() {
             cx.write_to_clipboard(ClipboardItem::new_string(link));
-            self.notice = Some("Mobile link copied. Open it on your phone to pair.".into());
+            self.notice = Some(Notice::Info(
+                "Mobile link copied. Open it on your phone to pair.".into(),
+            ));
             cx.notify();
         }
     }
@@ -102,7 +104,7 @@ impl Workspace {
         self.mobile_access.revoke_confirm = None;
         if let Some(server) = &self.mobile_access.server {
             server.revoke_client(id);
-            self.notice = Some("Revoking linked client…".into());
+            self.notice = Some(Notice::Info("Revoking linked client…".into()));
         }
         cx.notify();
     }
@@ -113,7 +115,7 @@ impl Workspace {
             match result {
                 Ok(server) => {
                     self.mobile_access.server = Some(server);
-                    self.notice = Some("Connecting mobile access…".into());
+                    self.notice = Some(Notice::Info("Connecting mobile access…".into()));
                 }
                 Err(error) => {
                     self.mobile_access.pairing_visible = false;
@@ -147,7 +149,9 @@ impl Workspace {
                                     .collect()
                             })
                         });
-                        self.notice = Some("Browser linked. A fresh pairing code is ready.".into());
+                        self.notice = Some(Notice::Info(
+                            "Browser linked. A fresh pairing code is ready.".into(),
+                        ));
                     } else if let Some(link) = self.mobile_link() {
                         self.mobile_access.qr = QrCode::new(link.as_bytes()).ok().map(|qr| {
                             qr.to_colors()
@@ -156,7 +160,7 @@ impl Workspace {
                                 .collect()
                         });
                         cx.write_to_clipboard(ClipboardItem::new_string(link));
-                        self.notice = Some("Mobile link copied. Scan the code or open the copied link on your phone.".into());
+                        self.notice = Some(Notice::Info("Mobile link copied. Scan the code or open the copied link on your phone.".into()));
                     }
                 }
                 Err(error) => startup_error = Some(error),
@@ -167,14 +171,14 @@ impl Workspace {
             self.mobile_access.server = None;
             self.mobile_access.endpoint_id = None;
             self.mobile_access.pairing_visible = false;
-            self.notice = Some(format!("Mobile access failed: {error}"));
+            self.notice = Some(Notice::Error(format!("Mobile access failed: {error}")));
             cx.notify();
             return;
         }
         for result in revocations {
             self.notice = Some(match result {
-                Ok(_) => "Linked client revoked.".into(),
-                Err(error) => format!("Could not revoke linked client: {error}"),
+                Ok(_) => Notice::Info("Linked client revoked.".into()),
+                Err(error) => Notice::Error(format!("Could not revoke linked client: {error}")),
             });
             cx.notify();
         }

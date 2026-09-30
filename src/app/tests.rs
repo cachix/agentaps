@@ -484,10 +484,18 @@ fn zoom_shortcuts_and_menu_actions_change_the_font_scale(cx: &mut gpui_kit::Test
     assert_eq!(saved.font_scale, 1.0, "ZoomReset should persist the reset");
 
     // The acknowledgement notice hides itself after ZOOM_NOTICE_TIMEOUT.
-    let notice =
-        |cx: &mut gpui_kit::VisualTestContext| cx.update(|_, cx| workspace.read(cx).notice.clone());
+    let notice = |cx: &mut gpui_kit::VisualTestContext| {
+        cx.update(|_, cx| {
+            workspace
+                .read(cx)
+                .notice
+                .as_ref()
+                .map(|notice| notice.message().to_owned())
+        })
+    };
     cx.dispatch_action(ZoomIn);
     cx.dispatch_action(ZoomIn);
+    assert!(cx.update(|_, cx| matches!(workspace.read(cx).notice, Some(Notice::Info(_)))));
     assert_eq!(notice(cx), Some("Zoom 120%".to_string()));
     cx.executor().advance_clock(ZOOM_NOTICE_TIMEOUT);
     cx.run_until_parked();
@@ -499,10 +507,52 @@ fn zoom_shortcuts_and_menu_actions_change_the_font_scale(cx: &mut gpui_kit::Test
 
     // A later error or unrelated notice must survive the zoom timer.
     cx.dispatch_action(ZoomIn);
-    cx.update(|_, cx| workspace.update(cx, |this, _| this.notice = Some("Another notice".into())));
+    cx.update(|_, cx| {
+        workspace.update(cx, |this, _| {
+            this.notice = Some(Notice::Error("Another notice".into()))
+        })
+    });
     cx.executor().advance_clock(ZOOM_NOTICE_TIMEOUT);
     cx.run_until_parked();
     assert_eq!(notice(cx), Some("Another notice".to_string()));
+
+    // Git results carry their severity into the banner and can be dismissed.
+    for (action, result, expected) in [
+        (
+            crate::git_sync::SyncAction::Pull,
+            Ok((0, 0)),
+            Notice::Info("Commits pulled.".into()),
+        ),
+        (
+            crate::git_sync::SyncAction::Push,
+            Ok((0, 0)),
+            Notice::Info("Commits pushed.".into()),
+        ),
+        (
+            crate::git_sync::SyncAction::Pull,
+            Err("connection lost".into()),
+            Notice::Error("Could not sync commits: connection lost".into()),
+        ),
+    ] {
+        cx.update(|_, cx| {
+            workspace.update(cx, |this, cx| {
+                this.sync
+                    .tx
+                    .send(SyncUpdate::OperationFinished {
+                        path: temp.path().to_owned(),
+                        host: None,
+                        action,
+                        result,
+                        counts: None,
+                    })
+                    .unwrap();
+                this.poll_sync_counts(cx);
+                assert_eq!(this.notice, Some(expected));
+                this.dismiss_notice(cx);
+                assert_eq!(this.notice, None);
+            });
+        });
+    }
 
     // Finish the previous snapshot before replacing the writer with a failing one.
     cx.update(|_, cx| workspace.update(cx, |this, _| this.persistence.wait().unwrap()));
@@ -518,7 +568,7 @@ fn zoom_shortcuts_and_menu_actions_change_the_font_scale(cx: &mut gpui_kit::Test
     cx.update(|_, cx| {
         workspace.update(cx, |this, _| {
             let error = this.persistence.wait().unwrap_err();
-            this.notice = Some(format!("Could not save config: {error}"));
+            this.notice = Some(Notice::Error(format!("Could not save config: {error}")));
         })
     });
     assert!(notice(cx).unwrap().starts_with("Could not save config:"));
@@ -549,12 +599,20 @@ fn zoom_shortcuts_and_menu_actions_change_the_font_scale(cx: &mut gpui_kit::Test
     cx.dispatch_action(ZoomReset);
     cx.executor().advance_clock(ZOOM_NOTICE_TIMEOUT);
     cx.run_until_parked();
-    cx.update(|_, cx| restored.update(cx, |this, _| this.notice = Some("Keep this notice".into())));
+    cx.update(|_, cx| {
+        restored.update(cx, |this, _| {
+            this.notice = Some(Notice::Error("Keep this notice".into()))
+        })
+    });
     cx.dispatch_action(ZoomReset);
     cx.executor().advance_clock(ZOOM_NOTICE_TIMEOUT);
     cx.run_until_parked();
     assert_eq!(
-        cx.update(|_, cx| restored.read(cx).notice.clone()),
+        cx.update(|_, cx| restored
+            .read(cx)
+            .notice
+            .as_ref()
+            .map(|notice| notice.message().to_owned())),
         Some("Keep this notice".to_string())
     );
     cx.update(|_, cx| restored.update(cx, |this, _| this.persistence.wait().unwrap()));

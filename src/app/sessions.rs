@@ -253,7 +253,7 @@ impl Workspace {
         }
         let agent = &mut self.projects[project_index].agents[agent_index];
         if agent.status == Status::Error {
-            self.notice = Some("Agent is not connected".into());
+            self.notice = Some(Notice::Error("Agent is not connected".into()));
             cx.notify();
             return;
         }
@@ -273,7 +273,7 @@ impl Workspace {
             return;
         }
         if agent.session_id.is_none() {
-            self.notice = Some("Agent is not connected".into());
+            self.notice = Some(Notice::Error("Agent is not connected".into()));
             cx.notify();
             return;
         }
@@ -580,7 +580,7 @@ impl Workspace {
         self.refresh_pending_sync_counts(cx);
         self.poll_mobile(cx);
         if let Some(error) = self.persistence.poll() {
-            self.notice = Some(format!("Could not save config: {error}"));
+            self.notice = Some(Notice::Error(format!("Could not save config: {error}")));
             cx.notify();
         }
         if self.persistence.due() {
@@ -672,7 +672,9 @@ impl Workspace {
             return;
         };
         if project.agents.iter().any(|agent| agent.active_work) {
-            self.notice = Some("Wait for the agent to finish before syncing this project".into());
+            self.notice = Some(Notice::Info(
+                "Wait for the agent to finish before syncing this project".into(),
+            ));
             cx.notify();
             return;
         }
@@ -682,10 +684,10 @@ impl Workspace {
         if !self.sync.in_progress.insert(key) {
             return;
         }
-        self.notice = Some(match action {
+        self.notice = Some(Notice::Info(match action {
             crate::git_sync::SyncAction::Push => "Pushing commits…".into(),
             crate::git_sync::SyncAction::Pull => "Pulling commits…".into(),
-        });
+        }));
         let tx = self.sync.tx.clone();
         std::thread::spawn(move || {
             let result = crate::git_sync::sync(&path, host.as_deref(), action);
@@ -751,11 +753,11 @@ impl Workspace {
                         project.sync_counts = counts;
                     }
                     self.notice = Some(match result {
-                        Ok(_) => match action {
+                        Ok(_) => Notice::Info(match action {
                             crate::git_sync::SyncAction::Push => "Commits pushed.".into(),
                             crate::git_sync::SyncAction::Pull => "Commits pulled.".into(),
-                        },
-                        Err(error) => format!("Could not sync commits: {error}"),
+                        }),
+                        Err(error) => Notice::Error(format!("Could not sync commits: {error}")),
                     });
                     changed = true;
                 }

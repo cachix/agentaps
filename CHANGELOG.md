@@ -15,6 +15,7 @@ Notable changes to Agentaps are recorded here.
 
 ### Fixed
 
+- Informational notices, including Git sync confirmations, use a soft blue style, while errors stay red. All notices have a dismiss button.
 - Windows saves sessions in its platform configuration directory without requiring `HOME`; existing configurations remain available through migration.
 - Saving conversation history no longer blocks the UI on serialization or disk writes, coalesces waiting saves, and backs off after storage errors.
 - Restored zoom now scales markdown code blocks, keeps multiline composers within the available space, and leaves other notices and save errors visible.
