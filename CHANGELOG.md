@@ -13,6 +13,7 @@ Notable changes to Agentaps are recorded here.
 
 ### Fixed
 
+- The Send and Stop buttons stay vertically centered in the message composer.
 - Diff review and sidebar line counts exclude untracked files, so an otherwise unchanged checkout shows no diff.
 - `devenv shell` evaluates on macOS again. The Linux-only graphics libraries (wayland, libxkbcommon, libxcb, vulkan-loader, fontconfig, freetype) are now installed only on Linux.
 - Claude ACP sessions retry once when another Claude Code process temporarily blocks OAuth token refresh.

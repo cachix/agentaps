@@ -445,7 +445,7 @@ impl Workspace {
             .w_full()
             .min_w(px(0.))
             .flex()
-            .items_end()
+            .items_center()
             .gap_1()
             .pr_1p5()
             .py_1p5()
