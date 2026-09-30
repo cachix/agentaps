@@ -130,7 +130,8 @@ impl Workspace {
                 && !matches!(agent.status, Status::Working | Status::Done);
             let action = sync_action(sync_counts);
             let sync_busy = self
-                .sync_in_progress
+                .sync
+                .in_progress
                 .contains(&(project.path.clone(), project.ssh_host.clone()));
             let row = div()
                 .id(("agent", agent_id))
@@ -161,7 +162,8 @@ impl Workspace {
                         window,
                         cx,
                     );
-                    this.composer
+                    this.conversation
+                        .composer
                         .update(cx, |input, cx| input.focus(window, cx));
                     cx.notify();
                 }))
@@ -340,7 +342,8 @@ impl Workspace {
                     .filter(|(ahead, behind)| *ahead > 0 || *behind > 0);
                 let action = sync_action(sync_counts);
                 let sync_busy = self
-                    .sync_in_progress
+                    .sync
+                    .in_progress
                     .contains(&(project.path.clone(), project.ssh_host.clone()));
                 project_list = project_list.child(
                     div()
@@ -488,7 +491,8 @@ impl Workspace {
                             .on_click(cx.listener(|this, _, window, cx| {
                                 this.set_view(this.view.toggle_archive(), window, cx);
                                 if this.view.displayed_session().is_some() {
-                                    this.composer
+                                    this.conversation
+                                        .composer
                                         .update(cx, |input, cx| input.focus(window, cx));
                                 } else {
                                     this.sidebar_search

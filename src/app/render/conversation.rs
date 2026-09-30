@@ -12,8 +12,8 @@ impl Workspace {
     ) -> Div {
         let project = &self.projects[project_index];
         let agent = &project.agents[agent_index];
-        let (added, removed) = self.diff_counts.unwrap_or_default();
-        let available_agents = self.available_agents.clone();
+        let (added, removed) = self.diff.counts.unwrap_or_default();
+        let available_agents = self.picker.available_agents.clone();
         let current_command = agent.config.command.clone();
         let current_name = agent.name.clone();
         let view = cx.entity().clone();
@@ -198,12 +198,12 @@ impl Workspace {
                             .flex()
                             .items_center()
                             .gap_2()
-                            .child(if self.diff_visible {
+                            .child(if self.diff.visible {
                                 "Hide diff"
                             } else {
                                 "Diff"
                             })
-                            .when(self.diff_counts.is_some(), |element| {
+                            .when(self.diff.counts.is_some(), |element| {
                                 element
                                     .child(
                                         div()
@@ -218,7 +218,7 @@ impl Workspace {
                             }),
                     )
                     .on_click(cx.listener(move |this, _, _, cx| {
-                        if this.diff_visible {
+                        if this.diff.visible {
                             this.close_diff();
                             cx.notify();
                         } else {
@@ -240,21 +240,24 @@ impl Workspace {
                 .child(project_controls),
         );
         let view = cx.entity().clone();
-        let rows = self.chat_rows.clone();
-        let history = gpui_kit::list(self.chat_list.clone(), move |index, window, cx| {
-            view.update(cx, |this, cx| {
-                let agent = &this.projects[project_index].agents[agent_index];
-                this.render_chat_row(
-                    agent,
-                    project_index,
-                    agent_index,
-                    rows[index].kind,
-                    window,
-                    cx,
-                )
-                .into_any_element()
-            })
-        })
+        let rows = self.conversation.chat_rows.clone();
+        let history = gpui_kit::list(
+            self.conversation.chat_list.clone(),
+            move |index, window, cx| {
+                view.update(cx, |this, cx| {
+                    let agent = &this.projects[project_index].agents[agent_index];
+                    this.render_chat_row(
+                        agent,
+                        project_index,
+                        agent_index,
+                        rows[index].kind,
+                        window,
+                        cx,
+                    )
+                    .into_any_element()
+                })
+            },
+        )
         .w_full()
         .h_full()
         .py_4();
@@ -265,7 +268,7 @@ impl Workspace {
                 .min_h(px(0.))
                 .relative()
                 .child(div().id("chat-scroll").size_full().px_4().child(history))
-                .vertical_scrollbar(&self.chat_list),
+                .vertical_scrollbar(&self.conversation.chat_list),
         );
         let file_results = self.file_results(cx);
         if self.file_mention_active(cx) {
@@ -281,13 +284,20 @@ impl Workspace {
                 .flex()
                 .flex_col();
             if file_results.is_empty() {
-                menu = menu.child(div().px_3().py_2().text_sm().text_color(rgb(MUTED)).child(
-                    if self.file_search.as_ref().is_some_and(FileSearch::loading) {
-                        "Looking for files…"
-                    } else {
-                        "No matching files"
-                    },
-                ));
+                menu = menu.child(
+                    div().px_3().py_2().text_sm().text_color(rgb(MUTED)).child(
+                        if self
+                            .conversation
+                            .file_search
+                            .as_ref()
+                            .is_some_and(FileSearch::loading)
+                        {
+                            "Looking for files…"
+                        } else {
+                            "No matching files"
+                        },
+                    ),
+                );
             }
             for (index, file) in file_results.into_iter().enumerate() {
                 let name = file.clone();
@@ -301,7 +311,9 @@ impl Workspace {
                         .flex()
                         .items_center()
                         .gap_3()
-                        .when(index == self.file_selection, |row| row.bg(rgb(SELECTED)))
+                        .when(index == self.conversation.file_selection, |row| {
+                            row.bg(rgb(SELECTED))
+                        })
                         .hover(|style| style.bg(rgb(SELECTED)))
                         .child(
                             Icon::new(if file.ends_with('/') {
@@ -334,7 +346,7 @@ impl Workspace {
                 .flex()
                 .flex_col();
             for (index, command) in slash_commands.into_iter().enumerate() {
-                let selected = index == self.slash_selection;
+                let selected = index == self.conversation.slash_selection;
                 let name = format!("/{}", command.name);
                 let description = command.description.clone();
                 let hint = command.input_hint().map(str::to_owned);
@@ -382,9 +394,20 @@ impl Workspace {
             }
             chat = chat.child(div().px_4().flex().justify_center().child(menu));
         }
-        let shell_mode = self.composer.read(cx).value().starts_with('!');
-        let has_text = !self.composer.read(cx).value().trim().is_empty();
-        let focused = self.composer.read(cx).focus_handle(cx).is_focused(window);
+        let shell_mode = self.conversation.composer.read(cx).value().starts_with('!');
+        let has_text = !self
+            .conversation
+            .composer
+            .read(cx)
+            .value()
+            .trim()
+            .is_empty();
+        let focused = self
+            .conversation
+            .composer
+            .read(cx)
+            .focus_handle(cx)
+            .is_focused(window);
         let action_button = if agent.active_work {
             let stopping = agent.cancel_requested;
             div()
@@ -456,7 +479,7 @@ impl Workspace {
                     .min_w(px(0.))
                     .relative()
                     .child(
-                        Textarea::new(&self.composer)
+                        Textarea::new(&self.conversation.composer)
                             .appearance(false)
                             .when(shell_mode, |textarea| textarea.pr(px(48.))),
                     )
@@ -650,7 +673,8 @@ impl Workspace {
                         // A mouse click returns to typing; keyboard users keep
                         // their place in the tab order.
                         if !event.is_keyboard() {
-                            this.composer
+                            this.conversation
+                                .composer
                                 .update(cx, |input, cx| input.focus(window, cx));
                         }
                     });

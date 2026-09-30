@@ -6,7 +6,8 @@ use crate::file_search::{FileSearch, scan_project};
 use crate::folder_search::FolderSearch;
 use crate::theme::*;
 use crate::{config, theme};
-use agent_client_protocol_schema::{ProtocolVersion, v2};
+#[cfg(test)]
+use agent_client_protocol_schema::ProtocolVersion;
 use gpui_kit::component::{
     ActiveTheme, Disableable, Icon, IconName,
     button::{Button, ButtonVariants},
@@ -38,6 +39,8 @@ use std::{
 };
 
 mod agent;
+mod state;
+use state::*;
 mod assets;
 mod elicitation;
 mod mobile;
@@ -48,6 +51,7 @@ mod tests;
 mod tool_activity;
 
 use self::{agent::*, elicitation::*, tool_activity::*};
+use crate::session::*;
 use assets::AppAssets;
 
 enum DiffData {
@@ -437,84 +441,21 @@ struct Workspace {
     sidebar_order: Vec<u64>,
     sidebar_fraction: f32,
     font_scale: f32,
-    collapsed_tool_groups: HashSet<(u64, usize)>,
-    expanded_tool_history: HashSet<(u64, usize)>,
-    expanded_tool_rows: HashSet<(u64, usize)>,
+    conversation: ConversationState,
     next_agent_id: u64,
     events_tx: Sender<Event>,
     events_rx: Receiver<Event>,
     deferred_connections: Vec<u64>,
     deferred_connections_deadline: Option<Instant>,
-    folder_search: FolderSearch,
-    folder_dialog_open: bool,
-    file_search: Option<FileSearch>,
-    file_search_project: Option<usize>,
-    file_scan_tx: Sender<u64>,
-    file_scan_rx: Receiver<u64>,
-    file_scan_generation: u64,
-    file_selection: usize,
-    file_dismissed: bool,
-    available_agents: Vec<AgentChoice>,
-    picker_selection: usize,
+    picker: PickerState,
     sidebar_selection: usize,
-    slash_selection: usize,
-    slash_dismissed: bool,
-    prompt_recall: Option<PromptRecall>,
-    picker_input: Entity<InputState>,
     sidebar_search: Entity<InputState>,
-    mobile_provider_input: Entity<InputState>,
-    composer: Entity<TextareaState>,
-    composer_max_rows: usize,
-    composer_viewport_height: f32,
-    composer_base_line_height: f32,
-    session_composers: HashMap<u64, Entity<TextareaState>>,
-    chat_list: ListState,
-    chat_list_agent: Option<u64>,
-    chat_rows: Vec<ChatRow>,
-    diff_visible: bool,
-    diff_selected_file: Option<String>,
-    diff_presentation: DiffPresentation,
-    diff_rows: Arc<Vec<DiffListRow>>,
-    diff_list: ListState,
-    diff_tx: Sender<(u64, DiffLoadResult)>,
-    diff_rx: Receiver<(u64, DiffLoadResult)>,
-    diff_request_id: u64,
-    diff_watch_tx: Sender<u64>,
-    diff_watch_rx: Receiver<u64>,
-    diff_watcher_tx: Sender<(u64, notify::Result<notify::RecommendedWatcher>)>,
-    diff_watcher_rx: Receiver<(u64, notify::Result<notify::RecommendedWatcher>)>,
-    diff_watch_generation: u64,
-    diff_watched_project: Option<usize>,
-    diff_watcher: Option<notify::RecommendedWatcher>,
-    diff_refresh_due: Option<Instant>,
-    sync_tx: Sender<SyncUpdate>,
-    sync_rx: Receiver<SyncUpdate>,
-    sync_loading: bool,
-    sync_in_progress: HashSet<(PathBuf, Option<String>)>,
-    sync_refresh_pending: HashSet<(PathBuf, Option<String>)>,
-    last_remote_sync: Instant,
-    last_upstream_fetch: Instant,
-    diff_first_change_at: Option<Instant>,
-    diff_poll_at: Option<Instant>,
-    diff_loading: bool,
-    diff_error: Option<String>,
-    diff_counts: Option<(usize, usize)>,
-    diff_files: Vec<DiffFile>,
-    diff_file_stats: Vec<(usize, usize)>,
-    dirty: bool,
-    last_saved: Instant,
+    mobile_access: MobileState,
+    diff: DiffState,
+    sync: SyncState,
+    persistence: crate::persistence::Persistence,
     notice: Option<String>,
     zoom_notice_generation: u64,
-    mobile: Option<crate::mobile::Server>,
-    mobile_start_tx: Sender<Result<crate::mobile::Server, String>>,
-    mobile_start_rx: Receiver<Result<crate::mobile::Server, String>>,
-    mobile_loading: bool,
-    mobile_endpoint_id: Option<String>,
-    mobile_pairing_visible: bool,
-    mobile_revoke_confirm: Option<String>,
-    mobile_provider_prompt: Option<String>,
-    mobile_qr: Option<Vec<Vec<bool>>>,
-    last_mobile_snapshot: Option<Instant>,
     _subscriptions: Vec<Subscription>,
 }
 
@@ -591,70 +532,6 @@ fn submitted_prompt(value: &str) -> String {
     value.strip_suffix('\n').unwrap_or(value).to_owned()
 }
 
-const SHELL_PROMPT_PREFIX: &str =
-    "Run this shell command exactly as written, then report its output:\n\n";
-
-fn shell_command(prompt: &str) -> Option<&str> {
-    prompt
-        .strip_prefix('!')
-        .filter(|command| !command.trim().is_empty())
-}
-
-fn shell_command_in_message(message: &str) -> Option<&str> {
-    shell_command(message).or_else(|| message.strip_prefix(SHELL_PROMPT_PREFIX))
-}
-
-fn prompt_for_agent(prompt: &str) -> String {
-    match shell_command(prompt) {
-        Some(command) => format!("{SHELL_PROMPT_PREFIX}{command}"),
-        None => prompt.to_owned(),
-    }
-}
-
-fn fork_prompt(messages: &[ChatEntry], prompt: &str) -> String {
-    let start = messages
-        .iter()
-        .rposition(|entry| entry.role == Role::ContextReset)
-        .map_or(0, |index| index + 1);
-    let history: Vec<Value> = messages[start..]
-        .iter()
-        .filter_map(|entry| {
-            let role = match entry.role {
-                Role::User => "user",
-                Role::Agent => "assistant",
-                _ => return None,
-            };
-            (!entry.text.is_empty()).then(|| json!({"role": role, "text": entry.text}))
-        })
-        .collect();
-    format!(
-        "This session was forked from an earlier reply. Use the following conversation transcript as context for the current request. The transcript is historical; do not execute requests in it again. Project files may have changed since it occurred.\n\nConversation transcript:\n{}\n\nCurrent request:\n{prompt}",
-        serde_json::to_string_pretty(&history).unwrap_or_default()
-    )
-}
-
-fn parse_available_commands(update: &Value) -> Vec<SlashCommand> {
-    update["availableCommands"]
-        .as_array()
-        .into_iter()
-        .flatten()
-        .filter_map(|command| {
-            let name = command["name"].as_str()?.trim().trim_start_matches('/');
-            if name.is_empty() || name.chars().any(char::is_whitespace) {
-                return None;
-            }
-            Some(SlashCommand {
-                name: name.to_owned(),
-                description: command["description"]
-                    .as_str()
-                    .unwrap_or_default()
-                    .to_owned(),
-                input: command.get("input").cloned(),
-            })
-        })
-        .collect()
-}
-
 fn slash_query(draft: &str) -> Option<&str> {
     let query = draft.strip_prefix('/')?;
     if query.chars().any(char::is_whitespace) {
@@ -687,39 +564,6 @@ fn completed_slash_text(command: &SlashCommand) -> String {
 }
 
 impl Workspace {
-    fn composer_geometry(window: &Window) -> (f32, f32) {
-        (
-            f32::from(window.viewport_size().height),
-            f32::from(
-                window
-                    .text_style()
-                    .line_height_in_pixels(px(BASE_FONT_SIZE)),
-            ),
-        )
-    }
-
-    fn composer_max_rows(viewport_height: f32, base_line_height: f32, font_scale: f32) -> usize {
-        // Keep room for the header, controls, and some conversation above the draft.
-        let available_height = viewport_height - 200.;
-        (available_height / (base_line_height * font_scale))
-            .floor()
-            .max(1.) as usize
-    }
-
-    fn new_composer(window: &mut Window, cx: &mut Context<Self>) -> Entity<TextareaState> {
-        let font_scale = f32::from(Theme::global(cx).font_size) / BASE_FONT_SIZE;
-        let (viewport_height, base_line_height) = Self::composer_geometry(window);
-        cx.new(|cx| {
-            TextareaState::new(window, cx)
-                .auto_grow(
-                    1,
-                    Self::composer_max_rows(viewport_height, base_line_height, font_scale),
-                )
-                .submit_on_enter(true)
-                .placeholder("Ask your agent…")
-        })
-    }
-
     fn subscribe_composer(
         &mut self,
         composer: &Entity<TextareaState>,
@@ -730,20 +574,26 @@ impl Workspace {
             composer,
             window,
             |this, input, event: &InputEvent, window, cx| {
-                if input.entity_id() != this.composer.entity_id() {
+                if input.entity_id() != this.conversation.composer.entity_id() {
                     return;
                 }
                 match event {
                     InputEvent::Change => {
-                        if this.prompt_recall.as_ref().is_some_and(|recall| {
-                            recall.displayed != this.composer.read(cx).value().as_ref()
-                        }) {
-                            this.prompt_recall = None;
+                        if this
+                            .conversation
+                            .prompt_recall
+                            .as_ref()
+                            .is_some_and(|recall| {
+                                recall.displayed
+                                    != this.conversation.composer.read(cx).value().as_ref()
+                            })
+                        {
+                            this.conversation.prompt_recall = None;
                         }
-                        this.slash_selection = 0;
-                        this.slash_dismissed = false;
-                        this.file_selection = 0;
-                        this.file_dismissed = false;
+                        this.conversation.slash_selection = 0;
+                        this.conversation.slash_dismissed = false;
+                        this.conversation.file_selection = 0;
+                        this.conversation.file_dismissed = false;
                         this.update_file_query(cx);
                         cx.notify();
                     }
@@ -762,27 +612,29 @@ impl Workspace {
             let agent_id = self.projects[session.project_index].agents[session.agent_index]
                 .config
                 .id;
-            if !self.session_composers.contains_key(&agent_id) {
-                let composer = if self.session_composers.is_empty() {
-                    self.composer.clone()
+            if !self.conversation.session_composers.contains_key(&agent_id) {
+                let composer = if self.conversation.session_composers.is_empty() {
+                    self.conversation.composer.clone()
                 } else {
-                    let composer = Self::new_composer(window, cx);
+                    let composer = ConversationState::new_composer(window, cx);
                     self.subscribe_composer(&composer, window, cx);
                     composer
                 };
-                self.session_composers.insert(agent_id, composer);
+                self.conversation
+                    .session_composers
+                    .insert(agent_id, composer);
             }
-            self.composer = self.session_composers[&agent_id].clone();
+            self.conversation.composer = self.conversation.session_composers[&agent_id].clone();
             if self.deferred_connections.contains(&agent_id) {
                 self.connect(session.project_index, session.agent_index);
             }
         }
         if self.view.displayed_session() != view.displayed_session() {
-            self.prompt_recall = None;
+            self.conversation.prompt_recall = None;
             self.close_diff();
-            self.diff_error = None;
-            self.diff_rows = Arc::new(Vec::new());
-            self.diff_list = ListState::new(0, ListAlignment::Top, px(28.));
+            self.diff.error = None;
+            self.diff.rows = Arc::new(Vec::new());
+            self.diff.list = ListState::new(0, ListAlignment::Top, px(28.));
         }
         let project_index = view
             .displayed_session()
@@ -793,25 +645,25 @@ impl Workspace {
             .map(|session| session.project_index)
             != project_index
         {
-            self.diff_request_id += 1;
-            self.diff_loading = false;
-            self.diff_counts = None;
-            self.diff_files.clear();
-            self.diff_file_stats.clear();
+            self.diff.request_id += 1;
+            self.diff.loading = false;
+            self.diff.counts = None;
+            self.diff.files.clear();
+            self.diff.file_stats.clear();
         }
-        if self.file_search_project != project_index {
-            self.file_search_project = project_index;
-            self.file_scan_generation += 1;
-            let generation = self.file_scan_generation;
-            self.file_selection = 0;
-            self.file_dismissed = false;
-            self.file_search = project_index.and_then(|index| {
+        if self.conversation.file_search_project != project_index {
+            self.conversation.file_search_project = project_index;
+            self.conversation.file_scan_generation += 1;
+            let generation = self.conversation.file_scan_generation;
+            self.conversation.file_selection = 0;
+            self.conversation.file_dismissed = false;
+            self.conversation.file_search = project_index.map(|index| {
                 let project = &self.projects[index];
                 let search = FileSearch::new();
                 let injector = search.injector();
                 let root = project.path.clone();
                 let host = project.ssh_host.clone();
-                let sender = self.file_scan_tx.clone();
+                let sender = self.conversation.file_scan_tx.clone();
                 std::thread::spawn(move || {
                     if let Some(host) = host {
                         crate::file_search::scan_remote_project(&root, &host, &injector);
@@ -820,7 +672,7 @@ impl Workspace {
                     }
                     let _ = sender.send(generation);
                 });
-                Some(search)
+                search
             });
         }
         if matches!(self.view, WorkspaceView::Archive { .. })
@@ -838,30 +690,30 @@ impl Workspace {
             cx.notify();
             return;
         }
-        self.diff_visible = true;
-        self.diff_selected_file = None;
-        self.diff_files.clear();
-        self.diff_file_stats.clear();
-        self.diff_rows = Arc::new(Vec::new());
-        self.diff_list = ListState::new(0, ListAlignment::Top, px(28.));
+        self.diff.visible = true;
+        self.diff.selected_file = None;
+        self.diff.files.clear();
+        self.diff.file_stats.clear();
+        self.diff.rows = Arc::new(Vec::new());
+        self.diff.list = ListState::new(0, ListAlignment::Top, px(28.));
         self.refresh_diff(project_index, cx);
     }
 
     fn close_diff(&mut self) {
-        self.diff_visible = false;
-        self.diff_selected_file = None;
+        self.diff.visible = false;
+        self.diff.selected_file = None;
     }
 
     fn refresh_diff(&mut self, project_index: usize, cx: &mut Context<Self>) {
-        self.diff_request_id += 1;
-        let request_id = self.diff_request_id;
+        self.diff.request_id += 1;
+        let request_id = self.diff.request_id;
         let path = self.projects[project_index].path.clone();
-        let presentation = self.diff_presentation;
-        let selected_file = self.diff_selected_file.clone();
-        let visible = self.diff_visible;
-        let tx = self.diff_tx.clone();
-        self.diff_loading = true;
-        self.diff_error = None;
+        let presentation = self.diff.presentation;
+        let selected_file = self.diff.selected_file.clone();
+        let visible = self.diff.visible;
+        let tx = self.diff.tx.clone();
+        self.diff.loading = true;
+        self.diff.error = None;
         std::thread::spawn(move || {
             let result = if visible {
                 crate::git_diff::load(&path).map(|files| {
@@ -887,35 +739,35 @@ impl Workspace {
         presentation: crate::diff_view::Presentation,
         cx: &mut Context<Self>,
     ) {
-        let scroll_top = self.diff_list.logical_scroll_top();
-        self.diff_presentation = presentation;
-        self.diff_rows = Arc::new(diff_list_rows(
-            &self.diff_files,
-            &self.diff_file_stats,
-            self.diff_selected_file.as_deref(),
+        let scroll_top = self.diff.list.logical_scroll_top();
+        self.diff.presentation = presentation;
+        self.diff.rows = Arc::new(diff_list_rows(
+            &self.diff.files,
+            &self.diff.file_stats,
+            self.diff.selected_file.as_deref(),
             presentation,
         ));
-        self.diff_list = ListState::new(self.diff_rows.len(), ListAlignment::Top, px(28.));
-        self.diff_list.scroll_to(scroll_top);
+        self.diff.list = ListState::new(self.diff.rows.len(), ListAlignment::Top, px(28.));
+        self.diff.list.scroll_to(scroll_top);
         cx.notify();
     }
 
     fn select_diff_file(&mut self, path: String, cx: &mut Context<Self>) {
         let clicked_path = path.clone();
-        let old_scroll_top = self.diff_list.logical_scroll_top();
-        let old_file_index = self.diff_rows.iter().position(|row| {
+        let old_scroll_top = self.diff.list.logical_scroll_top();
+        let old_file_index = self.diff.rows.iter().position(|row| {
             matches!(row, DiffListRow::File { path: row_path, .. } if row_path == &clicked_path)
         });
-        self.diff_selected_file =
-            (self.diff_selected_file.as_deref() != Some(path.as_str())).then_some(path);
-        self.set_diff_presentation(self.diff_presentation, cx);
+        self.diff.selected_file =
+            (self.diff.selected_file.as_deref() != Some(path.as_str())).then_some(path);
+        self.set_diff_presentation(self.diff.presentation, cx);
         if let Some(old_file_index) = old_file_index
-            && let Some(new_file_index) = self.diff_rows.iter().position(|row| {
+            && let Some(new_file_index) = self.diff.rows.iter().position(|row| {
                 matches!(row, DiffListRow::File { path: row_path, .. } if row_path == &clicked_path)
             })
         {
             let distance = old_file_index.saturating_sub(old_scroll_top.item_ix);
-            self.diff_list.scroll_to(gpui_kit::ListOffset {
+            self.diff.list.scroll_to(gpui_kit::ListOffset {
                 item_ix: new_file_index.saturating_sub(distance),
                 offset_in_item: old_scroll_top.offset_in_item,
             });
@@ -938,7 +790,7 @@ impl Workspace {
         let mobile_provider_input = cx.new(|cx| {
             InputState::new(window, cx).placeholder("keyring, onepassword, or provider URI")
         });
-        let composer = Self::new_composer(window, cx);
+        let composer = ConversationState::new_composer(window, cx);
         let _subscriptions = vec![
             cx.subscribe_in(
                 &mobile_provider_input,
@@ -978,7 +830,7 @@ impl Workspace {
                 window,
                 |this, _, event: &InputEvent, window, cx| match event {
                     InputEvent::Change => {
-                        this.picker_selection = 0;
+                        this.picker.selection = 0;
                         if matches!(
                             this.view,
                             WorkspaceView::NewSession {
@@ -986,8 +838,9 @@ impl Workspace {
                                 ..
                             }
                         ) {
-                            this.folder_search
-                                .set_query(&this.picker_input.read(cx).value());
+                            this.picker
+                                .folder_search
+                                .set_query(&this.picker.input.read(cx).value());
                         }
                         cx.notify();
                     }
@@ -1036,8 +889,9 @@ impl Workspace {
             1.0
         };
         Theme::update(cx, |theme| set_theme_font_scale(theme, font_scale));
-        let (composer_viewport_height, composer_base_line_height) = Self::composer_geometry(window);
-        let composer_max_rows = Self::composer_max_rows(
+        let (composer_viewport_height, composer_base_line_height) =
+            ConversationState::composer_geometry(window);
+        let composer_max_rows = ConversationState::composer_max_rows(
             composer_viewport_height,
             composer_base_line_height,
             font_scale,
@@ -1086,95 +940,104 @@ impl Workspace {
             sidebar_order,
             sidebar_fraction,
             font_scale,
-            collapsed_tool_groups: HashSet::new(),
-            expanded_tool_history: HashSet::new(),
-            expanded_tool_rows: HashSet::new(),
+            conversation: ConversationState {
+                composer,
+                max_rows: composer_max_rows,
+                viewport_height: composer_viewport_height,
+                base_line_height: composer_base_line_height,
+                session_composers: HashMap::new(),
+                chat_list: ListState::new(0, ListAlignment::Bottom, px(300.)),
+                chat_list_agent: None,
+                chat_rows: Vec::new(),
+                collapsed_tool_groups: HashSet::new(),
+                expanded_tool_history: HashSet::new(),
+                expanded_tool_rows: HashSet::new(),
+                prompt_recall: None,
+                slash_selection: 0,
+                slash_dismissed: false,
+                file_search: None,
+                file_search_project: None,
+                file_scan_tx,
+                file_scan_rx,
+                file_scan_generation: 0,
+                file_selection: 0,
+                file_dismissed: false,
+            },
             next_agent_id,
             events_tx,
             events_rx,
             deferred_connections: Vec::new(),
             deferred_connections_deadline: None,
-            folder_search,
-            folder_dialog_open: false,
-            file_search: None,
-            file_search_project: None,
-            file_scan_tx,
-            file_scan_rx,
-            file_scan_generation: 0,
-            file_selection: 0,
-            file_dismissed: false,
-            available_agents: installed_agents(),
-            picker_selection: 0,
+            picker: PickerState {
+                folder_search,
+                folder_dialog_open: false,
+                available_agents: installed_agents(),
+                selection: 0,
+                input: picker_input,
+            },
             sidebar_selection: 0,
-            slash_selection: 0,
-            slash_dismissed: false,
-            prompt_recall: None,
-            picker_input,
             sidebar_search,
-            mobile_provider_input,
-            composer,
-            composer_max_rows,
-            composer_viewport_height,
-            composer_base_line_height,
-            session_composers: HashMap::new(),
-            chat_list: ListState::new(0, ListAlignment::Bottom, px(300.)),
-            chat_list_agent: None,
-            chat_rows: Vec::new(),
-            diff_visible: false,
-            diff_selected_file: None,
-            diff_presentation: crate::diff_view::Presentation::Unified,
-            diff_rows: Arc::new(Vec::new()),
-            diff_list: ListState::new(0, ListAlignment::Top, px(28.)),
-            diff_tx,
-            diff_rx,
-            diff_request_id: 0,
-            diff_watch_tx,
-            diff_watch_rx,
-            diff_watcher_tx,
-            diff_watcher_rx,
-            diff_watch_generation: 0,
-            diff_watched_project: None,
-            diff_watcher: None,
-            diff_refresh_due: None,
-            sync_tx,
-            sync_rx,
-            sync_loading: false,
-            sync_in_progress: HashSet::new(),
-            sync_refresh_pending: HashSet::new(),
-            last_remote_sync: Instant::now() - Duration::from_secs(30),
-            last_upstream_fetch: Instant::now() - Duration::from_secs(300),
-            diff_first_change_at: None,
-            diff_poll_at: None,
-            diff_loading: false,
-            diff_error: None,
-            diff_counts: None,
-            diff_files: Vec::new(),
-            diff_file_stats: Vec::new(),
-            dirty: migrate_config,
-            last_saved: Instant::now(),
+            mobile_access: MobileState {
+                provider_input: mobile_provider_input,
+                server: None,
+                start_tx: mobile_start_tx,
+                start_rx: mobile_start_rx,
+                loading: false,
+                endpoint_id: None,
+                pairing_visible: false,
+                revoke_confirm: None,
+                provider_prompt: None,
+                qr: None,
+                last_snapshot: None,
+            },
+            diff: DiffState {
+                visible: false,
+                selected_file: None,
+                presentation: crate::diff_view::Presentation::Unified,
+                rows: Arc::new(Vec::new()),
+                list: ListState::new(0, ListAlignment::Top, px(28.)),
+                tx: diff_tx,
+                rx: diff_rx,
+                request_id: 0,
+                watch_tx: diff_watch_tx,
+                watch_rx: diff_watch_rx,
+                watcher_tx: diff_watcher_tx,
+                watcher_rx: diff_watcher_rx,
+                watch_generation: 0,
+                watched_project: None,
+                watcher: None,
+                refresh_due: None,
+                first_change_at: None,
+                poll_at: None,
+                loading: false,
+                error: None,
+                counts: None,
+                files: Vec::new(),
+                file_stats: Vec::new(),
+            },
+            sync: SyncState {
+                tx: sync_tx,
+                rx: sync_rx,
+                loading: false,
+                in_progress: HashSet::new(),
+                refresh_pending: HashSet::new(),
+                last_remote_sync: Instant::now() - Duration::from_secs(30),
+                last_upstream_fetch: Instant::now() - Duration::from_secs(300),
+            },
+            persistence: crate::persistence::Persistence::new(migrate_config),
             notice,
             zoom_notice_generation: 0,
-            mobile: None,
-            mobile_start_tx,
-            mobile_start_rx,
-            mobile_loading: false,
-            mobile_endpoint_id: None,
-            mobile_pairing_visible: false,
-            mobile_revoke_confirm: None,
-            mobile_provider_prompt: None,
-            mobile_qr: None,
-            last_mobile_snapshot: None,
             _subscriptions,
         };
-        let composer = this.composer.clone();
+        let composer = this.conversation.composer.clone();
         this.subscribe_composer(&composer, window, cx);
         this._subscriptions
             .push(cx.observe_window_bounds(window, |this, window, cx| {
                 (
-                    this.composer_viewport_height,
-                    this.composer_base_line_height,
-                ) = Self::composer_geometry(window);
-                this.refresh_composer_row_limit(cx);
+                    this.conversation.viewport_height,
+                    this.conversation.base_line_height,
+                ) = ConversationState::composer_geometry(window);
+                this.conversation.resize_composers(this.font_scale, cx);
             }));
         let mut selected = None;
         for project_index in 0..this.projects.len() {
@@ -1220,7 +1083,8 @@ impl Workspace {
             if !this.deferred_connections.is_empty() {
                 this.deferred_connections_deadline = Some(Instant::now() + Duration::from_secs(2));
             }
-            this.composer
+            this.conversation
+                .composer
                 .update(cx, |input, cx| input.focus(window, cx));
         } else {
             let view = if this
@@ -1242,7 +1106,8 @@ impl Workspace {
             };
             this.set_view(view, window, cx);
             if matches!(this.view, WorkspaceView::NewSession { .. }) {
-                this.picker_input
+                this.picker
+                    .input
                     .update(cx, |input, cx| input.focus(window, cx));
             }
         }
@@ -1258,18 +1123,23 @@ impl Workspace {
                 let Ok(connecting_session) = this.update_in(cx, |this, window, cx| {
                     this.poll_events(window, cx);
                     this.poll_sync_counts(cx);
-                    if this.folder_search.tick() {
+                    if this.picker.folder_search.tick() {
                         cx.notify();
                     }
-                    while let Ok(generation) = this.file_scan_rx.try_recv() {
-                        if this.file_scan_generation == generation
-                            && let Some(search) = this.file_search.as_mut()
+                    while let Ok(generation) = this.conversation.file_scan_rx.try_recv() {
+                        if this.conversation.file_scan_generation == generation
+                            && let Some(search) = this.conversation.file_search.as_mut()
                         {
                             search.scan_complete();
                             cx.notify();
                         }
                     }
-                    if this.file_search.as_mut().is_some_and(FileSearch::tick) {
+                    if this
+                        .conversation
+                        .file_search
+                        .as_mut()
+                        .is_some_and(FileSearch::tick)
+                    {
                         cx.notify();
                     }
                     if last_branch_refresh.elapsed() >= Duration::from_secs(5) {
@@ -1319,35 +1189,12 @@ impl Workspace {
     }
 
     fn persist(&mut self) {
-        if let Err(error) = config::save(&self.config()) {
-            self.notice = Some(format!("Could not save config: {error}"));
-            self.dirty = true;
-        } else {
-            self.dirty = false;
-            self.last_saved = Instant::now();
-        }
+        self.persistence.submit(self.config());
     }
 
     fn open_picker(&mut self, step: PickerStep, window: &mut Window, cx: &mut Context<Self>) {
         self.set_view(self.view.open_picker(step), window, cx);
-        self.picker_selection = 0;
-        if matches!(step, PickerStep::Folders | PickerStep::ChangeFolder { .. }) {
-            self.folder_search.set_query("");
-        }
-        self.picker_input.update(cx, |input, cx| {
-            input.set_value("", window, cx);
-            input.set_placeholder(
-                match step {
-                    PickerStep::Agents { .. } => "Search installed agents or enter an ACP command…",
-                    PickerStep::Folders | PickerStep::ChangeFolder { .. } => {
-                        "Search recent folders or enter a local or SSH path…"
-                    }
-                },
-                window,
-                cx,
-            );
-            input.focus(window, cx);
-        });
+        self.picker.open(step, window, cx);
         cx.notify();
     }
 
@@ -1383,7 +1230,8 @@ impl Workspace {
                 return_to: Some(session),
             } => {
                 self.set_view(WorkspaceView::Conversation(session), window, cx);
-                self.composer
+                self.conversation
+                    .composer
                     .update(cx, |input, cx| input.focus(window, cx));
                 cx.notify();
             }
@@ -1392,10 +1240,10 @@ impl Workspace {
     }
 
     fn choose_folder(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        if self.folder_dialog_open {
+        if self.picker.folder_dialog_open {
             return;
         }
-        self.folder_dialog_open = true;
+        self.picker.folder_dialog_open = true;
         let selection = cx.prompt_for_paths(PathPromptOptions {
             files: false,
             directories: true,
@@ -1405,7 +1253,7 @@ impl Workspace {
         cx.spawn_in(window, async move |this, cx| {
             let result = selection.await;
             let _ = this.update_in(cx, |this, window, cx| {
-                this.folder_dialog_open = false;
+                this.picker.folder_dialog_open = false;
                 if !matches!(
                     this.view,
                     WorkspaceView::NewSession {
@@ -1512,7 +1360,8 @@ impl Workspace {
             );
         } else {
             self.set_view(WorkspaceView::Conversation(location), window, cx);
-            self.composer
+            self.conversation
+                .composer
                 .update(cx, |input, cx| input.focus(window, cx));
             cx.notify();
         }
@@ -1539,8 +1388,9 @@ impl Workspace {
     }
 
     fn agent_results(&self, cx: &Context<Self>) -> Vec<AgentChoice> {
-        let query = self.picker_input.read(cx).value().to_string();
+        let query = self.picker.input.read(cx).value().to_string();
         let mut agents = self
+            .picker
             .available_agents
             .iter()
             .filter_map(|agent| {
@@ -1607,7 +1457,7 @@ impl Workspace {
                 ssh_host: ssh_host.clone(),
                 agents: Vec::new(),
             });
-            self.folder_search.add_recent(match &ssh_host {
+            self.picker.folder_search.add_recent(match &ssh_host {
                 Some(host) => PathBuf::from(crate::remote::project_label(host, &path)),
                 None => path,
             });
@@ -1662,7 +1512,8 @@ impl Workspace {
             window,
             cx,
         );
-        self.composer
+        self.conversation
+            .composer
             .update(cx, |input, cx| input.focus(window, cx));
         cx.notify();
     }
@@ -1764,7 +1615,8 @@ impl Workspace {
                 window,
                 cx,
             );
-            self.composer
+            self.conversation
+                .composer
                 .update(cx, |input, cx| input.focus(window, cx));
         }
         self.persist();
@@ -1778,9 +1630,10 @@ impl Workspace {
                 ..
             } => {
                 if let Some(path) = self
+                    .picker
                     .folder_search
                     .results()
-                    .get(self.picker_selection)
+                    .get(self.picker.selection)
                     .cloned()
                 {
                     self.select_folder(path, window, cx);
@@ -1794,7 +1647,7 @@ impl Workspace {
                 step: PickerStep::Agents { .. },
                 ..
             } => {
-                if let Some(agent) = self.agent_results(cx).get(self.picker_selection).cloned() {
+                if let Some(agent) = self.agent_results(cx).get(self.picker.selection).cloned() {
                     self.start_agent(agent.command, Some(agent.name), window, cx);
                 } else {
                     self.start_custom_agent(window, cx);
@@ -1805,7 +1658,7 @@ impl Workspace {
     }
 
     fn start_custom_agent(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        let value = self.picker_input.read(cx).value().to_string();
+        let value = self.picker.input.read(cx).value().to_string();
         match shell_words::split(value.trim()) {
             Ok(command) if !command.is_empty() => self.start_agent(command, None, window, cx),
             _ => {
@@ -1817,25 +1670,6 @@ impl Workspace {
 
     fn quick_open(&mut self, _: &QuickOpen, window: &mut Window, cx: &mut Context<Self>) {
         self.open_picker(PickerStep::Folders, window, cx);
-    }
-
-    fn refresh_composer_row_limit(&mut self, cx: &mut Context<Self>) {
-        let max_rows = Self::composer_max_rows(
-            self.composer_viewport_height,
-            self.composer_base_line_height,
-            self.font_scale,
-        );
-        if max_rows == self.composer_max_rows {
-            return;
-        }
-        self.composer_max_rows = max_rows;
-        self.composer
-            .update(cx, |input, cx| input.set_auto_grow(1, max_rows, cx));
-        for composer in self.session_composers.values() {
-            if composer.entity_id() != self.composer.entity_id() {
-                composer.update(cx, |input, cx| input.set_auto_grow(1, max_rows, cx));
-            }
-        }
     }
 
     fn zoom_in(&mut self, _: &ZoomIn, _window: &mut Window, cx: &mut Context<Self>) {
@@ -1862,7 +1696,7 @@ impl Workspace {
         // Theme::update also refreshes every window, so the next frame lays
         // text out at the new sizes.
         Theme::update(cx, |theme| set_theme_font_scale(theme, scale));
-        self.refresh_composer_row_limit(cx);
+        self.conversation.resize_composers(self.font_scale, cx);
         self.zoom_notice_generation += 1;
         let generation = self.zoom_notice_generation;
         if self.notice.as_deref() == Some(acknowledgement.as_str()) {
@@ -1928,29 +1762,30 @@ impl Workspace {
         };
         let count = match step {
             PickerStep::Folders | PickerStep::ChangeFolder { .. } => {
-                self.folder_search.results().len()
+                self.picker.folder_search.results().len()
             }
             PickerStep::Agents { .. } => {
                 self.agent_results(cx).len()
-                    + usize::from(!self.picker_input.read(cx).value().trim().is_empty())
+                    + usize::from(!self.picker.input.read(cx).value().trim().is_empty())
             }
         };
         match event.keystroke.key.as_str() {
             "down" if count > 0 => {
-                self.picker_selection = (self.picker_selection + 1) % count;
+                self.picker.selection = (self.picker.selection + 1) % count;
                 cx.stop_propagation();
                 cx.notify();
             }
             "up" if count > 0 => {
-                self.picker_selection = (self.picker_selection + count - 1) % count;
+                self.picker.selection = (self.picker.selection + count - 1) % count;
                 cx.stop_propagation();
                 cx.notify();
             }
             "escape" => {
-                if self.picker_input.read(cx).value().is_empty() {
+                if self.picker.input.read(cx).value().is_empty() {
                     self.back_from_picker(window, cx);
                 } else {
-                    self.picker_input
+                    self.picker
+                        .input
                         .update(cx, |input, cx| input.set_value("", window, cx));
                 }
                 cx.stop_propagation();
@@ -1960,7 +1795,7 @@ impl Workspace {
     }
 
     fn slash_results(&self, cx: &Context<Self>) -> Vec<SlashCommand> {
-        if self.slash_dismissed {
+        if self.conversation.slash_dismissed {
             return Vec::new();
         }
         let Some(SessionLocation {
@@ -1970,7 +1805,7 @@ impl Workspace {
         else {
             return Vec::new();
         };
-        let draft = self.composer.read(cx).value().to_string();
+        let draft = self.conversation.composer.read(cx).value().to_string();
         matching_slash_commands(
             &self.projects[project_index].agents[agent_index]
                 .config
@@ -1980,49 +1815,50 @@ impl Workspace {
     }
 
     fn update_file_query(&mut self, cx: &Context<Self>) {
-        let input = self.composer.read(cx);
+        let input = self.conversation.composer.read(cx);
         let draft = input.value().to_string();
         let query = file_mention(&draft, input.cursor_position()).map(|(_, query)| query);
-        if let (Some(search), Some(query)) = (self.file_search.as_mut(), query) {
+        if let (Some(search), Some(query)) = (self.conversation.file_search.as_mut(), query) {
             search.set_query(query);
         }
     }
 
     fn file_results(&self, cx: &Context<Self>) -> Vec<String> {
-        if self.file_dismissed || self.view.displayed_session().is_none() {
+        if self.conversation.file_dismissed || self.view.displayed_session().is_none() {
             return Vec::new();
         }
-        let input = self.composer.read(cx);
+        let input = self.conversation.composer.read(cx);
         let draft = input.value().to_string();
         let Some((_, query)) = file_mention(&draft, input.cursor_position()) else {
             return Vec::new();
         };
-        self.file_search
+        self.conversation
+            .file_search
             .as_ref()
             .filter(|search| search.query() == query)
             .map_or_else(Vec::new, |search| search.results().to_vec())
     }
 
     fn file_mention_active(&self, cx: &Context<Self>) -> bool {
-        if self.file_dismissed || self.view.displayed_session().is_none() {
+        if self.conversation.file_dismissed || self.view.displayed_session().is_none() {
             return false;
         }
-        let input = self.composer.read(cx);
+        let input = self.conversation.composer.read(cx);
         file_mention(&input.value(), input.cursor_position()).is_some()
     }
 
     fn complete_file(&mut self, file: &str, window: &mut Window, cx: &mut Context<Self>) {
-        let input = self.composer.read(cx);
+        let input = self.conversation.composer.read(cx);
         let draft = input.value().to_string();
         let Some((range, _)) = file_mention(&draft, input.cursor_position()) else {
             return;
         };
         let (value, cursor) = completed_file_text(&draft, range, file);
-        self.composer.update(cx, |input, cx| {
+        self.conversation.composer.update(cx, |input, cx| {
             input.replace_all(value, window, cx);
             input.set_cursor_position(cursor, window, cx);
         });
-        self.file_dismissed = true;
+        self.conversation.file_dismissed = true;
         cx.notify();
     }
 
@@ -2034,12 +1870,12 @@ impl Workspace {
     ) {
         let value = completed_slash_text(&command);
         let column = value.encode_utf16().count() as u32;
-        self.composer.update(cx, |input, cx| {
+        self.conversation.composer.update(cx, |input, cx| {
             input.set_value(value, window, cx);
             input.set_cursor_position(Position::new(0, column), window, cx);
         });
-        self.slash_selection = 0;
-        self.slash_dismissed = true;
+        self.conversation.slash_selection = 0;
+        self.conversation.slash_dismissed = true;
         cx.notify();
     }
 
@@ -2049,21 +1885,31 @@ impl Workspace {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        if !self.composer.read(cx).focus_handle(cx).is_focused(window) {
+        if !self
+            .conversation
+            .composer
+            .read(cx)
+            .focus_handle(cx)
+            .is_focused(window)
+        {
             return;
         }
         let files = self.file_results(cx);
         if !files.is_empty() {
             match action {
-                SlashAction::Down => self.file_selection = (self.file_selection + 1) % files.len(),
+                SlashAction::Down => {
+                    self.conversation.file_selection =
+                        (self.conversation.file_selection + 1) % files.len()
+                }
                 SlashAction::Up => {
-                    self.file_selection = (self.file_selection + files.len() - 1) % files.len()
+                    self.conversation.file_selection =
+                        (self.conversation.file_selection + files.len() - 1) % files.len()
                 }
                 SlashAction::Complete => {
-                    let index = self.file_selection.min(files.len() - 1);
+                    let index = self.conversation.file_selection.min(files.len() - 1);
                     self.complete_file(&files[index], window, cx);
                 }
-                SlashAction::Dismiss => self.file_dismissed = true,
+                SlashAction::Dismiss => self.conversation.file_dismissed = true,
             }
             cx.stop_propagation();
             cx.notify();
@@ -2076,7 +1922,7 @@ impl Workspace {
             )
         {
             if matches!(action, SlashAction::Dismiss) {
-                self.file_dismissed = true;
+                self.conversation.file_dismissed = true;
                 cx.notify();
             }
             cx.stop_propagation();
@@ -2091,17 +1937,19 @@ impl Workspace {
         }
         match action {
             SlashAction::Down => {
-                self.slash_selection = (self.slash_selection + 1) % commands.len();
+                self.conversation.slash_selection =
+                    (self.conversation.slash_selection + 1) % commands.len();
             }
             SlashAction::Up => {
-                self.slash_selection = (self.slash_selection + commands.len() - 1) % commands.len();
+                self.conversation.slash_selection =
+                    (self.conversation.slash_selection + commands.len() - 1) % commands.len();
             }
             SlashAction::Complete => {
-                let index = self.slash_selection.min(commands.len() - 1);
+                let index = self.conversation.slash_selection.min(commands.len() - 1);
                 self.complete_slash_command(commands[index].clone(), window, cx);
             }
             SlashAction::Dismiss => {
-                self.slash_dismissed = true;
+                self.conversation.slash_dismissed = true;
             }
         }
         cx.stop_propagation();
@@ -2109,13 +1957,13 @@ impl Workspace {
     }
 
     fn handle_escape(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        if self.mobile_provider_prompt.take().is_some() {
+        if self.mobile_access.provider_prompt.take().is_some() {
             cx.stop_propagation();
             cx.notify();
             return;
         }
-        if self.mobile_pairing_visible {
-            self.mobile_pairing_visible = false;
+        if self.mobile_access.pairing_visible {
+            self.mobile_access.pairing_visible = false;
             cx.stop_propagation();
             cx.notify();
             return;
@@ -2144,7 +1992,7 @@ impl Workspace {
         let Some(session) = self.view.displayed_session() else {
             return;
         };
-        let input = self.composer.read(cx);
+        let input = self.conversation.composer.read(cx);
         let current = input.value().to_string();
         let line = input.cursor_position().line as usize;
         if (up && line != 0) || (!up && line < current.matches('\n').count()) {
@@ -2152,7 +2000,7 @@ impl Workspace {
         }
         let agent = &self.projects[session.project_index].agents[session.agent_index];
         let Some(value) = PromptRecall::step(
-            &mut self.prompt_recall,
+            &mut self.conversation.prompt_recall,
             agent.config.id,
             &agent.config.prompt_history,
             &current,
@@ -2167,7 +2015,7 @@ impl Workspace {
             .unwrap_or("")
             .encode_utf16()
             .count() as u32;
-        self.composer.update(cx, |input, cx| {
+        self.conversation.composer.update(cx, |input, cx| {
             input.set_value(value, window, cx);
             input.set_cursor_position(Position::new(line, column), window, cx);
         });
@@ -2178,8 +2026,8 @@ impl Workspace {
 
 impl Drop for Workspace {
     fn drop(&mut self) {
-        if self.dirty {
-            let _ = config::save(&self.config());
+        if self.persistence.dirty {
+            self.persistence.submit(self.config());
         }
     }
 }
@@ -2247,17 +2095,17 @@ pub(crate) fn run() {
             let workspace_out = workspace.clone();
             let workspace_reset = workspace.clone();
             cx.on_action(move |_: &ZoomIn, cx| {
-                let _ = workspace.update(cx, |this, cx| {
+                workspace.update(cx, |this, cx| {
                     this.set_font_scale(this.font_scale + FONT_SCALE_STEP, cx);
                 });
             });
             cx.on_action(move |_: &ZoomOut, cx| {
-                let _ = workspace_out.update(cx, |this, cx| {
+                workspace_out.update(cx, |this, cx| {
                     this.set_font_scale(this.font_scale - FONT_SCALE_STEP, cx);
                 });
             });
             cx.on_action(move |_: &ZoomReset, cx| {
-                let _ = workspace_reset.update(cx, |this, cx| {
+                workspace_reset.update(cx, |this, cx| {
                     this.set_font_scale(1.0, cx);
                 });
             });

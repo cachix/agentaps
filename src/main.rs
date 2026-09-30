@@ -9,7 +9,9 @@ mod folder_search;
 mod git_diff;
 mod git_sync;
 mod mobile;
+mod persistence;
 mod remote;
+mod session;
 #[cfg(unix)]
 mod shell_env;
 mod theme;

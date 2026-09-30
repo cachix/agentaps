@@ -85,7 +85,7 @@ impl Workspace {
                 div()
                     .text_sm()
                     .text_color(rgb(MUTED))
-                    .child(if self.mobile_loading {
+                    .child(if self.mobile_access.loading {
                         "Loading mobile secrets from SecretSpec…"
                     } else {
                         "Starting mobile connection…"
@@ -108,7 +108,7 @@ impl Workspace {
                     .bg(rgb(SURFACE))
                     .child("Close")
                     .on_click(cx.listener(|this, _, _, cx| {
-                        this.mobile_pairing_visible = false;
+                        this.mobile_access.pairing_visible = false;
                         cx.notify();
                     })),
             )
@@ -116,7 +116,8 @@ impl Workspace {
 
     fn render_linked_clients(&self, cx: &mut Context<Self>) -> gpui_kit::Stateful<Div> {
         let clients = self
-            .mobile
+            .mobile_access
+            .server
             .as_ref()
             .map(crate::mobile::Server::linked_clients)
             .unwrap_or_default();
@@ -139,7 +140,7 @@ impl Workspace {
         for client in clients {
             let id = client.id;
             let legacy = id == crate::mobile::LEGACY_CLIENT_ID;
-            let confirming = self.mobile_revoke_confirm.as_deref() == Some(&id);
+            let confirming = self.mobile_access.revoke_confirm.as_deref() == Some(&id);
             let description = client.paired_at.map_or_else(
                 || "Revoking this entry disconnects all older pairings.".into(),
                 paired_ago,
@@ -186,7 +187,7 @@ impl Workspace {
                         .text_color(rgb(MUTED))
                         .child("Cancel")
                         .on_click(cx.listener(|this, _, _, cx| {
-                            this.mobile_revoke_confirm = None;
+                            this.mobile_access.revoke_confirm = None;
                             cx.notify();
                         })),
                 );
@@ -267,7 +268,7 @@ impl Workspace {
                                     })),
                             ),
                     )
-                    .child(Input::new(&self.mobile_provider_input))
+                    .child(Input::new(&self.mobile_access.provider_input))
                     .child(
                         div()
                             .flex()
@@ -295,7 +296,7 @@ impl Workspace {
                                     .bg(rgb(BG))
                                     .child("Close")
                                     .on_click(cx.listener(|this, _, _, cx| {
-                                        this.mobile_provider_prompt = None;
+                                        this.mobile_access.provider_prompt = None;
                                         cx.notify();
                                     })),
                             ),
@@ -318,10 +319,9 @@ impl Workspace {
         let sidebar_width = (f32::from(viewport.width) * self.sidebar_fraction).max(180.);
         let available = (f32::from(viewport.width) - sidebar_width - 70.)
             .min(f32::from(viewport.height) - 230.)
-            .min(640.)
-            .max(80.);
+            .clamp(80., 640.);
         let mut qr = div().flex().flex_col().flex_shrink_0().bg(rgb(0xffffff));
-        if let Some(rows) = &self.mobile_qr {
+        if let Some(rows) = &self.mobile_access.qr {
             let module_size = (available / (rows.len() as f32 + 8.)).floor().max(1.);
             qr = qr.p(px(module_size * 4.));
             for row in rows {
@@ -366,8 +366,8 @@ impl Workspace {
                     .bg(rgb(SURFACE))
                     .child("Close")
                     .on_click(cx.listener(|this, _, _, cx| {
-                        this.mobile_pairing_visible = false;
-                        this.mobile_revoke_confirm = None;
+                        this.mobile_access.pairing_visible = false;
+                        this.mobile_access.revoke_confirm = None;
                         cx.notify();
                     })),
             );
@@ -420,12 +420,15 @@ impl Workspace {
 
 impl Render for Workspace {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        let mobile_pairing = (self.mobile_pairing_visible && self.mobile_endpoint_id.is_some())
-            .then(|| self.render_mobile_pairing(window, cx));
-        let mobile_loading = (self.mobile_pairing_visible && self.mobile_endpoint_id.is_none())
-            .then(|| self.render_mobile_loading(cx));
+        let mobile_pairing = (self.mobile_access.pairing_visible
+            && self.mobile_access.endpoint_id.is_some())
+        .then(|| self.render_mobile_pairing(window, cx));
+        let mobile_loading = (self.mobile_access.pairing_visible
+            && self.mobile_access.endpoint_id.is_none())
+        .then(|| self.render_mobile_loading(cx));
         let mobile_provider = self
-            .mobile_provider_prompt
+            .mobile_access
+            .provider_prompt
             .as_ref()
             .map(|error| self.render_mobile_provider(error, cx));
         let sidebar = self.render_sidebar(window, cx);
@@ -458,7 +461,7 @@ impl Render for Workspace {
         }) = self.view.displayed_session()
         {
             self.sync_chat_rows(project_index, agent_index);
-            if self.diff_visible {
+            if self.diff.visible {
                 let conversation = self.render_conversation(
                     div().flex_1().min_w(px(0.)).h_full().flex().flex_col(),
                     project_index,
@@ -558,7 +561,7 @@ impl Render for Workspace {
                     let position = f32::from(event.event.position.x);
                     let max_width = (viewport_width - 320.).max(180.);
                     this.sidebar_fraction = position.clamp(180., max_width) / viewport_width;
-                    this.dirty = true;
+                    this.persistence.dirty = true;
                     cx.notify();
                 }),
             )

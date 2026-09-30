@@ -9,7 +9,7 @@ export RUSTC_BOOTSTRAP=wasm_thread
 if [[ -n "${NO_COLOR:-}" ]]; then
   export NO_COLOR=true
 fi
-trunk build index.html --release --public-url /connect/ --dist dist/connect
+trunk build index.html --locked --release --public-url /connect/ --dist dist/connect
 cp -R site/. dist/
 mkdir -p dist/fonts
 cp fonts/IBMPlexSans-Regular.ttf dist/fonts/

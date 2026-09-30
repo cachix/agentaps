@@ -1,42 +1,5 @@
 use super::*;
 
-fn initialize_params() -> Value {
-    let initialize = v2::InitializeRequest::new(
-        ProtocolVersion::V2,
-        v2::Implementation::new("agentaps", env!("CARGO_PKG_VERSION")).title("Agentaps"),
-    )
-    .capabilities(v2::ClientCapabilities::new().elicitation(
-        v2::ElicitationCapabilities::new().form(v2::ElicitationFormCapabilities::new()),
-    ));
-    let mut params = json!(initialize);
-    // A v1 agent reads this field when it accepts our v2 version offer.
-    params["clientCapabilities"] = json!({"elicitation":{"form":{}}});
-    params
-}
-
-fn update_config_options(agent: &mut AgentView, options: &Value) {
-    if let Some(option) = model_option(options) {
-        agent.model = Some(option.label());
-        agent.model_option = Some(option);
-    } else {
-        agent.model_option = None;
-    }
-    agent.effort_option = effort_option(options);
-    if let Some(option) = mode_option(options) {
-        agent.mode_option = Some(option);
-        agent.legacy_modes = false;
-    } else if !agent.legacy_modes {
-        agent.mode_option = None;
-    }
-    agent.collaboration_option = collaboration_option(options);
-}
-
-/// Applies the config options and session modes from a session response.
-fn update_session_settings(agent: &mut AgentView, result: &Value) {
-    update_config_options(agent, &result["configOptions"]);
-    update_session_modes(agent, &result["modes"]);
-}
-
 impl Workspace {
     pub(super) fn move_session_to_project(
         &mut self,
@@ -47,7 +10,8 @@ impl Workspace {
     ) {
         if session.project_index == target_project_index {
             self.set_view(WorkspaceView::Conversation(session), window, cx);
-            self.composer
+            self.conversation
+                .composer
                 .update(cx, |input, cx| input.focus(window, cx));
             cx.notify();
             return;
@@ -79,15 +43,21 @@ impl Workspace {
         if let Some(id) = self.sidebar_order.iter_mut().find(|id| **id == old_id) {
             *id = new_id;
         }
-        if let Some(composer) = self.session_composers.remove(&old_id) {
-            self.session_composers.insert(new_id, composer);
+        if let Some(composer) = self.conversation.session_composers.remove(&old_id) {
+            self.conversation.session_composers.insert(new_id, composer);
         }
         self.deferred_connections.retain(|id| *id != old_id);
-        self.collapsed_tool_groups.retain(|(id, _)| *id != old_id);
-        self.expanded_tool_history.retain(|(id, _)| *id != old_id);
-        self.expanded_tool_rows.retain(|(id, _)| *id != old_id);
-        self.chat_list_agent = None;
-        self.chat_rows.clear();
+        self.conversation
+            .collapsed_tool_groups
+            .retain(|(id, _)| *id != old_id);
+        self.conversation
+            .expanded_tool_history
+            .retain(|(id, _)| *id != old_id);
+        self.conversation
+            .expanded_tool_rows
+            .retain(|(id, _)| *id != old_id);
+        self.conversation.chat_list_agent = None;
+        self.conversation.chat_rows.clear();
 
         self.set_view(
             WorkspaceView::Conversation(SessionLocation {
@@ -100,7 +70,8 @@ impl Workspace {
         self.connect(target_project_index, agent_index);
         self.notice = None;
         self.persist();
-        self.composer
+        self.conversation
+            .composer
             .update(cx, |input, cx| input.focus(window, cx));
         cx.notify();
     }
@@ -123,7 +94,7 @@ impl Workspace {
         if option.current == value || !option.choices.iter().any(|choice| choice.value == value) {
             return;
         }
-        let Some(session_id) = &agent.session_id else {
+        let Some(session_id) = &agent.controller.session_id else {
             return;
         };
         let id = agent.next_request_id;
@@ -166,14 +137,20 @@ impl Workspace {
         } else {
             self.sidebar_order.push(new_id);
         }
-        if let Some(composer) = self.session_composers.remove(&old_id) {
-            self.session_composers.insert(new_id, composer);
+        if let Some(composer) = self.conversation.session_composers.remove(&old_id) {
+            self.conversation.session_composers.insert(new_id, composer);
         }
-        self.collapsed_tool_groups.retain(|(id, _)| *id != old_id);
-        self.expanded_tool_history.retain(|(id, _)| *id != old_id);
-        self.expanded_tool_rows.retain(|(id, _)| *id != old_id);
-        self.chat_list_agent = None;
-        self.chat_rows.clear();
+        self.conversation
+            .collapsed_tool_groups
+            .retain(|(id, _)| *id != old_id);
+        self.conversation
+            .expanded_tool_history
+            .retain(|(id, _)| *id != old_id);
+        self.conversation
+            .expanded_tool_rows
+            .retain(|(id, _)| *id != old_id);
+        self.conversation.chat_list_agent = None;
+        self.conversation.chat_rows.clear();
         self.connect(project_index, agent_index);
         self.notice = None;
         self.persist();
@@ -223,7 +200,8 @@ impl Workspace {
         self.connect(project_index, new_index);
         self.notice = None;
         self.persist();
-        self.composer
+        self.conversation
+            .composer
             .update(cx, |input, cx| input.focus(window, cx));
         cx.notify();
     }
@@ -264,11 +242,12 @@ impl Workspace {
         else {
             return;
         };
-        let value = self.composer.read(cx).value().to_string();
+        let value = self.conversation.composer.read(cx).value().to_string();
         let prompt = submitted_prompt(&value);
         if prompt.trim().is_empty() || (prompt.starts_with('!') && shell_command(&prompt).is_none())
         {
-            self.composer
+            self.conversation
+                .composer
                 .update(cx, |input, cx| input.set_value("", window, cx));
             return;
         }
@@ -284,9 +263,10 @@ impl Workspace {
         {
             agent.config.prompt_history.push(prompt.clone());
             agent.config.pending_prompts.push(prompt);
-            self.dirty = true;
-            self.prompt_recall = None;
-            self.composer
+            self.persistence.dirty = true;
+            self.conversation.prompt_recall = None;
+            self.conversation
+                .composer
                 .update(cx, |input, cx| input.set_value("", window, cx));
             self.notice = None;
             cx.notify();
@@ -300,13 +280,14 @@ impl Workspace {
         match agent.start_prompt(prompt.clone()) {
             Ok(()) => {
                 agent.config.prompt_history.push(prompt);
-                self.chat_list.scroll_to(gpui_kit::ListOffset {
-                    item_ix: self.chat_list.item_count(),
+                self.conversation.chat_list.scroll_to(gpui_kit::ListOffset {
+                    item_ix: self.conversation.chat_list.item_count(),
                     offset_in_item: px(0.),
                 });
-                self.dirty = true;
-                self.prompt_recall = None;
-                self.composer
+                self.persistence.dirty = true;
+                self.conversation.prompt_recall = None;
+                self.conversation
+                    .composer
                     .update(cx, |input, cx| input.set_value("", window, cx));
                 self.notice = None;
             }
@@ -341,18 +322,18 @@ impl Workspace {
             }
             if agent.active_work
                 && !agent.cancel_requested
-                && let Some(session_id) = &agent.session_id
+                && let Some(session_id) = &agent.controller.session_id
             {
-                match agent.send(json!({"jsonrpc":"2.0","method":"session/cancel","params":{"sessionId":session_id}})) {
+                match agent.controller.send(json!({"jsonrpc":"2.0","method":"session/cancel","params":{"sessionId":session_id}})) {
                     Ok(()) => agent.cancel_requested = true,
                     Err(error) => agent.log(Role::System, format!("Could not stop agent: {error}")),
                 }
             }
-            for permission in agent.permissions.drain(..) {
-                let _ = agent.connection.as_ref().map(|connection| connection.send(json!({"jsonrpc":"2.0","id":permission.request_id,"result":{"outcome":{"outcome":"cancelled"}}})));
+            for permission in agent.controller.permissions.drain(..) {
+                let _ = agent.controller.connection.as_ref().map(|connection| connection.send(json!({"jsonrpc":"2.0","id":permission.request_id,"result":{"outcome":{"outcome":"cancelled"}}})));
             }
             for elicitation in agent.elicitations.drain(..) {
-                let _ = agent.connection.as_ref().map(|connection| connection.send(json!({"jsonrpc":"2.0","id":elicitation.request_id,"result":{"action":"cancel"}})));
+                let _ = agent.controller.connection.as_ref().map(|connection| connection.send(json!({"jsonrpc":"2.0","id":elicitation.request_id,"result":{"action":"cancel"}})));
             }
             agent.awaiting_response = false;
             cx.notify();
@@ -484,102 +465,53 @@ impl Workspace {
             .view
             .displayed_session()
             .map(|session| session.project_index);
-        if self.diff_watched_project != project_index {
-            self.diff_watched_project = project_index;
-            self.diff_watch_generation += 1;
-            self.diff_watcher = None;
-            self.diff_poll_at = None;
-            self.diff_refresh_due = project_index.map(|_| Instant::now());
-            self.diff_first_change_at = None;
+        if self.diff.watched_project != project_index {
+            self.diff.watched_project = project_index;
+            self.diff.watch_generation += 1;
+            self.diff.watcher = None;
+            self.diff.poll_at = None;
+            self.diff.refresh_due = project_index.map(|_| Instant::now());
+            self.diff.first_change_at = None;
             if let Some(project_index) = project_index {
-                let generation = self.diff_watch_generation;
+                let generation = self.diff.watch_generation;
                 let path = self.projects[project_index].path.clone();
-                let watch_tx = self.diff_watch_tx.clone();
-                let watcher_tx = self.diff_watcher_tx.clone();
+                let watch_tx = self.diff.watch_tx.clone();
+                let watcher_tx = self.diff.watcher_tx.clone();
                 std::thread::spawn(move || {
                     let watcher = crate::diff_watch::start(&path, generation, watch_tx);
                     let _ = watcher_tx.send((generation, watcher));
                 });
             }
         }
-        while let Ok((request_id, result)) = self.diff_rx.try_recv() {
-            if request_id != self.diff_request_id {
-                continue;
-            }
-            self.diff_loading = false;
-            match result {
-                Ok(DiffData::Full(files, stats, presentation, selected_file, rows)) => {
-                    let scroll_top = self.diff_list.logical_scroll_top();
-                    if self
-                        .diff_selected_file
-                        .as_ref()
-                        .is_some_and(|selected| !files.iter().any(|file| &file.path == selected))
-                    {
-                        self.diff_selected_file = None;
-                    }
-                    self.diff_rows = if presentation == self.diff_presentation
-                        && selected_file == self.diff_selected_file
-                    {
-                        rows
-                    } else {
-                        Arc::new(diff_list_rows(
-                            &files,
-                            &stats,
-                            self.diff_selected_file.as_deref(),
-                            self.diff_presentation,
-                        ))
-                    };
-                    self.diff_list =
-                        ListState::new(self.diff_rows.len(), ListAlignment::Top, px(28.));
-                    self.diff_list.scroll_to(scroll_top);
-                    self.diff_counts = (!stats.is_empty()).then(|| {
-                        stats.iter().copied().fold((0, 0), |total, count| {
-                            (total.0 + count.0, total.1 + count.1)
-                        })
-                    });
-                    self.diff_files = files;
-                    self.diff_file_stats = stats;
-                    self.diff_error = None;
-                }
-                Ok(DiffData::Counts(counts)) => {
-                    self.diff_counts = counts;
-                    self.diff_error = None;
-                }
-                Err(error) => {
-                    self.diff_counts = None;
-                    self.diff_files.clear();
-                    self.diff_file_stats.clear();
-                    self.diff_error = Some(error);
-                }
-            }
+        if self.diff.poll_results() {
             cx.notify();
         }
-        while let Ok((generation, watcher)) = self.diff_watcher_rx.try_recv() {
-            if self.diff_watched_project.is_some() && generation == self.diff_watch_generation {
-                self.diff_watcher = watcher.ok();
-                if self.diff_watcher.is_none() {
-                    self.diff_poll_at = Some(Instant::now() + Duration::from_secs(3));
+        while let Ok((generation, watcher)) = self.diff.watcher_rx.try_recv() {
+            if self.diff.watched_project.is_some() && generation == self.diff.watch_generation {
+                self.diff.watcher = watcher.ok();
+                if self.diff.watcher.is_none() {
+                    self.diff.poll_at = Some(Instant::now() + Duration::from_secs(3));
                 }
             }
         }
         let mut watched_change = false;
-        while let Ok(generation) = self.diff_watch_rx.try_recv() {
+        while let Ok(generation) = self.diff.watch_rx.try_recv() {
             watched_change |=
-                self.diff_watched_project.is_some() && generation == self.diff_watch_generation;
+                self.diff.watched_project.is_some() && generation == self.diff.watch_generation;
         }
         let now = Instant::now();
         if watched_change {
-            let first_change = *self.diff_first_change_at.get_or_insert(now);
-            self.diff_refresh_due =
+            let first_change = *self.diff.first_change_at.get_or_insert(now);
+            self.diff.refresh_due =
                 Some((now + Duration::from_millis(350)).min(first_change + Duration::from_secs(2)));
         }
-        if self.diff_poll_at.is_some_and(|poll_at| now >= poll_at) {
-            self.diff_refresh_due.get_or_insert(now);
-            self.diff_poll_at = Some(now + Duration::from_secs(3));
+        if self.diff.poll_at.is_some_and(|poll_at| now >= poll_at) {
+            self.diff.refresh_due.get_or_insert(now);
+            self.diff.poll_at = Some(now + Duration::from_secs(3));
         }
-        if !self.diff_loading && self.diff_refresh_due.is_some_and(|due| now >= due) {
-            self.diff_refresh_due = None;
-            self.diff_first_change_at = None;
+        if !self.diff.loading && self.diff.refresh_due.is_some_and(|due| now >= due) {
+            self.diff.refresh_due = None;
+            self.diff.first_change_at = None;
             if let Some(session) = self.view.displayed_session() {
                 self.refresh_diff(session.project_index, cx);
             }
@@ -613,7 +545,8 @@ impl Workspace {
                                     .any(|agent| agent.config.id == agent_id && !agent.active_work)
                         })
                     {
-                        self.sync_refresh_pending
+                        self.sync
+                            .refresh_pending
                             .insert((path.clone(), host.clone()));
                         if let Some(project) = self
                             .projects
@@ -626,16 +559,8 @@ impl Workspace {
                 }
                 Event::Disconnected { agent_id, reason } => {
                     if let Some((agent, _)) = self.agent_mut(agent_id) {
-                        agent.oauth_retry = None;
-                        agent.awaiting_response = false;
-                        agent.clear_pending_settings();
-                        agent.cancel_requested = false;
                         agent.elicitations.clear();
-                        agent.permissions.clear();
-                        if agent.status != Status::Error {
-                            agent.status = Status::Error;
-                            agent.log(Role::System, reason);
-                        }
+                        agent.controller.disconnected(reason);
                     }
                 }
             }
@@ -649,56 +574,17 @@ impl Workspace {
             }
         }
         if changed {
-            self.dirty = true;
+            self.persistence.dirty = true;
             cx.notify();
         }
         self.refresh_pending_sync_counts(cx);
         self.poll_mobile(cx);
-        if self.dirty && self.last_saved.elapsed() >= Duration::from_secs(1) {
+        if let Some(error) = self.persistence.poll() {
+            self.notice = Some(format!("Could not save config: {error}"));
+            cx.notify();
+        }
+        if self.persistence.due() {
             self.persist();
-        }
-    }
-
-    pub(super) fn start_new_session(agent: &mut AgentView, path: &Path) {
-        agent.restoring = None;
-        agent.recovery_due = None;
-        agent.config.was_working = false;
-        agent.config.active_prompt = None;
-        agent.oauth_retry = None;
-        agent.session_id = None;
-        agent.config.session_id = None;
-        agent.config.session_has_activity = false;
-        let request = json!({"jsonrpc":"2.0","id":2,"method":"session/new","params":{
-            "cwd":path,"mcpServers":[]
-        }});
-        if let Err(error) = agent.send(request.clone()) {
-            agent.status = Status::Error;
-            agent.log(Role::System, error);
-        } else {
-            agent.remember_auth_request(request);
-        }
-    }
-
-    pub(super) fn resume_session(
-        agent: &mut AgentView,
-        path: &Path,
-        mode: RestoreMode,
-        session_id: String,
-    ) {
-        agent.session_id = Some(session_id.clone());
-        agent.restoring = Some(mode);
-        let method = match mode {
-            RestoreMode::Resume => "session/resume",
-            RestoreMode::Load => "session/load",
-        };
-        let request = json!({"jsonrpc":"2.0","id":2,"method":method,"params":{
-            "sessionId":session_id,"cwd":path,"mcpServers":[]
-        }});
-        if let Err(error) = agent.send(request.clone()) {
-            agent.status = Status::Error;
-            agent.log(Role::System, error);
-        } else {
-            agent.remember_auth_request(request);
         }
     }
 
@@ -723,416 +609,36 @@ impl Workspace {
         let Some((agent, path)) = self.agent_mut(agent_id) else {
             return;
         };
-        if let Some(method) = value.get("method").and_then(Value::as_str) {
-            match method {
-                "session/update" => Self::handle_update(agent, &value),
-                "$/cancel_request" => {
-                    let request_id = &value["params"]["requestId"];
-                    if let Some(index) = agent
-                        .elicitations
-                        .iter()
-                        .position(|question| question.request_id == *request_id)
-                    {
-                        agent.elicitations.remove(index);
-                        let _ = agent.send(json!({"jsonrpc":"2.0","id":request_id,"error":{"code":-32800,"message":"Request cancelled"}}));
-                    }
-                }
-                "session/request_permission" => {
-                    let Some(request_id) = value.get("id").cloned() else {
-                        return;
-                    };
-                    let params = &value["params"];
-                    if let Some(session_id) = &agent.session_id
-                        && params["sessionId"].as_str() != Some(session_id)
-                    {
-                        return;
-                    }
-                    let title = params["title"]
-                        .as_str()
-                        .or_else(|| params["toolCall"]["title"].as_str())
-                        .unwrap_or("Agent requests permission")
-                        .to_owned();
-                    let description = params["description"]
-                        .as_str()
-                        .or_else(|| params["subject"]["command"].as_str())
-                        .map(str::to_owned);
-                    let options: Vec<(String, String)> = params["options"]
-                        .as_array()
-                        .into_iter()
-                        .flatten()
-                        .filter_map(|option| {
-                            Some((
-                                option["optionId"].as_str()?.to_owned(),
-                                option["name"].as_str()?.to_owned(),
-                            ))
-                        })
-                        .collect();
-                    if options.is_empty() {
-                        let _ = agent.send(json!({"jsonrpc":"2.0","id":request_id,"result":{"outcome":{"outcome":"cancelled"}}}));
-                    } else {
-                        agent.permissions.push(Permission {
-                            request_id,
-                            title,
-                            description,
-                            options,
-                        });
-                    }
-                }
-                "elicitation/create" => {
-                    let Some(request_id) = value.get("id").cloned() else {
-                        return;
-                    };
-                    let params = &value["params"];
-                    if params["sessionId"].as_str() != agent.session_id.as_deref() {
-                        let _ = agent.send(json!({"jsonrpc":"2.0","id":request_id,"error":{"code":-32602,"message":"Unknown session"}}));
-                        return;
-                    }
-                    match Elicitation::new(request_id.clone(), params, window, cx) {
-                        Ok(question) => agent.elicitations.push(question),
-                        Err(message) => {
-                            let _ = agent.send(json!({"jsonrpc":"2.0","id":request_id,"error":{"code":-32602,"message":message}}));
-                        }
-                    }
-                }
-                _ => {
-                    if let Some(id) = value.get("id") {
-                        let _ = agent.send(json!({"jsonrpc":"2.0","id":id,"error":{"code":-32601,"message":"Method not supported by this client"}}));
-                    }
-                }
-            }
-            return;
-        }
-        let Some(id) = value.get("id").and_then(Value::as_u64) else {
-            return;
-        };
-        let config_kind = [
-            ConfigOptionKind::Model,
-            ConfigOptionKind::Effort,
-            ConfigOptionKind::Mode,
-            ConfigOptionKind::Collaboration,
-        ]
-        .into_iter()
-        .find(|kind| {
-            agent
-                .pending_setting(*kind)
-                .as_ref()
-                .is_some_and(|(pending_id, _)| *pending_id == id)
-        });
-        if let Some(kind) = config_kind {
-            let (_, selected) = agent.pending_setting(kind).take().unwrap();
-            if let Some(error) = value.get("error") {
-                let message = error["message"].as_str().unwrap_or("unknown error");
-                agent.log(Role::System, format!("Could not change setting: {message}"));
-            } else if value["result"]["configOptions"].is_array() {
-                update_config_options(agent, &value["result"]["configOptions"]);
-            } else if let Some(option) = agent.setting_option(kind) {
-                option.current = selected;
-                if kind == ConfigOptionKind::Model {
-                    agent.model = Some(option.label());
-                }
-            }
-            return;
-        }
-        if let Some(error) = value.get("error") {
-            let message = error["message"].as_str().unwrap_or("unknown error");
-            if agent.defer_oauth_retry(id, message) {
-                return;
-            }
-            if agent
-                .oauth_retry
-                .as_ref()
-                .is_some_and(|retry| retry.request["id"] == id)
-            {
-                agent.oauth_retry = None;
-            }
-            if id == 2 && agent.restoring.take().is_some() {
-                agent.log(
-                    Role::System,
-                    format!(
-                        "Could not restore the previous session: {message}. Starting a new session."
-                    ),
-                );
-                Self::start_new_session(agent, &path);
-                return;
-            }
-            if id >= 3 && agent.protocol == Some(ProtocolVersion::V2) {
-                agent.active_work = false;
-                agent.awaiting_response = false;
-                agent.cancel_requested = false;
-                agent.config.active_prompt = None;
-                agent.status = Status::Idle;
-            } else {
-                agent.status = Status::Error;
-            }
-            let details = error["data"]["details"].as_str();
-            agent.log(
-                Role::System,
-                match details {
-                    Some(details) if !details.is_empty() => {
-                        format!("ACP error: {message}\n{details}")
-                    }
-                    _ => format!("ACP error: {message}"),
-                },
-            );
-            return;
-        }
-        if agent
-            .oauth_retry
-            .as_ref()
-            .is_some_and(|retry| retry.request["id"] == id)
-        {
-            agent.oauth_retry = None;
-        }
-        match id {
-            1 => {
-                let protocol = match value["result"]["protocolVersion"].as_u64() {
-                    Some(2) => {
-                        match serde_json::from_value::<v2::InitializeResponse>(
-                            value["result"].clone(),
-                        ) {
-                            Ok(response) if response.capabilities.session.is_some() => {
-                                Some(ProtocolVersion::V2)
-                            }
-                            Ok(_) => {
-                                agent.log(
-                                    Role::System,
-                                    "ACP v2 agent did not advertise session support",
-                                );
-                                None
-                            }
-                            Err(error) => {
-                                agent.log(
-                                    Role::System,
-                                    format!("Invalid ACP v2 initialization: {error}"),
-                                );
-                                None
-                            }
-                        }
-                    }
-                    Some(1) => Some(ProtocolVersion::V1),
-                    _ => {
-                        agent.log(Role::System, "Agent does not support ACP v1 or v2");
-                        None
-                    }
-                };
-                if let Some(protocol) = protocol {
-                    agent.protocol = Some(protocol);
-                    if let Some(previous_session) = agent
-                        .config
-                        .session_id
-                        .clone()
-                        .filter(|_| agent.has_restorable_activity())
-                    {
-                        if let Some(mode) = restore_mode(protocol, &value["result"]) {
-                            Self::resume_session(agent, &path, mode, previous_session);
-                        } else {
-                            agent.log(
-                                Role::System,
-                                "This agent cannot restore sessions. Starting a new session with the saved activity visible.",
-                            );
-                            Self::start_new_session(agent, &path);
-                        }
-                    } else {
-                        Self::start_new_session(agent, &path);
-                    }
-                } else {
-                    agent.status = Status::Error;
-                }
-            }
-            2 => {
-                if agent.restoring.take().is_some() {
-                    update_session_settings(agent, &value["result"]);
-                    if agent.status == Status::Connecting {
-                        agent.status = Status::Idle;
-                    }
-                    if agent.config.was_working && !agent.active_work {
-                        // A live v2 agent may report running just after resume responds.
-                        agent.recovery_due = Some(Instant::now() + Duration::from_secs(1));
-                    }
-                } else if let Some(session_id) = value["result"]["sessionId"].as_str() {
-                    agent.session_id = Some(session_id.to_owned());
-                    agent.config.session_id = agent.session_id.clone();
-                    update_session_settings(agent, &value["result"]);
-                    agent.status = Status::Idle;
-                } else {
-                    agent.status = Status::Error;
-                    agent.log(Role::System, "Agent returned no session ID");
-                }
-            }
-            _ => {
-                agent.handle_prompt_response(&value["result"]);
-            }
-        }
-    }
-
-    pub(super) fn handle_update(agent: &mut AgentView, value: &Value) {
-        if let Some(session_id) = &agent.session_id
-            && value["params"]["sessionId"].as_str() != Some(session_id)
-        {
-            return;
-        }
-        let update = &value["params"]["update"];
-        if agent.protocol == Some(ProtocolVersion::V2)
-            && let Err(error) =
-                serde_json::from_value::<v2::UpdateSessionNotification>(value["params"].clone())
-        {
-            agent.log(Role::System, format!("Invalid ACP v2 update: {error}"));
-            return;
-        }
-        if agent.protocol == Some(ProtocolVersion::V2)
-            && matches!(
-                update["sessionUpdate"].as_str(),
-                Some("user_message" | "user_message_chunk")
-            )
-        {
-            agent.mark_auth_request_accepted();
-        }
-        match update["sessionUpdate"].as_str() {
-            Some("session_info_update") => {
-                if let Some(title) = update.get("title") {
-                    if title.is_null() {
-                        agent.config.title = None;
-                    } else if let Some(title) = title.as_str() {
-                        agent.config.title =
-                            Some(title.split_whitespace().collect::<Vec<_>>().join(" "))
-                                .filter(|title| !title.is_empty());
-                    }
-                }
-            }
-            Some("usage_update") => {
-                if let (Some(used), Some(size)) = (update["used"].as_u64(), update["size"].as_u64())
-                    && size > 0
+        match agent.controller.handle_message(&path, &value) {
+            Some(UiRequest::CancelElicitation(request_id)) => {
+                if let Some(index) = agent
+                    .elicitations
+                    .iter()
+                    .position(|question| question.request_id == request_id)
                 {
-                    agent.context = Some((used, size));
+                    agent.elicitations.remove(index);
+                    let _ = agent.send(json!({"jsonrpc":"2.0","id":request_id,"error":{"code":-32800,"message":"Request cancelled"}}));
                 }
             }
-            Some("config_option_update") => {
-                update_config_options(agent, &update["configOptions"]);
-            }
-            Some("current_mode_update") => {
-                if let (Some(option), Some(mode)) =
-                    (agent.mode_option.as_mut(), update["currentModeId"].as_str())
-                {
-                    option.current = mode.to_owned();
-                }
-            }
-            Some("available_commands_update") => {
-                agent.config.available_commands = parse_available_commands(update);
-            }
-            _ => {}
-        }
-        if agent.restoring == Some(RestoreMode::Load) {
-            return;
-        }
-        if agent.protocol == Some(ProtocolVersion::V2) {
-            match update["sessionUpdate"].as_str() {
-                Some("state_update") => match update["state"].as_str() {
-                    Some("running" | "requires_action") => {
-                        agent.status = Status::Working;
-                        agent.active_work = true;
-                        agent.config.was_working = false;
-                        agent.recovery_due = None;
-                    }
-                    Some("idle") => {
-                        if agent.oauth_retry.as_ref().is_some_and(|retry| {
-                            retry.due.is_some() && retry.request["method"] == "session/prompt"
-                        }) {
-                            return;
-                        }
-                        agent.status = if agent.active_work {
-                            Status::Done
-                        } else {
-                            Status::Idle
-                        };
-                        agent.active_work = false;
-                        agent.awaiting_response = false;
-                        agent.cancel_requested = false;
-                        agent.config.active_prompt = None;
-                        if let Some(reason) = update["stopReason"].as_str()
-                            && reason != "end_turn"
-                        {
-                            agent.log(Role::System, format!("Stopped: {reason}"));
-                        }
-                    }
-                    _ => {}
-                },
-                Some("user_message" | "agent_message" | "agent_thought") => {
-                    if update["sessionUpdate"].as_str() != Some("user_message") {
-                        agent.awaiting_response = false;
-                    }
-                    if let Some(id) = update["messageId"].as_str() {
-                        let role = match update["sessionUpdate"].as_str() {
-                            Some("user_message") => Role::User,
-                            Some("agent_thought") => Role::Thought,
-                            _ => Role::Agent,
-                        };
-                        agent.upsert_message(role, id, update.get("content"), false);
+            Some(UiRequest::Elicitation { request_id, params }) => {
+                match Elicitation::new(request_id.clone(), &params, window, cx) {
+                    Ok(question) => agent.elicitations.push(question),
+                    Err(message) => {
+                        let _ = agent.send(json!({"jsonrpc":"2.0","id":request_id,"error":{"code":-32602,"message":message}}));
                     }
                 }
-                Some("user_message_chunk" | "agent_message_chunk" | "agent_thought_chunk") => {
-                    if update["sessionUpdate"].as_str() != Some("user_message_chunk") {
-                        agent.awaiting_response = false;
-                    }
-                    if let Some(id) = update["messageId"].as_str() {
-                        let role = match update["sessionUpdate"].as_str() {
-                            Some("user_message_chunk") => Role::User,
-                            Some("agent_thought_chunk") => Role::Thought,
-                            _ => Role::Agent,
-                        };
-                        agent.upsert_message(role, id, update.get("content"), true);
-                    }
-                }
-                Some("tool_call_update") => {
-                    agent.awaiting_response = false;
-                    agent.upsert_tool_call(update);
-                }
-                Some("tool_call_content_chunk") => {
-                    agent.awaiting_response = false;
-                    if let Some(id) = update["toolCallId"].as_str() {
-                        let key = format!("tool:{id}");
-                        let content = content_text(&update["content"]["content"]);
-                        if let Some(entry) = agent
-                            .messages
-                            .iter_mut()
-                            .find(|entry| entry.key.as_deref() == Some(&key))
-                            && !content.is_empty()
-                        {
-                            entry.text.push('\n');
-                            entry.text.push_str(&content);
-                        }
-                    }
-                }
-                _ => {}
             }
-            return;
-        }
-        match update["sessionUpdate"].as_str() {
-            Some("agent_message_chunk") => {
-                agent.awaiting_response = false;
-                if let Some(text) = update["content"]["text"].as_str() {
-                    if let Some(last) = agent.messages.last_mut()
-                        && matches!(last.role, Role::Agent)
-                    {
-                        last.text.push_str(text);
-                        return;
-                    }
-                    agent.log(Role::Agent, text);
-                }
-            }
-            Some("tool_call" | "tool_call_update") => {
-                agent.awaiting_response = false;
-                agent.upsert_tool_call(update);
-            }
-            _ => {}
+            None => {}
         }
     }
 
     fn refresh_pending_sync_counts(&mut self, cx: &mut Context<Self>) {
-        if !self.sync_loading
+        if !self.sync.loading
             && self
-                .sync_refresh_pending
+                .sync
+                .refresh_pending
                 .iter()
-                .any(|key| !self.sync_in_progress.contains(key))
+                .any(|key| !self.sync.in_progress.contains(key))
         {
             self.refresh_branches(cx);
         }
@@ -1153,53 +659,7 @@ impl Workspace {
         if changed {
             cx.notify();
         }
-        if !self.sync_loading {
-            let fetch_upstream = self.last_upstream_fetch.elapsed() >= Duration::from_secs(300);
-            if fetch_upstream {
-                self.last_upstream_fetch = Instant::now();
-            }
-            let refresh_remote =
-                fetch_upstream || self.last_remote_sync.elapsed() >= Duration::from_secs(30);
-            if refresh_remote {
-                self.last_remote_sync = Instant::now();
-            }
-            let mut projects = Vec::new();
-            for project in &self.projects {
-                let path = project.path.clone();
-                let host = project.ssh_host.clone();
-                let key = (path.clone(), host.clone());
-                if self.sync_in_progress.contains(&key)
-                    || !(refresh_remote
-                        || host.is_none()
-                        || self.sync_refresh_pending.contains(&key))
-                {
-                    continue;
-                }
-                let forced_fetch = self.sync_refresh_pending.remove(&key);
-                projects.push((path, host, fetch_upstream || forced_fetch));
-            }
-            projects.sort_by_key(|(_, host, _)| host.is_some());
-            self.sync_loading = true;
-            let tx = self.sync_tx.clone();
-            std::thread::spawn(move || {
-                for (path, host, fetch) in projects {
-                    let counts = host.as_ref().map_or_else(
-                        || {
-                            if fetch && !crate::git_sync::fetch(&path) {
-                                None
-                            } else {
-                                crate::git_sync::counts(&path)
-                            }
-                        },
-                        |host| crate::git_sync::remote_counts(host, &path, fetch),
-                    );
-                    if tx.send(SyncUpdate::Counts(path, host, counts)).is_err() {
-                        return;
-                    }
-                }
-                let _ = tx.send(SyncUpdate::Finished);
-            });
-        }
+        self.sync.schedule(&self.projects);
     }
 
     pub(super) fn start_git_sync(
@@ -1219,14 +679,14 @@ impl Workspace {
         let path = project.path.clone();
         let host = project.ssh_host.clone();
         let key = (path.clone(), host.clone());
-        if !self.sync_in_progress.insert(key) {
+        if !self.sync.in_progress.insert(key) {
             return;
         }
         self.notice = Some(match action {
             crate::git_sync::SyncAction::Push => "Pushing commits…".into(),
             crate::git_sync::SyncAction::Pull => "Pulling commits…".into(),
         });
-        let tx = self.sync_tx.clone();
+        let tx = self.sync.tx.clone();
         std::thread::spawn(move || {
             let result = crate::git_sync::sync(&path, host.as_deref(), action);
             if result.is_err() && host.is_none() {
@@ -1249,14 +709,16 @@ impl Workspace {
 
     pub(super) fn poll_sync_counts(&mut self, cx: &mut Context<Self>) {
         let mut changed = false;
-        while let Ok(update) = self.sync_rx.try_recv() {
+        while let Ok(update) = self.sync.rx.try_recv() {
             match update {
                 SyncUpdate::Counts(path, host, counts) => {
                     if self
-                        .sync_in_progress
+                        .sync
+                        .in_progress
                         .contains(&(path.clone(), host.clone()))
                         || self
-                            .sync_refresh_pending
+                            .sync
+                            .refresh_pending
                             .contains(&(path.clone(), host.clone()))
                     {
                         continue;
@@ -1279,8 +741,8 @@ impl Workspace {
                     counts,
                 } => {
                     let key = (path.clone(), host.clone());
-                    self.sync_in_progress.remove(&key);
-                    if !self.sync_refresh_pending.contains(&key)
+                    self.sync.in_progress.remove(&key);
+                    if !self.sync.refresh_pending.contains(&key)
                         && let Some(project) = self
                             .projects
                             .iter_mut()
@@ -1297,7 +759,7 @@ impl Workspace {
                     });
                     changed = true;
                 }
-                SyncUpdate::Finished => self.sync_loading = false,
+                SyncUpdate::Finished => self.sync.loading = false,
             }
         }
         if changed {
@@ -1314,7 +776,8 @@ mod tests {
     #[test]
     fn advertises_form_questions_to_v1_and_v2_agents() {
         let params = initialize_params();
-        let v2: v2::InitializeRequest = serde_json::from_value(params.clone()).unwrap();
+        let v2: agent_client_protocol_schema::v2::InitializeRequest =
+            serde_json::from_value(params.clone()).unwrap();
         assert!(v2.capabilities.elicitation.unwrap().supports_form());
         let v1: agent_client_protocol_schema::v1::InitializeRequest =
             serde_json::from_value(params).unwrap();

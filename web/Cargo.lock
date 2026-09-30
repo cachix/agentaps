@@ -146,6 +146,7 @@ version = "0.1.0"
 dependencies = [
  "agentaps-control-protocol",
  "async-channel",
+ "futures-lite",
  "getrandom 0.4.3",
  "gpui-kit",
  "iroh",

@@ -8,17 +8,7 @@ pub(super) fn tool_run_end(messages: &[ChatEntry], start: usize) -> usize {
     end
 }
 
-pub(super) fn tool_title_and_status(text: &str) -> (&str, Option<&str>) {
-    let headline = text.lines().next().unwrap_or(text);
-    let Some((title, status)) = headline.rsplit_once(" · ") else {
-        return (headline, None);
-    };
-    if matches!(status, "pending" | "in_progress" | "completed" | "failed") {
-        (title, Some(status))
-    } else {
-        (headline, None)
-    }
-}
+pub(super) use crate::session::tool_title_and_status;
 
 pub(super) fn markdown_code_block(text: &str) -> String {
     let fence_size = text

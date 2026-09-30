@@ -51,3 +51,7 @@ toml = "1.1"
 [dev-dependencies]
 gpui-kit = { version = "=0.7.0", features = ["test-support"] }
 tempfile = "3"
+
+[workspace]
+members = ["crates/control-protocol"]
+exclude = ["web", "crates/gpui-kit-reqwest-compat"]

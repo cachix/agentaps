@@ -137,27 +137,32 @@ impl Workspace {
         let agent = &self.projects[project_index].agents[agent_index];
         let rows = chat_rows(
             agent,
-            &self.collapsed_tool_groups,
-            &self.expanded_tool_history,
-            &self.expanded_tool_rows,
+            &self.conversation.collapsed_tool_groups,
+            &self.conversation.expanded_tool_history,
+            &self.conversation.expanded_tool_rows,
         );
 
-        if self.chat_list_agent != Some(agent.config.id) {
-            self.chat_list.reset(rows.len());
-            self.chat_list_agent = Some(agent.config.id);
-        } else if let Some((range, count)) = changed_row_range(&self.chat_rows, &rows) {
-            let near_bottom = self.chat_list.scroll_px_offset_for_scrollbar().y
-                + self.chat_list.max_offset_for_scrollbar().y
+        if self.conversation.chat_list_agent != Some(agent.config.id) {
+            self.conversation.chat_list.reset(rows.len());
+            self.conversation.chat_list_agent = Some(agent.config.id);
+        } else if let Some((range, count)) = changed_row_range(&self.conversation.chat_rows, &rows)
+        {
+            let near_bottom = self
+                .conversation
+                .chat_list
+                .scroll_px_offset_for_scrollbar()
+                .y
+                + self.conversation.chat_list.max_offset_for_scrollbar().y
                 <= px(24.);
-            self.chat_list.splice(range, count);
+            self.conversation.chat_list.splice(range, count);
             if near_bottom {
-                self.chat_list.scroll_to(gpui_kit::ListOffset {
+                self.conversation.chat_list.scroll_to(gpui_kit::ListOffset {
                     item_ix: rows.len(),
                     offset_in_item: px(0.),
                 });
             }
         }
-        self.chat_rows = rows;
+        self.conversation.chat_rows = rows;
     }
 
     pub(super) fn render_chat_row(
@@ -349,7 +354,7 @@ impl Workspace {
                                                 cx.background_executor()
                                                     .timer(Duration::from_secs(2))
                                                     .await;
-                                                _ = copy_state.update(cx, |state, cx| {
+                                                copy_state.update(cx, |state, cx| {
                                                     state.copied = false;
                                                     cx.notify();
                                                 });

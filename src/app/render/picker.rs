@@ -7,13 +7,13 @@ impl Workspace {
         };
         let is_folders = matches!(step, PickerStep::Folders | PickerStep::ChangeFolder { .. });
         let changing_folder = matches!(step, PickerStep::ChangeFolder { .. });
-        let query = self.picker_input.read(cx).value().to_string();
+        let query = self.picker.input.read(cx).value().to_string();
         let mut results = div().flex().flex_col().gap_1();
         if is_folders {
-            let matches = self.folder_search.results();
+            let matches = self.picker.folder_search.results();
             if matches.is_empty() {
                 results = results.child(div().p_5().text_sm().text_color(rgb(MUTED)).child(
-                    if self.folder_search.searching() {
+                    if self.picker.folder_search.searching() {
                         "Searching recent folders…"
                     } else {
                         "No matching recent folders. Enter a local absolute path or ssh://host/absolute/path."
@@ -36,7 +36,7 @@ impl Workspace {
                         .flex()
                         .items_center()
                         .gap_3()
-                        .bg(rgb(if index == self.picker_selection {
+                        .bg(rgb(if index == self.picker.selection {
                             SELECTED
                         } else {
                             SURFACE
@@ -98,7 +98,7 @@ impl Workspace {
                         .flex()
                         .items_center()
                         .gap_3()
-                        .bg(rgb(if index == self.picker_selection {
+                        .bg(rgb(if index == self.picker.selection {
                             SELECTED
                         } else {
                             SURFACE
@@ -142,7 +142,7 @@ impl Workspace {
                 );
             }
             if !query.trim().is_empty() {
-                let custom_selected = self.picker_selection == match_count;
+                let custom_selected = self.picker.selection == match_count;
                 results = results.child(
                     div()
                         .id("custom-agent")
@@ -285,7 +285,7 @@ impl Workspace {
                                 .border_color(rgb(BORDER))
                                 .bg(rgb(SURFACE))
                                 .p_2()
-                                .child(Input::new(&self.picker_input).cleanable(true)),
+                                .child(Input::new(&self.picker.input).cleanable(true)),
                         )
                         .when(is_folders, |element| {
                             element.child(

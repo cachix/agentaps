@@ -114,11 +114,12 @@ impl Default for Config {
 }
 
 fn config_base() -> Result<PathBuf, String> {
-    let base = std::env::var_os("XDG_CONFIG_HOME")
-        .map(PathBuf::from)
-        .or_else(|| std::env::var_os("HOME").map(|home| PathBuf::from(home).join(".config")))
-        .ok_or("HOME and XDG_CONFIG_HOME are unset")?;
-    Ok(base)
+    use etcetera::base_strategy::{BaseStrategy, choose_base_strategy};
+    // XDG on Unix preserves existing Linux and macOS locations; Windows uses
+    // its known-folder API and does not require HOME to be set.
+    choose_base_strategy()
+        .map(|strategy| strategy.config_dir())
+        .map_err(|error| error.to_string())
 }
 
 pub fn path() -> Result<PathBuf, String> {
@@ -126,17 +127,41 @@ pub fn path() -> Result<PathBuf, String> {
 }
 
 pub fn load() -> Result<(Config, bool), String> {
-    load_from_base(&config_base()?)
+    let base = config_base()?;
+    #[cfg(windows)]
+    {
+        // Only Windows changes platform location. An explicit Unix XDG root
+        // must not fall back to a different workspace under HOME.
+        let mut legacy_bases = Vec::new();
+        if let Some(xdg) = std::env::var_os("XDG_CONFIG_HOME") {
+            legacy_bases.push(PathBuf::from(xdg));
+        }
+        if let Some(home) = std::env::var_os("HOME") {
+            legacy_bases.push(PathBuf::from(home).join(".config"));
+        }
+        load_from_locations(&base, &legacy_bases)
+    }
+    #[cfg(not(windows))]
+    {
+        load_from_locations(&base, &[])
+    }
 }
 
+#[cfg(test)]
 fn load_from_base(base: &Path) -> Result<(Config, bool), String> {
+    load_from_locations(base, &[])
+}
+
+fn load_from_locations(base: &Path, legacy_bases: &[PathBuf]) -> Result<(Config, bool), String> {
     let current = base.join("agentaps").join("config.json");
     let legacy = base.join("devenv-terminal").join("config.json");
-    let (path, needs_migration) = if current.exists() {
-        (current, false)
-    } else if legacy.exists() {
-        (legacy, true)
-    } else {
+    let candidates = std::iter::once((current, false))
+        .chain(std::iter::once((legacy, true)))
+        .chain(legacy_bases.iter().flat_map(|base| {
+            ["agentaps", "devenv-terminal"].map(|name| (base.join(name).join("config.json"), true))
+        }));
+    let Some((path, needs_migration)) = candidates.into_iter().find(|(path, _)| path.exists())
+    else {
         return Ok((Config::default(), false));
     };
     let config = serde_json::from_slice(&fs::read(&path).map_err(|error| error.to_string())?)
@@ -144,8 +169,7 @@ fn load_from_base(base: &Path) -> Result<(Config, bool), String> {
     Ok((config, needs_migration))
 }
 
-pub fn save(config: &Config) -> Result<(), String> {
-    let path = path()?;
+pub(crate) fn save_to(path: &Path, config: &Config) -> Result<(), String> {
     fs::create_dir_all(path.parent().unwrap()).map_err(|error| error.to_string())?;
     let data = serde_json::to_vec_pretty(config).map_err(|error| error.to_string())?;
     let temporary = path.with_extension(format!("json.{}.tmp", std::process::id()));
@@ -167,7 +191,8 @@ pub fn save(config: &Config) -> Result<(), String> {
     }
     file.write_all(&data).map_err(|error| error.to_string())?;
     file.sync_all().map_err(|error| error.to_string())?;
-    fs::rename(&temporary, &path).map_err(|error| error.to_string())
+    drop(file);
+    fs::rename(&temporary, path).map_err(|error| error.to_string())
 }
 
 #[cfg(test)]
@@ -175,6 +200,76 @@ mod tests {
     use super::*;
 
     use std::time::{SystemTime, UNIX_EPOCH};
+
+    #[test]
+    fn migrates_old_platform_location_without_overriding_native_config() {
+        let temp = tempfile::tempdir().unwrap();
+        let native = temp.path().join("native");
+        let old = temp.path().join("old");
+        let old_path = old.join("agentaps/config.json");
+        fs::create_dir_all(old_path.parent().unwrap()).unwrap();
+        fs::write(&old_path, r#"{"sidebar_order":[7]}"#).unwrap();
+        let (config, migrate) = load_from_locations(&native, std::slice::from_ref(&old)).unwrap();
+        assert_eq!(config.sidebar_order, vec![7]);
+        assert!(migrate);
+        save_to(&native.join("agentaps/config.json"), &Config::default()).unwrap();
+        let (config, migrate) = load_from_locations(&native, &[old]).unwrap();
+        assert!(config.sidebar_order.is_empty());
+        assert!(!migrate);
+    }
+
+    #[test]
+    fn replaces_saved_config_and_keeps_private_permissions() {
+        let temp = tempfile::tempdir().unwrap();
+        let path = temp.path().join("agentaps/config.json");
+        save_to(&path, &Config::default()).unwrap();
+        let expected = Config {
+            sidebar_order: vec![9],
+            ..Config::default()
+        };
+        save_to(&path, &expected).unwrap();
+        let actual: Config = serde_json::from_slice(&fs::read(&path).unwrap()).unwrap();
+        assert_eq!(actual.sidebar_order, vec![9]);
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            assert_eq!(
+                fs::metadata(&path).unwrap().permissions().mode() & 0o777,
+                0o600
+            );
+        }
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn windows_config_does_not_require_unix_environment() {
+        const CHILD: &str = "AGENTAPS_CONFIG_TEST_ROOT";
+        if let Some(root) = std::env::var_os(CHILD) {
+            assert_eq!(
+                path().unwrap(),
+                PathBuf::from(root).join("agentaps/config.json")
+            );
+            return;
+        }
+        // Environment removal occurs only in the child, keeping parallel tests safe.
+        let temp = tempfile::tempdir().unwrap();
+        let result = std::process::Command::new(std::env::current_exe().unwrap())
+            .args([
+                "--exact",
+                "config::tests::windows_config_does_not_require_unix_environment",
+            ])
+            .env_remove("HOME")
+            .env_remove("XDG_CONFIG_HOME")
+            .env("APPDATA", temp.path())
+            .env(CHILD, temp.path())
+            .output()
+            .unwrap();
+        assert!(
+            result.status.success(),
+            "{}",
+            String::from_utf8_lossy(&result.stderr)
+        );
+    }
 
     #[test]
     fn loads_legacy_config_only_when_new_config_is_absent() {

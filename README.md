@@ -60,7 +60,7 @@ For local Claude ACP sessions, Agentaps uses the Claude Code CLI found on `PATH`
 
 - Web Connect shows the latest 100 messages per session and shortens long messages. It does not yet offer diff review or ACP form questions.
 - URL based elicitation, ACP client file system and terminal methods, and built in authentication are not yet supported. Agents that require those client features may not work.
-- Session data is stored at `$XDG_CONFIG_HOME/agentaps/config.json`, or `~/.config/agentaps/config.json` when `XDG_CONFIG_HOME` is unset. Closing the app can interrupt an active turn.
+- Session data is stored at `$XDG_CONFIG_HOME/agentaps/config.json`, or `~/.config/agentaps/config.json` when `XDG_CONFIG_HOME` is unset, on Linux and macOS. Windows uses its roaming application data directory (`%APPDATA%/agentaps/config.json`). Existing configurations migrate automatically. Closing the app can interrupt an active turn.
 
 ## License
 

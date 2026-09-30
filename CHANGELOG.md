@@ -6,6 +6,7 @@ Notable changes to Agentaps are recorded here.
 
 ### Added
 
+- Pull requests and main branch changes run formatting, strict lint checks, and desktop tests on Linux, macOS, and Windows, plus browser protection tests and a complete WASM website build.
 - CI checks that the devenv shell starts on Linux and macOS.
 - A View menu offers Zoom In, Zoom Out, and Reset Zoom (Cmd+=, Cmd+-, Cmd+0 on macOS, Ctrl on other platforms) to enlarge or shrink the app font size, remembered across restarts.
 - `agentaps --version` prints the installed version without opening the desktop app.
@@ -14,6 +15,8 @@ Notable changes to Agentaps are recorded here.
 
 ### Fixed
 
+- Windows saves sessions in its platform configuration directory without requiring `HOME`; existing configurations remain available through migration.
+- Saving conversation history no longer blocks the UI on serialization or disk writes, coalesces waiting saves, and backs off after storage errors.
 - Restored zoom now scales markdown code blocks, keeps multiline composers within the available space, and leaves other notices and save errors visible.
 - Zoom In, Zoom Out, and Reset Zoom now reach the workspace regardless of which element has focus, and each zoom change shows a notice with the new percentage that hides itself after a second and a half.
 - Zooming now visibly resizes the UI. The zoom level is written to the UI theme, whose font size the window applies on every frame; writing the window's rem size directly was overwritten before the next paint. Code text in the composer scales along.
@@ -27,6 +30,7 @@ Notable changes to Agentaps are recorded here.
 
 ### Changed
 
+- Desktop sessions use a UI-independent controller with common ACP updates; workspace components own their related state, and browser protection, transport, actions, and rendering live in separate modules.
 - Session headers show the full project path beside Diff instead of the Git branch. Selecting the path lets you move the session to another folder and reconnect the agent there with fresh context while keeping earlier messages visible.
 - Sidebar sessions show Git upstream counts in the agent status position when the agent has no active status.
 - Diff review opens beside the conversation with one compact row for the comparison and change totals, keeping chat and its composer available.

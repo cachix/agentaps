@@ -146,10 +146,13 @@ fn configure_claude_code_env(process: &mut Command, executable: std::path::PathB
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[cfg(unix)]
     use serde_json::json;
+    #[cfg(unix)]
     use std::time::Duration;
 
     #[test]
+    #[cfg(unix)]
     fn exchanges_json_rpc_lines_with_stdio_agent() {
         let script = "IFS= read -r request; printf '%s\\n' '{\"jsonrpc\":\"2.0\",\"id\":1,\"result\":{\"protocolVersion\":1}}'";
         let command = vec!["/bin/sh".into(), "-c".into(), script.into()];

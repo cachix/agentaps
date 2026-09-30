@@ -28,8 +28,8 @@ impl Workspace {
     ) -> Div {
         let tool_entries = &agent.messages[message_index..end];
         let group_key = (agent.config.id, message_index);
-        let expanded = !self.collapsed_tool_groups.contains(&group_key);
-        let history_expanded = self.expanded_tool_history.contains(&group_key);
+        let expanded = !self.conversation.collapsed_tool_groups.contains(&group_key);
+        let history_expanded = self.conversation.expanded_tool_history.contains(&group_key);
         let heading = tool_group_heading(tool_entries);
         let has_specific_actions = tool_entries
             .iter()
@@ -91,8 +91,8 @@ impl Workspace {
                     )
                 })
                 .on_click(cx.listener(move |this, _, _, cx| {
-                    if !this.collapsed_tool_groups.insert(group_key) {
-                        this.collapsed_tool_groups.remove(&group_key);
+                    if !this.conversation.collapsed_tool_groups.insert(group_key) {
+                        this.conversation.collapsed_tool_groups.remove(&group_key);
                     }
                     cx.notify();
                 })),
@@ -121,8 +121,8 @@ impl Workspace {
                         .child(format!("{completed_count} completed steps"))
                         .child(if history_expanded { "⌄" } else { "›" })
                         .on_click(cx.listener(move |this, _, _, cx| {
-                            if !this.expanded_tool_history.insert(group_key) {
-                                this.expanded_tool_history.remove(&group_key);
+                            if !this.conversation.expanded_tool_history.insert(group_key) {
+                                this.conversation.expanded_tool_history.remove(&group_key);
                             }
                             cx.notify();
                         })),
@@ -151,7 +151,7 @@ impl Workspace {
                     _ => ("•", MUTED, MUTED),
                 };
                 let row_key = (agent.config.id, message_index + offset);
-                let row_expanded = self.expanded_tool_rows.contains(&row_key);
+                let row_expanded = self.conversation.expanded_tool_rows.contains(&row_key);
                 let row_id: gpui_kit::ElementId = ("tool-row", agent.config.id).into();
                 let mut action = div().min_w(px(0.)).child(
                     div()
@@ -175,8 +175,8 @@ impl Workspace {
                             Tooltip::new("Show command and output").build(window, cx)
                         })
                         .on_click(cx.listener(move |this, _, _, cx| {
-                            if !this.expanded_tool_rows.insert(row_key) {
-                                this.expanded_tool_rows.remove(&row_key);
+                            if !this.conversation.expanded_tool_rows.insert(row_key) {
+                                this.conversation.expanded_tool_rows.remove(&row_key);
                             }
                             cx.notify();
                         })),

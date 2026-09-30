@@ -15,34 +15,26 @@ fn mobile_text(text: &str) -> String {
 
 impl Workspace {
     pub(super) fn mobile_link(&self) -> Option<String> {
-        let endpoint_id = self.mobile_endpoint_id.as_ref()?;
-        let token = self.mobile.as_ref()?.pairing_token.lock().ok()?.clone();
-        let base =
-            std::env::var("AGENTAPS_WEB_URL").unwrap_or_else(|_| "https://agentaps.dev/".into());
-        Some(format!(
-            "{}#{}:{token}",
-            base.trim_end_matches('#'),
-            endpoint_id
-        ))
+        self.mobile_access.link()
     }
 
     pub(super) fn show_mobile_link(&mut self, _window: &mut Window, cx: &mut Context<Self>) {
-        if self.mobile.is_none() {
-            self.mobile_pairing_visible = true;
-            if !self.mobile_loading {
+        if self.mobile_access.server.is_none() {
+            self.mobile_access.pairing_visible = true;
+            if !self.mobile_access.loading {
                 self.start_mobile(None);
             }
         } else if let Some(link) = self.mobile_link() {
             cx.write_to_clipboard(ClipboardItem::new_string(link.clone()));
-            self.mobile_qr = QrCode::new(link.as_bytes()).ok().map(|qr| {
+            self.mobile_access.qr = QrCode::new(link.as_bytes()).ok().map(|qr| {
                 qr.to_colors()
                     .chunks(qr.width())
                     .map(|row| row.iter().map(|color| *color == Color::Dark).collect())
                     .collect()
             });
-            self.mobile_pairing_visible = !self.mobile_pairing_visible;
+            self.mobile_access.pairing_visible = !self.mobile_access.pairing_visible;
             self.notice = Some(
-                if self.mobile_pairing_visible {
+                if self.mobile_access.pairing_visible {
                     "Mobile link copied. Scan the code or open the copied link on your phone."
                 } else {
                     "Mobile pairing code hidden. Mobile access is still on."
@@ -50,17 +42,17 @@ impl Workspace {
                 .into(),
             );
         } else {
-            self.mobile_pairing_visible = !self.mobile_pairing_visible;
+            self.mobile_access.pairing_visible = !self.mobile_access.pairing_visible;
             self.notice = Some("Mobile access is starting".into());
         }
         cx.notify();
     }
 
     fn start_mobile(&mut self, provider: Option<String>) {
-        self.mobile_loading = true;
-        self.mobile_provider_prompt = None;
+        self.mobile_access.loading = true;
+        self.mobile_access.provider_prompt = None;
         self.notice = None;
-        let sender = self.mobile_start_tx.clone();
+        let sender = self.mobile_access.start_tx.clone();
         std::thread::spawn(move || {
             let result = match provider {
                 Some(provider) => crate::mobile::start_with_provider(Some(&provider)),
@@ -72,7 +64,8 @@ impl Workspace {
 
     pub(super) fn use_mobile_provider(&mut self, cx: &mut Context<Self>) {
         let provider = self
-            .mobile_provider_input
+            .mobile_access
+            .provider_input
             .read(cx)
             .value()
             .trim()
@@ -82,11 +75,12 @@ impl Workspace {
 
     pub(super) fn use_mobile_provider_named(&mut self, provider: &str, cx: &mut Context<Self>) {
         if provider.is_empty() {
-            self.mobile_provider_prompt = Some("Enter a SecretSpec provider name or URI.".into());
+            self.mobile_access.provider_prompt =
+                Some("Enter a SecretSpec provider name or URI.".into());
             cx.notify();
             return;
         }
-        self.mobile_pairing_visible = true;
+        self.mobile_access.pairing_visible = true;
         self.start_mobile(Some(provider.to_owned()));
         cx.notify();
     }
@@ -100,13 +94,13 @@ impl Workspace {
     }
 
     pub(super) fn revoke_mobile_client(&mut self, id: String, cx: &mut Context<Self>) {
-        if self.mobile_revoke_confirm.as_deref() != Some(&id) {
-            self.mobile_revoke_confirm = Some(id);
+        if self.mobile_access.revoke_confirm.as_deref() != Some(&id) {
+            self.mobile_access.revoke_confirm = Some(id);
             cx.notify();
             return;
         }
-        self.mobile_revoke_confirm = None;
-        if let Some(server) = &self.mobile {
+        self.mobile_access.revoke_confirm = None;
+        if let Some(server) = &self.mobile_access.server {
             server.revoke_client(id);
             self.notice = Some("Revoking linked client…".into());
         }
@@ -114,21 +108,21 @@ impl Workspace {
     }
 
     pub(super) fn poll_mobile(&mut self, cx: &mut Context<Self>) {
-        if let Ok(result) = self.mobile_start_rx.try_recv() {
-            self.mobile_loading = false;
+        if let Ok(result) = self.mobile_access.start_rx.try_recv() {
+            self.mobile_access.loading = false;
             match result {
                 Ok(server) => {
-                    self.mobile = Some(server);
+                    self.mobile_access.server = Some(server);
                     self.notice = Some("Connecting mobile access…".into());
                 }
                 Err(error) => {
-                    self.mobile_pairing_visible = false;
-                    self.mobile_provider_prompt = Some(error);
+                    self.mobile_access.pairing_visible = false;
+                    self.mobile_access.provider_prompt = Some(error);
                 }
             }
             cx.notify();
         }
-        let Some(server) = &self.mobile else {
+        let Some(server) = &self.mobile_access.server else {
             return;
         };
         let statuses: Vec<_> = server.status.try_iter().collect();
@@ -140,10 +134,10 @@ impl Workspace {
         for status in statuses {
             match status {
                 Ok(endpoint_id) => {
-                    let already_ready = self.mobile_endpoint_id.is_some();
-                    self.mobile_endpoint_id = Some(endpoint_id);
+                    let already_ready = self.mobile_access.endpoint_id.is_some();
+                    self.mobile_access.endpoint_id = Some(endpoint_id);
                     if already_ready {
-                        self.mobile_qr = self.mobile_link().and_then(|link| {
+                        self.mobile_access.qr = self.mobile_link().and_then(|link| {
                             QrCode::new(link.as_bytes()).ok().map(|qr| {
                                 qr.to_colors()
                                     .chunks(qr.width())
@@ -155,7 +149,7 @@ impl Workspace {
                         });
                         self.notice = Some("Browser linked. A fresh pairing code is ready.".into());
                     } else if let Some(link) = self.mobile_link() {
-                        self.mobile_qr = QrCode::new(link.as_bytes()).ok().map(|qr| {
+                        self.mobile_access.qr = QrCode::new(link.as_bytes()).ok().map(|qr| {
                             qr.to_colors()
                                 .chunks(qr.width())
                                 .map(|row| row.iter().map(|color| *color == Color::Dark).collect())
@@ -170,9 +164,9 @@ impl Workspace {
             cx.notify();
         }
         if let Some(error) = startup_error {
-            self.mobile = None;
-            self.mobile_endpoint_id = None;
-            self.mobile_pairing_visible = false;
+            self.mobile_access.server = None;
+            self.mobile_access.endpoint_id = None;
+            self.mobile_access.pairing_visible = false;
             self.notice = Some(format!("Mobile access failed: {error}"));
             cx.notify();
             return;
@@ -194,19 +188,21 @@ impl Workspace {
         if handled_command
             || received_status
             || self
-                .last_mobile_snapshot
+                .mobile_access
+                .last_snapshot
                 .is_none_or(|last| last.elapsed() >= Duration::from_millis(500))
         {
             let snapshot = self.mobile_snapshot();
-            if let Some(server) = &self.mobile {
+            if let Some(server) = &self.mobile_access.server {
                 *server.snapshot.lock().unwrap() = snapshot;
             }
-            self.last_mobile_snapshot = Some(Instant::now());
+            self.mobile_access.last_snapshot = Some(Instant::now());
         }
     }
 
     fn mobile_snapshot(&self) -> Response {
         let mut agent_options: Vec<AgentOption> = self
+            .picker
             .available_agents
             .iter()
             .map(|agent| AgentOption {
@@ -343,7 +339,7 @@ impl Workspace {
                             ssh_host: ssh_host.clone(),
                             agents: Vec::new(),
                         });
-                        self.folder_search.add_recent(match &ssh_host {
+                        self.picker.folder_search.add_recent(match &ssh_host {
                             Some(host) => PathBuf::from(crate::remote::project_label(host, &path)),
                             None => path,
                         });
@@ -372,7 +368,7 @@ impl Workspace {
                     return Err("Could not send prompt".into());
                 }
                 agent.config.prompt_history.push(text);
-                self.dirty = true;
+                self.persistence.dirty = true;
                 cx.notify();
             }
             RemoteCommand::Cancel { agent_id } => {
@@ -382,10 +378,10 @@ impl Workspace {
                 if !agent.active_work || agent.cancel_requested {
                     return Err("Agent is not working".into());
                 }
-                let Some(session_id) = &agent.session_id else {
+                let Some(session_id) = &agent.controller.session_id else {
                     return Err("Agent is still connecting".into());
                 };
-                match agent.send(json!({"jsonrpc":"2.0","method":"session/cancel","params":{"sessionId":session_id}})) {
+                match agent.controller.send(json!({"jsonrpc":"2.0","method":"session/cancel","params":{"sessionId":session_id}})) {
                     Ok(()) => agent.cancel_requested = true,
                     Err(error) => {
                         agent.log(Role::System, format!("Could not stop agent: {error}"));
@@ -402,8 +398,10 @@ impl Workspace {
                 let Some(agent) = self.mobile_agent_mut(agent_id) else {
                     return Err("Session not found".into());
                 };
+                let request_id: Value = serde_json::from_str(&request_id)
+                    .map_err(|_| "Invalid permission request ID".to_owned())?;
                 let Some(index) = agent.permissions.iter().position(|permission| {
-                    permission.request_id.to_string() == request_id
+                    permission.request_id == request_id
                         && permission.options.iter().any(|(id, _)| *id == option_id)
                 }) else {
                     return Err("Permission request is no longer pending".into());

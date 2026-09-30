@@ -1,0 +1,69 @@
+name: Checks
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: checks-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  desktop:
+    name: Desktop checks (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-22.04, macos-15, windows-2022]
+    steps:
+      - uses: actions/checkout@v5
+      - name: Install Linux libraries
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            pkg-config libfontconfig-dev libfreetype6-dev \
+            libxkbcommon-dev libxkbcommon-x11-dev libwayland-dev libx11-dev \
+            libxcb-shape0-dev libxcb-xfixes0-dev libxcb-randr0-dev \
+            libxcb-xinput-dev libegl1-mesa-dev libgles2-mesa-dev libglib2.0-dev
+      - name: Install Rust toolchain
+        shell: bash
+        run: |
+          rustup toolchain install 1.97.1 --profile minimal --component rustfmt --component clippy
+          rustup default 1.97.1
+      - name: Check formatting
+        shell: bash
+        run: |
+          cargo fmt --all -- --check
+          cargo fmt --manifest-path web/Cargo.toml -- --check
+          cargo fmt --manifest-path crates/control-protocol/Cargo.toml -- --check
+          cargo fmt --manifest-path crates/gpui-kit-reqwest-compat/Cargo.toml -- --check
+      - name: Check lints
+        run: cargo clippy --workspace --locked --all-targets -- -D warnings
+      - name: Test desktop
+        run: cargo test --workspace --locked
+
+  web:
+    name: Browser tests and WASM build
+    runs-on: ubuntu-22.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Test browser storage and protection
+        run: node web/tests/browser.mjs
+      - name: Build the website and Web Connect
+        run: bash web/cloudflare-build.sh
+      - name: Check WASM lints
+        run: |
+          rustup component add clippy
+          RUSTC_BOOTSTRAP=wasm_thread cargo clippy --manifest-path web/Cargo.toml --target wasm32-unknown-unknown --locked -- -D warnings

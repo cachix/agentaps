@@ -5,13 +5,14 @@ use gpui_kit::component::{Sizable, spinner::Spinner};
 impl Workspace {
     pub(super) fn render_diff(&self, panel: Div, cx: &mut Context<Self>) -> Div {
         let (added, removed) = self
-            .diff_file_stats
+            .diff
+            .file_stats
             .iter()
             .copied()
             .fold((0, 0), |total, count| {
                 (total.0 + count.0, total.1 + count.1)
             });
-        let files = self.diff_files.len();
+        let files = self.diff.files.len();
         let toolbar = div()
             .px_4()
             .py_2()
@@ -42,7 +43,7 @@ impl Workspace {
                     .flex()
                     .items_center()
                     .justify_center()
-                    .when(self.diff_loading, |slot| {
+                    .when(self.diff.loading, |slot| {
                         slot.child(Spinner::new().small().color(rgb(MUTED).into()))
                             .tooltip(|window, cx| {
                                 Tooltip::new("Loading checkout changes").build(window, cx)
@@ -85,22 +86,23 @@ impl Workspace {
                     .child("Close")
                     .on_click(cx.listener(|this, _, window, cx| {
                         this.close_diff();
-                        this.composer
+                        this.conversation
+                            .composer
                             .update(cx, |input, cx| input.focus(window, cx));
                         cx.notify();
                     })),
             );
         let panel = panel.child(toolbar);
-        let body = if let Some(error) = &self.diff_error {
+        let body = if let Some(error) = &self.diff.error {
             div()
                 .flex_1()
                 .p_4()
                 .text_color(rgb(ERROR_TEXT))
                 .child(format!("Could not load diff: {error}"))
                 .into_any_element()
-        } else if self.diff_loading && self.diff_files.is_empty() {
+        } else if self.diff.loading && self.diff.files.is_empty() {
             div().flex_1().into_any_element()
-        } else if self.diff_files.is_empty() {
+        } else if self.diff.files.is_empty() {
             div()
                 .flex_1()
                 .p_4()
@@ -109,21 +111,21 @@ impl Workspace {
                 .into_any_element()
         } else {
             let view = cx.entity().clone();
-            let rows = self.diff_rows.clone();
+            let rows = self.diff.rows.clone();
             div()
                 .flex_1()
                 .min_h(px(0.))
                 .relative()
                 .child(
                     div().id("diff-scroll").size_full().child(
-                        gpui_kit::list(self.diff_list.clone(), move |index, _, cx| {
+                        gpui_kit::list(self.diff.list.clone(), move |index, _, cx| {
                             view.update(cx, |this, cx| this.render_diff_list_row(&rows[index], cx))
                         })
                         .w_full()
                         .h_full(),
                     ),
                 )
-                .vertical_scrollbar(&self.diff_list)
+                .vertical_scrollbar(&self.diff.list)
                 .into_any_element()
         };
         panel.child(body)
@@ -240,7 +242,7 @@ impl Workspace {
         label: &'static str,
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
-        let selected = self.diff_presentation == presentation;
+        let selected = self.diff.presentation == presentation;
         div()
             .id(label)
             .px_2()
