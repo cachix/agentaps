@@ -162,6 +162,7 @@ fn session_search_score(
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum PickerStep {
     Folders,
+    ChangeFolder { session: SessionLocation },
     Agents { project_index: usize },
 }
 
@@ -226,6 +227,13 @@ impl WorkspaceView {
             Self::Archive {
                 return_to: Some(session),
             } if session == archived => Self::Archive { return_to: next },
+            Self::NewSession {
+                step: PickerStep::ChangeFolder { session },
+                ..
+            } if session == archived => Self::NewSession {
+                step: PickerStep::Folders,
+                return_to: next,
+            },
             Self::NewSession {
                 step,
                 return_to: Some(session),
@@ -974,7 +982,7 @@ impl Workspace {
                         if matches!(
                             this.view,
                             WorkspaceView::NewSession {
-                                step: PickerStep::Folders,
+                                step: PickerStep::Folders | PickerStep::ChangeFolder { .. },
                                 ..
                             }
                         ) {
@@ -1323,7 +1331,7 @@ impl Workspace {
     fn open_picker(&mut self, step: PickerStep, window: &mut Window, cx: &mut Context<Self>) {
         self.set_view(self.view.open_picker(step), window, cx);
         self.picker_selection = 0;
-        if step == PickerStep::Folders {
+        if matches!(step, PickerStep::Folders | PickerStep::ChangeFolder { .. }) {
             self.folder_search.set_query("");
         }
         self.picker_input.update(cx, |input, cx| {
@@ -1331,7 +1339,9 @@ impl Workspace {
             input.set_placeholder(
                 match step {
                     PickerStep::Agents { .. } => "Search installed agents or enter an ACP command…",
-                    PickerStep::Folders => "Search recent folders or enter a local or SSH path…",
+                    PickerStep::Folders | PickerStep::ChangeFolder { .. } => {
+                        "Search recent folders or enter a local or SSH path…"
+                    }
                 },
                 window,
                 cx,
@@ -1341,6 +1351,27 @@ impl Workspace {
         cx.notify();
     }
 
+    fn open_change_folder(
+        &mut self,
+        session: SessionLocation,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let agent = &self.projects[session.project_index].agents[session.agent_index];
+        if agent.active_work
+            || agent.config.was_working
+            || agent.config.active_prompt.is_some()
+            || !agent.config.pending_prompts.is_empty()
+        {
+            self.notice = Some(
+                "Wait for the agent and queued prompts to finish before changing folders".into(),
+            );
+            cx.notify();
+            return;
+        }
+        self.open_picker(PickerStep::ChangeFolder { session }, window, cx);
+    }
+
     fn back_from_picker(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         match self.view {
             WorkspaceView::NewSession {
@@ -1348,7 +1379,7 @@ impl Workspace {
                 ..
             } => self.open_picker(PickerStep::Folders, window, cx),
             WorkspaceView::NewSession {
-                step: PickerStep::Folders,
+                step: PickerStep::Folders | PickerStep::ChangeFolder { .. },
                 return_to: Some(session),
             } => {
                 self.set_view(WorkspaceView::Conversation(session), window, cx);
@@ -1378,7 +1409,7 @@ impl Workspace {
                 if !matches!(
                     this.view,
                     WorkspaceView::NewSession {
-                        step: PickerStep::Folders,
+                        step: PickerStep::Folders | PickerStep::ChangeFolder { .. },
                         ..
                     }
                 ) {
@@ -1527,6 +1558,25 @@ impl Workspace {
     }
 
     fn select_folder(&mut self, path: PathBuf, window: &mut Window, cx: &mut Context<Self>) {
+        if let WorkspaceView::NewSession {
+            step: PickerStep::ChangeFolder { session },
+            ..
+        } = self.view
+        {
+            let agent = &self.projects[session.project_index].agents[session.agent_index];
+            if agent.active_work
+                || agent.config.was_working
+                || agent.config.active_prompt.is_some()
+                || !agent.config.pending_prompts.is_empty()
+            {
+                self.notice = Some(
+                    "Wait for the agent and queued prompts to finish before changing folders"
+                        .into(),
+                );
+                cx.notify();
+                return;
+            }
+        }
         let (path, ssh_host) = match crate::remote::parse_project(&path.to_string_lossy()) {
             Ok(Some(remote)) => (remote.path, Some(remote.host)),
             Ok(None) => match path.canonicalize() {
@@ -1565,7 +1615,15 @@ impl Workspace {
             self.projects.len() - 1
         };
         self.notice = None;
-        self.open_picker(PickerStep::Agents { project_index }, window, cx);
+        if let WorkspaceView::NewSession {
+            step: PickerStep::ChangeFolder { session },
+            ..
+        } = self.view
+        {
+            self.move_session_to_project(session, project_index, window, cx);
+        } else {
+            self.open_picker(PickerStep::Agents { project_index }, window, cx);
+        }
     }
 
     fn start_agent(
@@ -1716,7 +1774,7 @@ impl Workspace {
     fn confirm_picker(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         match self.view {
             WorkspaceView::NewSession {
-                step: PickerStep::Folders,
+                step: PickerStep::Folders | PickerStep::ChangeFolder { .. },
                 ..
             } => {
                 if let Some(path) = self
@@ -1869,7 +1927,9 @@ impl Workspace {
             return;
         };
         let count = match step {
-            PickerStep::Folders => self.folder_search.results().len(),
+            PickerStep::Folders | PickerStep::ChangeFolder { .. } => {
+                self.folder_search.results().len()
+            }
             PickerStep::Agents { .. } => {
                 self.agent_results(cx).len()
                     + usize::from(!self.picker_input.read(cx).value().trim().is_empty())

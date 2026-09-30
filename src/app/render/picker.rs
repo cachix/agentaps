@@ -5,7 +5,8 @@ impl Workspace {
         let WorkspaceView::NewSession { step, return_to } = self.view else {
             return chat;
         };
-        let is_folders = step == PickerStep::Folders;
+        let is_folders = matches!(step, PickerStep::Folders | PickerStep::ChangeFolder { .. });
+        let changing_folder = matches!(step, PickerStep::ChangeFolder { .. });
         let query = self.picker_input.read(cx).value().to_string();
         let mut results = div().flex().flex_col().gap_1();
         if is_folders {
@@ -176,9 +177,10 @@ impl Workspace {
         }
         let project_path = match step {
             PickerStep::Agents { project_index } => self.projects.get(project_index),
+            PickerStep::ChangeFolder { session } => self.projects.get(session.project_index),
             PickerStep::Folders => None,
         }
-        .map(|project| project.path.display().to_string())
+        .map(ProjectView::display_path)
         .unwrap_or_default();
         chat = chat.child(
             div()
@@ -207,7 +209,11 @@ impl Workspace {
                                         .text_xs()
                                         .font_weight(gpui_kit::FontWeight::SEMIBOLD)
                                         .text_color(rgb(ACCENT))
-                                        .child("NEW SESSION"),
+                                        .child(if changing_folder {
+                                            "SESSION FOLDER"
+                                        } else {
+                                            "NEW SESSION"
+                                        }),
                                 )
                                 .when(!is_folders || return_to.is_some(), |element| {
                                     element.child(
@@ -234,18 +240,24 @@ impl Workspace {
                                 .text_2xl()
                                 .font_weight(gpui_kit::FontWeight::SEMIBOLD)
                                 .text_color(rgb(TEXT))
-                                .child(if is_folders {
+                                .child(if changing_folder {
+                                    "Change session folder"
+                                } else if is_folders {
                                     "Choose a project"
                                 } else {
                                     "Choose an agent"
                                 }),
                         )
                         .child(div().text_sm().text_color(rgb(MUTED)).child(if is_folders {
-                            "Choose a local folder, select a recent project, or enter a local or SSH path."
+                            if changing_folder {
+                                "Choose a local or SSH folder. The agent will reconnect there with fresh context; earlier messages stay visible."
+                            } else {
+                                "Choose a local folder, select a recent project, or enter a local or SSH path."
+                            }
                         } else {
                             "Select an installed agent or enter an ACP command."
                         }))
-                        .when(!is_folders, |element| {
+                        .when(!is_folders || changing_folder, |element| {
                             element.child(
                                 div()
                                     .min_w(px(0.))

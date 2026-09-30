@@ -13,11 +13,6 @@ impl Workspace {
         let project = &self.projects[project_index];
         let agent = &project.agents[agent_index];
         let (added, removed) = self.diff_counts.unwrap_or_default();
-        let viewport_width = f32::from(window.viewport_size().width);
-        let sidebar_width = (viewport_width * self.sidebar_fraction).max(180.);
-        let chat_width =
-            (viewport_width - sidebar_width - 6.) / if self.diff_visible { 2. } else { 1. };
-        let stacked_header = chat_width < 560.;
         let available_agents = self.available_agents.clone();
         let current_command = agent.config.command.clone();
         let current_name = agent.name.clone();
@@ -92,16 +87,7 @@ impl Workspace {
                         .scrollable(true)
                 }),
         );
-        let project_name = project
-            .path
-            .file_name()
-            .map(|name| name.to_string_lossy().into_owned())
-            .unwrap_or_else(|| project.display_path());
-        let location = if project.branch.is_empty() {
-            project_name
-        } else {
-            format!("{project_name} · {}", project.branch)
-        };
+        let location = project.display_path();
         let can_reset = agent
             .context
             .is_some_and(|(used, size)| used > 0 && size > 0);
@@ -123,21 +109,6 @@ impl Workspace {
                         .font_weight(gpui_kit::FontWeight::MEDIUM)
                         .text_color(rgb(TEXT))
                         .child(title.clone()),
-                )
-            })
-            .when(!stacked_header, |element| {
-                element.child(
-                    div()
-                        .id("project-path")
-                        .min_w(px(0.))
-                        .truncate()
-                        .text_xs()
-                        .text_color(rgb(MUTED))
-                        .child(location)
-                        .tooltip({
-                            let path = project.display_path();
-                            move |window, cx| Tooltip::new(path.clone()).build(window, cx)
-                        }),
                 )
             });
         let menu_view = cx.entity().clone();
@@ -180,9 +151,35 @@ impl Workspace {
             });
         let project_controls = div()
             .flex()
-            .flex_shrink_0()
+            .flex_1()
+            .min_w(px(0.))
             .items_center()
+            .justify_end()
             .gap_2()
+            .child(
+                div()
+                    .id("project-path")
+                    .min_w(px(0.))
+                    .truncate()
+                    .text_xs()
+                    .text_color(rgb(MUTED))
+                    .cursor_pointer()
+                    .hover(|style| style.text_color(rgb(TEXT)))
+                    .child(location.clone())
+                    .tooltip(move |window, cx| {
+                        Tooltip::new(format!("Change folder: {location}")).build(window, cx)
+                    })
+                    .on_click(cx.listener(move |this, _, window, cx| {
+                        this.open_change_folder(
+                            SessionLocation {
+                                project_index,
+                                agent_index,
+                            },
+                            window,
+                            cx,
+                        );
+                    })),
+            )
             .child(
                 div()
                     .id("open-diff")

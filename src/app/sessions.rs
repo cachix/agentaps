@@ -38,6 +38,73 @@ fn update_session_settings(agent: &mut AgentView, result: &Value) {
 }
 
 impl Workspace {
+    pub(super) fn move_session_to_project(
+        &mut self,
+        session: SessionLocation,
+        target_project_index: usize,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        if session.project_index == target_project_index {
+            self.set_view(WorkspaceView::Conversation(session), window, cx);
+            self.composer
+                .update(cx, |input, cx| input.focus(window, cx));
+            cx.notify();
+            return;
+        }
+
+        let source = &self.projects[session.project_index].agents[session.agent_index];
+        let old_id = source.config.id;
+        let new_id = self.next_agent_id;
+        let mut messages = source.messages.clone();
+        messages.push(ChatEntry {
+            role: Role::System,
+            key: None,
+            text: format!(
+                "Folder changed to {}. Earlier messages remain visible, but the agent starts with fresh context.",
+                self.projects[target_project_index].display_path()
+            ),
+        });
+        let mut config = source.reset_config(new_id, messages);
+        config.title = source.config.title.clone();
+
+        self.projects[session.project_index]
+            .agents
+            .remove(session.agent_index);
+        let agent_index = self.projects[target_project_index].agents.len();
+        self.projects[target_project_index]
+            .agents
+            .push(AgentView::new(config));
+        self.next_agent_id += 1;
+        if let Some(id) = self.sidebar_order.iter_mut().find(|id| **id == old_id) {
+            *id = new_id;
+        }
+        if let Some(composer) = self.session_composers.remove(&old_id) {
+            self.session_composers.insert(new_id, composer);
+        }
+        self.deferred_connections.retain(|id| *id != old_id);
+        self.collapsed_tool_groups.retain(|(id, _)| *id != old_id);
+        self.expanded_tool_history.retain(|(id, _)| *id != old_id);
+        self.expanded_tool_rows.retain(|(id, _)| *id != old_id);
+        self.chat_list_agent = None;
+        self.chat_rows.clear();
+
+        self.set_view(
+            WorkspaceView::Conversation(SessionLocation {
+                project_index: target_project_index,
+                agent_index,
+            }),
+            window,
+            cx,
+        );
+        self.connect(target_project_index, agent_index);
+        self.notice = None;
+        self.persist();
+        self.composer
+            .update(cx, |input, cx| input.focus(window, cx));
+        cx.notify();
+    }
+
     pub(super) fn select_config_option(
         &mut self,
         project_index: usize,

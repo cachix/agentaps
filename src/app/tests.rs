@@ -127,6 +127,17 @@ fn workspace_view_keeps_sidebar_selection_exclusive() {
     assert_eq!(folders.displayed_session(), None);
     assert_eq!(folders.return_to(), Some(first));
 
+    let changing_folder = conversation.open_picker(PickerStep::ChangeFolder { session: first });
+    assert_eq!(changing_folder.return_to(), Some(first));
+    assert_eq!(changing_folder.displayed_session(), None);
+    assert_eq!(
+        changing_folder.session_archived(first, Some(second)),
+        WorkspaceView::NewSession {
+            step: PickerStep::Folders,
+            return_to: Some(second),
+        }
+    );
+
     let agents = folders.open_picker(PickerStep::Agents { project_index: 0 });
     assert_eq!(agents.highlighted_session(), None);
     assert_eq!(agents.return_to(), Some(first));

@@ -27,6 +27,7 @@ Notable changes to Agentaps are recorded here.
 
 ### Changed
 
+- Session headers show the full project path beside Diff instead of the Git branch. Selecting the path lets you move the session to another folder and reconnect the agent there with fresh context while keeping earlier messages visible.
 - Sidebar sessions show Git upstream counts in the agent status position when the agent has no active status.
 - Diff review opens beside the conversation with one compact row for the comparison and change totals, keeping chat and its composer available.
 - The message composer grows with pasted or typed multiline text up to most of the window height, then scrolls within the composer.
