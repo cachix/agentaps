@@ -4,9 +4,87 @@ use agentaps_control_protocol::{
     ALPN, AgentOption, Command, MAX_RESPONSE_BYTES, Project, Request, Response,
 };
 use async_channel::{Receiver, Sender};
-use iroh::{Endpoint, EndpointId, endpoint::presets};
+use iroh::{
+    Endpoint, EndpointId, RelayConfig, RelayMap, RelayMode, RelayUrl, TransportAddr,
+    address_lookup::{
+        AddressLookup, AddressLookupBuilder, AddressLookupBuilderError, EndpointData, EndpointInfo,
+        Error as AddressLookupError, Item, PkarrPublisher, PkarrResolver,
+    },
+    endpoint::{BindError, presets},
+};
+use n0_future::{StreamExt, boxed::BoxStream};
 use wasm_bindgen::JsValue;
 use wasm_bindgen_futures::JsFuture;
+
+// Safari cannot connect to hostnames with a trailing dot, and n0's default relay URLs all end in
+// one. Use dot-free copies for this browser's relays and for relays the desktop publishes.
+fn without_trailing_dot(relay: &RelayUrl) -> RelayUrl {
+    let Some(host) = relay.host_str().and_then(|host| host.strip_suffix('.')) else {
+        return relay.clone();
+    };
+    let mut url = (**relay).clone();
+    match url.set_host(Some(host)) {
+        Ok(()) => RelayUrl::from(url),
+        Err(_) => relay.clone(),
+    }
+}
+
+#[derive(Debug)]
+struct DotlessRelays<T>(T);
+
+#[derive(Debug)]
+struct DotlessRelaysBuilder<T>(T);
+
+impl<T: AddressLookupBuilder> AddressLookupBuilder for DotlessRelaysBuilder<T> {
+    fn into_address_lookup(
+        self,
+        endpoint: &Endpoint,
+    ) -> Result<impl AddressLookup, AddressLookupBuilderError> {
+        Ok(DotlessRelays(self.0.into_address_lookup(endpoint)?))
+    }
+}
+
+impl<T: AddressLookup> AddressLookup for DotlessRelays<T> {
+    fn resolve(
+        &self,
+        endpoint_id: EndpointId,
+    ) -> Option<BoxStream<Result<Item, AddressLookupError>>> {
+        let items = self.0.resolve(endpoint_id)?.map(|item| {
+            item.map(|item| {
+                let mut data = EndpointData::new(
+                    item.addrs()
+                        .map(|addr| match addr {
+                            TransportAddr::Relay(relay) => {
+                                TransportAddr::Relay(without_trailing_dot(relay))
+                            }
+                            addr => addr.clone(),
+                        })
+                        .collect(),
+                );
+                data.set_user_data(item.user_data());
+                Item::new(
+                    EndpointInfo::from_parts(item.endpoint_id(), data),
+                    item.provenance(),
+                    item.last_updated(),
+                )
+            })
+        });
+        Some(Box::pin(items))
+    }
+}
+
+async fn bind_endpoint() -> Result<Endpoint, BindError> {
+    let relays: Vec<RelayUrl> = iroh::defaults::prod::default_relay_map().urls();
+    let relays = relays
+        .iter()
+        .map(|relay| RelayConfig::from(without_trailing_dot(relay)));
+    Endpoint::builder(presets::Minimal)
+        .address_lookup(PkarrPublisher::n0_dns())
+        .address_lookup(DotlessRelaysBuilder(PkarrResolver::n0_dns()))
+        .relay_mode(RelayMode::Custom(RelayMap::from_iter(relays)))
+        .bind()
+        .await
+}
 
 pub(super) async fn request(
     endpoint: &Endpoint,
@@ -44,7 +122,7 @@ pub(super) async fn exchange_pairing(
     remote: EndpointId,
     pairing_token: &str,
 ) -> Result<String, JsValue> {
-    let endpoint = Endpoint::bind(presets::N0)
+    let endpoint = bind_endpoint()
         .await
         .map_err(|error| JsValue::from_str(&error.to_string()))?;
     let response = request(&endpoint, remote, pairing_token, Command::Pair).await;
@@ -78,24 +156,22 @@ pub(super) async fn run(
     events: Sender<ClientEvent>,
     cancel: Receiver<()>,
 ) {
-    let endpoint = match futures_lite::future::race(
-        async { Endpoint::bind(presets::N0).await.map(Some) },
-        async {
+    let endpoint =
+        match futures_lite::future::race(async { bind_endpoint().await.map(Some) }, async {
             let _ = cancel.recv().await;
             Ok(None)
-        },
-    )
-    .await
-    {
-        Ok(Some(endpoint)) => endpoint,
-        Ok(None) => return,
-        Err(error) => {
-            let _ = events
-                .send(ClientEvent::Error(format!("Could not start Iroh: {error}")))
-                .await;
-            return;
-        }
-    };
+        })
+        .await
+        {
+            Ok(Some(endpoint)) => endpoint,
+            Ok(None) => return,
+            Err(error) => {
+                let _ = events
+                    .send(ClientEvent::Error(format!("Could not start Iroh: {error}")))
+                    .await;
+                return;
+            }
+        };
     let work = async {
         loop {
             if pageHidden() {

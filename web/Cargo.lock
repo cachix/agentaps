@@ -151,6 +151,7 @@ dependencies = [
  "gpui-kit",
  "iroh",
  "js-sys",
+ "n0-future",
  "rqrr",
  "serde",
  "serde_json",
