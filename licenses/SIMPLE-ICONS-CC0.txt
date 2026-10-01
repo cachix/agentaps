@@ -1,0 +1,8 @@
+Agent logos in assets/agents come from Simple Icons 16.33.0
+https://github.com/simple-icons/simple-icons
+
+Simple Icons releases its SVG files under CC0 1.0 Universal.
+https://creativecommons.org/publicdomain/zero/1.0/
+
+The logos remain trademarks of their respective owners and are used only to
+identify the matching agents.

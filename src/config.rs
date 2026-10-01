@@ -1,6 +1,7 @@
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::{
+    collections::BTreeMap,
     fs,
     io::Write,
     path::{Path, PathBuf},
@@ -210,6 +211,34 @@ pub struct Config {
     pub sidebar_fraction: f32,
     #[serde(default = "default_font_scale")]
     pub font_scale: f32,
+    #[serde(default, deserialize_with = "known_or_default")]
+    pub send_key: SendKey,
+    #[serde(default)]
+    pub reduced_motion: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub font: Option<String>,
+    #[serde(default)]
+    pub thoughts_expanded: bool,
+    #[serde(default = "default_tool_activity_expanded")]
+    pub tool_activity_expanded: bool,
+    #[serde(default, deserialize_with = "known_or_default")]
+    pub diff_layout: crate::diff_view::Presentation,
+    #[serde(default = "default_notifications")]
+    pub notifications: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub claude_executable: Option<String>,
+    #[serde(
+        default,
+        skip_serializing_if = "BTreeMap::is_empty",
+        deserialize_with = "known_agents_only"
+    )]
+    pub agent_executables: BTreeMap<KnownAgent, String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub saved_agents: Vec<SavedAgent>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub web_connect_url: Option<String>,
+    #[serde(default, deserialize_with = "known_or_default")]
+    pub theme_source: ThemeSource,
 }
 
 fn default_sidebar_fraction() -> f32 {
@@ -220,6 +249,82 @@ fn default_font_scale() -> f32 {
     1.0
 }
 
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum SendKey {
+    #[default]
+    Enter,
+    ShiftEnter,
+    CtrlEnter,
+    AltEnter,
+}
+
+impl SendKey {
+    pub const ALL: [Self; 4] = [
+        Self::Enter,
+        Self::ShiftEnter,
+        Self::CtrlEnter,
+        Self::AltEnter,
+    ];
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum KnownAgent {
+    Codex,
+    Claude,
+    GeminiCli,
+    OpenCode,
+}
+
+impl KnownAgent {
+    pub const ALL: [Self; 4] = [Self::Codex, Self::Claude, Self::GeminiCli, Self::OpenCode];
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SavedAgent {
+    pub name: String,
+    pub command: Vec<String>,
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ThemeSource {
+    #[default]
+    Automatic,
+    Gtk,
+    Qt,
+}
+
+fn default_tool_activity_expanded() -> bool {
+    true
+}
+
+fn default_notifications() -> bool {
+    true
+}
+
+fn known_agents_only<'de, D: serde::Deserializer<'de>>(
+    deserializer: D,
+) -> Result<BTreeMap<KnownAgent, String>, D::Error> {
+    Ok(BTreeMap::<String, String>::deserialize(deserializer)?
+        .into_iter()
+        .filter_map(|(agent, path)| {
+            serde_json::from_value(Value::String(agent))
+                .ok()
+                .map(|agent| (agent, path))
+        })
+        .collect())
+}
+
+fn known_or_default<'de, D, T>(deserializer: D) -> Result<T, D::Error>
+where
+    D: serde::Deserializer<'de>,
+    T: serde::de::DeserializeOwned + Default,
+{
+    Ok(serde_json::from_value(Value::deserialize(deserializer)?).unwrap_or_default())
+}
+
 impl Default for Config {
     fn default() -> Self {
         Self {
@@ -228,6 +333,18 @@ impl Default for Config {
             sidebar_order: Vec::new(),
             sidebar_fraction: default_sidebar_fraction(),
             font_scale: default_font_scale(),
+            send_key: SendKey::default(),
+            reduced_motion: false,
+            font: None,
+            thoughts_expanded: false,
+            tool_activity_expanded: default_tool_activity_expanded(),
+            diff_layout: crate::diff_view::Presentation::default(),
+            notifications: default_notifications(),
+            claude_executable: None,
+            agent_executables: BTreeMap::new(),
+            saved_agents: Vec::new(),
+            web_connect_url: None,
+            theme_source: ThemeSource::default(),
         }
     }
 }
@@ -510,6 +627,18 @@ mod tests {
         assert!(old.sidebar_order.is_empty());
         assert_eq!(old.font_scale, 1.0);
         assert_eq!(old.theme, crate::appearance::Choice::Agentaps);
+        assert_eq!(old.send_key, SendKey::Enter);
+        assert!(!old.reduced_motion);
+        assert!(old.font.is_none());
+        assert!(!old.thoughts_expanded);
+        assert!(old.tool_activity_expanded);
+        assert_eq!(old.diff_layout, crate::diff_view::Presentation::Unified);
+        assert!(old.notifications);
+        assert!(old.claude_executable.is_none());
+        assert!(old.saved_agents.is_empty());
+        assert!(old.agent_executables.is_empty());
+        assert!(old.web_connect_url.is_none());
+        assert_eq!(old.theme_source, ThemeSource::Automatic);
 
         let config = Config {
             projects: vec![],
@@ -517,6 +646,21 @@ mod tests {
             sidebar_fraction: 0.32,
             font_scale: 1.25,
             theme: crate::appearance::Choice::SolarizedLight,
+            send_key: SendKey::ShiftEnter,
+            reduced_motion: true,
+            font: Some("Inter".into()),
+            thoughts_expanded: true,
+            tool_activity_expanded: false,
+            diff_layout: crate::diff_view::Presentation::Split,
+            notifications: false,
+            claude_executable: Some("/opt/claude".into()),
+            agent_executables: BTreeMap::from([(KnownAgent::OpenCode, "/opt/opencode".into())]),
+            saved_agents: vec![SavedAgent {
+                name: "Wrapped Codex".into(),
+                command: vec!["codex-wrapper".into(), "--acp".into()],
+            }],
+            web_connect_url: Some("https://example.test/".into()),
+            theme_source: ThemeSource::Qt,
         };
         let restored: Config =
             serde_json::from_slice(&serde_json::to_vec(&config).unwrap()).unwrap();
@@ -524,6 +668,31 @@ mod tests {
         assert_eq!(restored.sidebar_fraction, 0.32);
         assert_eq!(restored.font_scale, 1.25);
         assert_eq!(restored.theme, crate::appearance::Choice::SolarizedLight);
+        assert_eq!(restored.send_key, SendKey::ShiftEnter);
+        assert!(restored.reduced_motion);
+        assert_eq!(restored.font.as_deref(), Some("Inter"));
+        assert!(restored.thoughts_expanded);
+        assert!(!restored.tool_activity_expanded);
+        assert_eq!(restored.diff_layout, crate::diff_view::Presentation::Split);
+        assert!(!restored.notifications);
+        assert_eq!(restored.claude_executable.as_deref(), Some("/opt/claude"));
+        assert_eq!(restored.saved_agents, config.saved_agents);
+        assert_eq!(restored.agent_executables, config.agent_executables);
+        assert_eq!(
+            restored.web_connect_url.as_deref(),
+            Some("https://example.test/")
+        );
+        assert_eq!(restored.theme_source, ThemeSource::Qt);
+
+        let unknown: Config = serde_json::from_str(
+            r#"{"send_key":"double_tap","agent_executables":{"future_agent":"/x","codex":"/opt/codex"}}"#,
+        )
+        .unwrap();
+        assert_eq!(unknown.send_key, SendKey::Enter);
+        assert_eq!(
+            unknown.agent_executables,
+            BTreeMap::from([(KnownAgent::Codex, "/opt/codex".into())])
+        );
     }
 
     #[test]

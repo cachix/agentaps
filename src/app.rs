@@ -1,9 +1,10 @@
 use crate::acp::{Connection, Event};
 use crate::config::{
-    AgentConfig, ChatEntry, ChatFile, ChatImage, Config, ProjectConfig, Prompt, Role, SlashCommand,
+    AgentConfig, ChatEntry, ChatFile, ChatImage, Config, KnownAgent, ProjectConfig, Prompt, Role,
+    SavedAgent, SendKey, SlashCommand, ThemeSource,
 };
 use crate::diff_view::{File as DiffFile, Presentation as DiffPresentation, Row as DiffRow};
-use crate::discovery::{AgentChoice, installed_agents, score};
+use crate::discovery::{AgentChoice, installed_agents, known_agent, score};
 use crate::file_search::{FileSearch, scan_project};
 use crate::folder_search::FolderSearch;
 use crate::images::ImageStore;
@@ -32,7 +33,7 @@ use gpui_kit::{
 };
 use serde_json::{Value, json};
 use std::{
-    collections::{HashMap, HashSet},
+    collections::{BTreeMap, HashMap, HashSet},
     path::{Path, PathBuf},
     sync::{
         Arc,
@@ -48,15 +49,17 @@ use state::*;
 mod assets;
 mod elicitation;
 mod mobile;
+mod notifications;
 mod render;
 mod sessions;
+mod settings;
 #[cfg(test)]
 mod tests;
 mod tool_activity;
 
 use self::{agent::*, elicitation::*, tool_activity::*};
 use crate::session::*;
-use assets::AppAssets;
+use assets::{AppAssets, agent_icon};
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 enum Notice {
@@ -138,6 +141,8 @@ actions!(workspace, [QuickOpen, ZoomIn, ZoomOut, ZoomReset, Quit]);
 // Zoom scales the UI by editing these on the global Theme, because the
 // gpui-component Root plugin resets window rem_size to theme.font_size
 // before every frame, discarding direct window.set_rem_size calls.
+const APP_IDENTIFIER: &str = "dev.agentaps.app";
+const DEFAULT_WEB_CONNECT_URL: &str = "https://agentaps.dev/";
 const BASE_FONT_SIZE: f32 = 16.;
 const BASE_MONO_FONT_SIZE: f32 = 13.;
 const MIN_FONT_SCALE: f32 = 0.75;
@@ -461,6 +466,17 @@ struct Workspace {
     sidebar_fraction: f32,
     font_scale: f32,
     theme_choice: crate::appearance::Choice,
+    send_key: SendKey,
+    reduced_motion: bool,
+    font: Option<String>,
+    diff_layout: DiffPresentation,
+    notifications: bool,
+    claude_executable: Option<String>,
+    agent_executables: BTreeMap<KnownAgent, String>,
+    saved_agents: Vec<SavedAgent>,
+    web_connect_url: Option<String>,
+    theme_source: ThemeSource,
+    settings: Option<settings::SettingsPage>,
     conversation: ConversationState,
     next_agent_id: u64,
     events_tx: Sender<Event>,
@@ -549,6 +565,34 @@ fn compact_tokens(tokens: u64) -> String {
     }
 }
 
+fn enter_sends_prompt(send_key: SendKey, action: &Enter) -> bool {
+    match send_key {
+        SendKey::ShiftEnter => !action.secondary && action.shift,
+        SendKey::CtrlEnter => action.secondary,
+        SendKey::Enter | SendKey::AltEnter => false,
+    }
+}
+
+fn is_alt_enter(keystroke: &gpui_kit::Keystroke) -> bool {
+    let modifiers = &keystroke.modifiers;
+    keystroke.key == "enter" && modifiers.alt && !modifiers.shift && !modifiers.secondary()
+}
+
+fn agent_choices(
+    saved_agents: &[SavedAgent],
+    executables: &BTreeMap<KnownAgent, String>,
+) -> Vec<AgentChoice> {
+    saved_agents
+        .iter()
+        .map(|agent| AgentChoice {
+            name: agent.name.clone(),
+            detail: "Saved in settings".into(),
+            command: agent.command.clone(),
+        })
+        .chain(installed_agents(executables))
+        .collect()
+}
+
 fn submitted_prompt(value: &str) -> String {
     value.strip_suffix('\n').unwrap_or(value).to_owned()
 }
@@ -621,7 +665,7 @@ impl Workspace {
                     InputEvent::PressEnter {
                         secondary: false,
                         shift: false,
-                    } => this.send_prompt(window, cx),
+                    } if this.send_key == SendKey::Enter => this.send_prompt(window, cx),
                     _ => {}
                 }
             },
@@ -638,7 +682,11 @@ impl Workspace {
                 let composer = if self.conversation.session_composers.is_empty() {
                     self.conversation.composer.clone()
                 } else {
-                    let composer = ConversationState::new_composer(window, cx);
+                    let composer = ConversationState::new_composer(
+                        self.send_key == SendKey::Enter,
+                        window,
+                        cx,
+                    );
                     self.subscribe_composer(&composer, window, cx);
                     composer
                 };
@@ -799,7 +847,9 @@ impl Workspace {
     }
 
     fn mark_displayed_agent_viewed(&mut self) {
-        if let Some(session) = self.view.displayed_session() {
+        if self.settings.is_none()
+            && let Some(session) = self.view.displayed_session()
+        {
             self.projects[session.project_index].agents[session.agent_index].mark_viewed();
         }
     }
@@ -814,7 +864,6 @@ impl Workspace {
         let mobile_provider_input = cx.new(|cx| {
             InputState::new(window, cx).placeholder("keyring, onepassword, or provider URI")
         });
-        let composer = ConversationState::new_composer(window, cx);
         let _subscriptions = vec![
             cx.subscribe_in(
                 &mobile_provider_input,
@@ -915,9 +964,12 @@ impl Workspace {
             1.0
         };
         let theme_choice = config.theme;
+        crate::appearance::set_font(config.font.clone().map(Into::into), cx);
+        crate::theming::set_source(config.theme_source, cx);
         if let Err(error) = crate::appearance::select(theme_choice, font_scale, cx) {
             eprintln!("could not apply theme: {error:#}");
         }
+        cx.set_reduce_motion(config.reduced_motion);
         let (composer_viewport_height, composer_base_line_height) =
             ConversationState::composer_geometry(window);
         let composer_max_rows = ConversationState::composer_max_rows(
@@ -925,9 +977,8 @@ impl Workspace {
             composer_base_line_height,
             font_scale,
         );
-        composer.update(cx, |input, cx| {
-            input.set_auto_grow(1, composer_max_rows, cx)
-        });
+        let composer =
+            ConversationState::new_composer(config.send_key == SendKey::Enter, window, cx);
         let projects: Vec<ProjectView> = config
             .projects
             .into_iter()
@@ -974,6 +1025,17 @@ impl Workspace {
             sidebar_fraction,
             font_scale,
             theme_choice,
+            send_key: config.send_key,
+            reduced_motion: config.reduced_motion,
+            font: config.font.clone(),
+            diff_layout: config.diff_layout,
+            notifications: config.notifications,
+            claude_executable: config.claude_executable.clone(),
+            agent_executables: config.agent_executables.clone(),
+            saved_agents: config.saved_agents.clone(),
+            web_connect_url: config.web_connect_url.clone(),
+            theme_source: config.theme_source,
+            settings: None,
             conversation: ConversationState {
                 renaming: None,
                 composer,
@@ -987,10 +1049,12 @@ impl Workspace {
                 chat_list: ListState::new(0, ListAlignment::Bottom, px(300.)),
                 chat_list_agent: None,
                 chat_rows: Vec::new(),
-                collapsed_tool_groups: HashSet::new(),
+                toggled_tool_groups: HashSet::new(),
                 expanded_tool_history: HashSet::new(),
                 expanded_tool_rows: HashSet::new(),
-                expanded_thought_rows: HashSet::new(),
+                toggled_thought_rows: HashSet::new(),
+                thoughts_expanded: config.thoughts_expanded,
+                tool_activity_expanded: config.tool_activity_expanded,
                 prompt_recall: None,
                 slash_selection: 0,
                 slash_dismissed: false,
@@ -1010,7 +1074,7 @@ impl Workspace {
             picker: PickerState {
                 folder_search,
                 folder_dialog_open: false,
-                available_agents: installed_agents(),
+                available_agents: agent_choices(&config.saved_agents, &config.agent_executables),
                 selection: 0,
                 input: picker_input,
             },
@@ -1032,7 +1096,7 @@ impl Workspace {
             diff: DiffState {
                 visible: false,
                 selected_file: None,
-                presentation: crate::diff_view::Presentation::Unified,
+                presentation: config.diff_layout,
                 rows: Arc::new(Vec::new()),
                 list: ListState::new(0, ListAlignment::Top, px(28.)),
                 tx: diff_tx,
@@ -1078,6 +1142,18 @@ impl Workspace {
             }));
         let composer = this.conversation.composer.clone();
         this.subscribe_composer(&composer, window, cx);
+        let workspace = cx.entity().downgrade();
+        let window_handle = window.window_handle();
+        cx.on_system_notification_response(move |response, cx| {
+            let workspace = workspace.clone();
+            window_handle
+                .update(cx, |_, window, cx| {
+                    workspace.update(cx, |this, cx| {
+                        this.open_notified_session(&response.tag, window, cx)
+                    })
+                })
+                .ok();
+        });
         this._subscriptions
             .push(cx.observe_window_bounds(window, |this, window, cx| {
                 (
@@ -1233,6 +1309,18 @@ impl Workspace {
             sidebar_fraction: self.sidebar_fraction,
             font_scale: self.font_scale,
             theme: self.theme_choice,
+            send_key: self.send_key,
+            reduced_motion: self.reduced_motion,
+            font: self.font.clone(),
+            thoughts_expanded: self.conversation.thoughts_expanded,
+            tool_activity_expanded: self.conversation.tool_activity_expanded,
+            diff_layout: self.diff_layout,
+            notifications: self.notifications,
+            claude_executable: self.claude_executable.clone(),
+            agent_executables: self.agent_executables.clone(),
+            saved_agents: self.saved_agents.clone(),
+            web_connect_url: self.web_connect_url.clone(),
+            theme_source: self.theme_source,
         }
     }
 
@@ -1734,19 +1822,26 @@ impl Workspace {
         self.open_picker(PickerStep::Folders, window, cx);
     }
 
-    fn zoom_in(&mut self, _: &ZoomIn, _window: &mut Window, cx: &mut Context<Self>) {
+    fn zoom_in(&mut self, _: &ZoomIn, window: &mut Window, cx: &mut Context<Self>) {
         self.set_font_scale(self.font_scale + FONT_SCALE_STEP, cx);
+        self.sync_settings_text_size(window, cx);
     }
 
-    fn zoom_out(&mut self, _: &ZoomOut, _window: &mut Window, cx: &mut Context<Self>) {
+    fn zoom_out(&mut self, _: &ZoomOut, window: &mut Window, cx: &mut Context<Self>) {
         self.set_font_scale(self.font_scale - FONT_SCALE_STEP, cx);
+        self.sync_settings_text_size(window, cx);
     }
 
-    fn zoom_reset(&mut self, _: &ZoomReset, _window: &mut Window, cx: &mut Context<Self>) {
+    fn zoom_reset(&mut self, _: &ZoomReset, window: &mut Window, cx: &mut Context<Self>) {
         self.set_font_scale(1.0, cx);
+        self.sync_settings_text_size(window, cx);
     }
 
-    fn select_theme(&mut self, choice: crate::appearance::Choice, cx: &mut Context<Self>) {
+    pub(super) fn select_theme(
+        &mut self,
+        choice: crate::appearance::Choice,
+        cx: &mut Context<Self>,
+    ) {
         match crate::appearance::select(choice, self.font_scale, cx) {
             Ok(()) => {
                 self.theme_choice = choice;
@@ -1806,6 +1901,14 @@ impl Workspace {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
+        if self.send_key == SendKey::AltEnter
+            && is_alt_enter(&event.keystroke)
+            && self.composer_focused(window, cx)
+        {
+            cx.stop_propagation();
+            self.send_prompt(window, cx);
+            return;
+        }
         if self
             .sidebar_search
             .read(cx)
@@ -1962,19 +2065,21 @@ impl Workspace {
         cx.notify();
     }
 
+    fn composer_focused(&self, window: &Window, cx: &App) -> bool {
+        self.conversation
+            .composer
+            .read(cx)
+            .focus_handle(cx)
+            .is_focused(window)
+    }
+
     fn handle_slash_action(
         &mut self,
         action: SlashAction,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        if !self
-            .conversation
-            .composer
-            .read(cx)
-            .focus_handle(cx)
-            .is_focused(window)
-        {
+        if !self.composer_focused(window, cx) {
             return;
         }
         let files = self.file_results(cx);
@@ -2040,6 +2145,9 @@ impl Workspace {
     }
 
     fn handle_escape(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if self.settings.is_some() {
+            return;
+        }
         if self.conversation.renaming.is_some() {
             self.finish_rename_session(false, cx);
             self.conversation
@@ -2127,6 +2235,7 @@ pub(crate) fn run() {
     gpui_kit::application()
         .with_assets(AppAssets)
         .run(|cx: &mut App| {
+            cx.set_app_identity(APP_IDENTIFIER, "Agentaps");
             gpui_kit::init(cx);
             cx.bind_keys([KeyBinding::new(
                 "ctrl-enter",
@@ -2166,6 +2275,9 @@ pub(crate) fn run() {
                 KeyBinding::new("ctrl--", ZoomOut, None),
                 KeyBinding::new("ctrl-0", ZoomReset, None),
             ]);
+            if let Ok((config, _)) = config::load() {
+                crate::theming::set_source(config.theme_source, cx);
+            }
             crate::theming::initialize(cx);
             crate::appearance::initialize(cx);
             let bounds = Bounds::centered(None, size(px(1200.), px(760.)), cx);
@@ -2183,24 +2295,25 @@ pub(crate) fn run() {
             .expect("Could not open GPUI window");
             // App-level handlers so View menu items and shortcuts reach the
             // workspace regardless of which element holds focus.
-            let (_, workspace) = window_handle;
-            let workspace_out = workspace.clone();
-            let workspace_reset = workspace.clone();
-            cx.on_action(move |_: &ZoomIn, cx| {
-                workspace.update(cx, |this, cx| {
-                    this.set_font_scale(this.font_scale + FONT_SCALE_STEP, cx);
+            let (window_handle, workspace) = window_handle;
+            fn on_zoom<A: gpui_kit::Action>(
+                window_handle: gpui_kit::AnyWindowHandle,
+                workspace: Entity<Workspace>,
+                zoom: fn(&mut Workspace, &A, &mut Window, &mut Context<Workspace>),
+                cx: &mut App,
+            ) {
+                cx.on_action(move |action: &A, cx| {
+                    let workspace = workspace.clone();
+                    window_handle
+                        .update(cx, |_, window, cx| {
+                            workspace.update(cx, |this, cx| zoom(this, action, window, cx))
+                        })
+                        .ok();
                 });
-            });
-            cx.on_action(move |_: &ZoomOut, cx| {
-                workspace_out.update(cx, |this, cx| {
-                    this.set_font_scale(this.font_scale - FONT_SCALE_STEP, cx);
-                });
-            });
-            cx.on_action(move |_: &ZoomReset, cx| {
-                workspace_reset.update(cx, |this, cx| {
-                    this.set_font_scale(1.0, cx);
-                });
-            });
+            }
+            on_zoom(window_handle, workspace.clone(), Workspace::zoom_in, cx);
+            on_zoom(window_handle, workspace.clone(), Workspace::zoom_out, cx);
+            on_zoom(window_handle, workspace, Workspace::zoom_reset, cx);
             cx.activate(true);
         });
 }

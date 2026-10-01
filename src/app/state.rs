@@ -64,10 +64,12 @@ pub(super) struct ConversationState {
     pub(super) chat_list: ListState,
     pub(super) chat_list_agent: Option<u64>,
     pub(super) chat_rows: Vec<ChatRow>,
-    pub(super) collapsed_tool_groups: HashSet<(u64, usize)>,
+    pub(super) toggled_tool_groups: HashSet<(u64, usize)>,
     pub(super) expanded_tool_history: HashSet<(u64, usize)>,
     pub(super) expanded_tool_rows: HashSet<(u64, usize)>,
-    pub(super) expanded_thought_rows: HashSet<(u64, usize)>,
+    pub(super) toggled_thought_rows: HashSet<(u64, usize)>,
+    pub(super) thoughts_expanded: bool,
+    pub(super) tool_activity_expanded: bool,
     pub(super) prompt_recall: Option<PromptRecall>,
     pub(super) slash_selection: usize,
     pub(super) slash_dismissed: bool,
@@ -227,6 +229,7 @@ impl ConversationState {
     }
 
     pub(super) fn new_composer(
+        submit_on_enter: bool,
         window: &mut Window,
         cx: &mut Context<Workspace>,
     ) -> Entity<TextareaState> {
@@ -238,7 +241,7 @@ impl ConversationState {
                     1,
                     Self::composer_max_rows(viewport_height, base_line_height, font_scale),
                 )
-                .submit_on_enter(true)
+                .submit_on_enter(submit_on_enter)
                 .placeholder("Ask your agent…")
         })
     }
@@ -250,13 +253,17 @@ impl ConversationState {
             return;
         }
         self.max_rows = max_rows;
-        self.composer
-            .update(cx, |input, cx| input.set_auto_grow(1, max_rows, cx));
-        for composer in self.session_composers.values() {
-            if composer.entity_id() != self.composer.entity_id() {
-                composer.update(cx, |input, cx| input.set_auto_grow(1, max_rows, cx));
-            }
+        for composer in self.composers() {
+            composer.update(cx, |input, cx| input.set_auto_grow(1, max_rows, cx));
         }
+    }
+
+    pub(super) fn composers(&self) -> impl Iterator<Item = &Entity<TextareaState>> {
+        std::iter::once(&self.composer).chain(
+            self.session_composers
+                .values()
+                .filter(|composer| composer.entity_id() != self.composer.entity_id()),
+        )
     }
 }
 
@@ -289,11 +296,13 @@ impl PickerState {
 }
 
 impl MobileState {
-    pub(super) fn link(&self) -> Option<String> {
+    pub(super) fn link(&self, web_connect_url: Option<&str>) -> Option<String> {
         let endpoint_id = self.endpoint_id.as_ref()?;
         let token = self.server.as_ref()?.pairing_token.lock().ok()?.clone();
-        let base =
-            std::env::var("AGENTAPS_WEB_URL").unwrap_or_else(|_| "https://agentaps.dev/".into());
+        let base = std::env::var("AGENTAPS_WEB_URL")
+            .ok()
+            .or_else(|| web_connect_url.map(str::to_owned))
+            .unwrap_or_else(|| DEFAULT_WEB_CONNECT_URL.into());
         Some(format!(
             "{}#{}:{token}",
             base.trim_end_matches('#'),

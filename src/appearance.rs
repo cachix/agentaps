@@ -6,7 +6,7 @@ use anyhow::Result;
 use gpui_kit::component::theme::Theme;
 #[cfg(test)]
 use gpui_kit::component::theme::ThemeMode;
-use gpui_kit::{App, Global, Hsla};
+use gpui_kit::{App, Global, Hsla, SharedString};
 use native_theme_gpui::{AccessibilityPreferences, ColorMode};
 
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq, serde::Serialize, serde::Deserialize)]
@@ -94,6 +94,7 @@ impl Choice {
 struct Preferences {
     choice: Choice,
     scale: f32,
+    font: Option<SharedString>,
     system_theme: Theme,
     system_input: Hsla,
 }
@@ -134,6 +135,9 @@ fn resolve(choice: Choice, system: &Theme, system_input: Hsla) -> Result<(Theme,
     } else {
         gpui_kit::component::highlighter::HighlightTheme::default_light()
     };
+    theme.switch = theme.muted_foreground;
+    theme.switch_thumb = theme.background;
+    theme.tokens = (&theme.colors).into();
     Ok((theme, input))
 }
 
@@ -141,6 +145,7 @@ pub(crate) fn initialize(cx: &mut App) {
     cx.set_global(Preferences {
         choice: Choice::default(),
         scale: 1.,
+        font: None,
         system_theme: Theme::global(cx).clone(),
         system_input: crate::theming::input_background(cx),
     });
@@ -157,6 +162,9 @@ pub(crate) fn select(choice: Choice, scale: f32, cx: &mut App) -> Result<()> {
     }
     let preferences = cx.global::<Preferences>();
     let (mut theme, input) = resolve(choice, &preferences.system_theme, preferences.system_input)?;
+    if let Some(font) = &preferences.font {
+        theme.font_family = font.clone();
+    }
     // Keep zoom independent of the selected palette and native font metrics.
     crate::app::set_theme_font_scale(&mut theme, scale);
     theme.scrollbar_mode = gpui_kit::component::scroll::ScrollbarMode::Always;
@@ -168,6 +176,13 @@ pub(crate) fn select(choice: Choice, scale: f32, cx: &mut App) -> Result<()> {
     preferences.scale = scale;
     cx.refresh_windows();
     Ok(())
+}
+
+pub(crate) fn set_font(font: Option<SharedString>, cx: &mut App) {
+    if !cx.has_global::<Preferences>() {
+        initialize(cx);
+    }
+    cx.global_mut::<Preferences>().font = font;
 }
 
 pub(crate) fn set_scale(scale: f32, cx: &mut App) {
@@ -197,6 +212,14 @@ mod tests {
         cx.update(|cx| {
             gpui_kit::init(cx);
             initialize(cx);
+            select(Choice::Dracula, 1.4, cx).unwrap();
+            for choice in Choice::all() {
+                select(choice, 1., cx).unwrap();
+                let theme = Theme::global(cx);
+                assert_eq!(theme.switch, theme.muted_foreground, "{choice:?}");
+                assert_eq!(theme.switch_thumb, theme.background, "{choice:?}");
+                assert_eq!(theme.tokens.switch.color, theme.switch, "{choice:?}");
+            }
             select(Choice::Dracula, 1.4, cx).unwrap();
             let dracula = Theme::global(cx).background;
             Theme::change(ThemeMode::Light, None, cx);

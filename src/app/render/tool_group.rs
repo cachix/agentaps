@@ -29,7 +29,8 @@ impl Workspace {
         let palette = theme::palette(cx);
         let tool_entries = &agent.messages[message_index..end];
         let group_key = (agent.config.id, message_index);
-        let expanded = !self.conversation.collapsed_tool_groups.contains(&group_key);
+        let expanded = self.conversation.tool_activity_expanded
+            != self.conversation.toggled_tool_groups.contains(&group_key);
         let history_expanded = self.conversation.expanded_tool_history.contains(&group_key);
         let heading = tool_group_heading(tool_entries);
         let has_specific_actions = tool_entries
@@ -93,8 +94,8 @@ impl Workspace {
                     )
                 })
                 .on_click(cx.listener(move |this, _, _, cx| {
-                    if !this.conversation.collapsed_tool_groups.insert(group_key) {
-                        this.conversation.collapsed_tool_groups.remove(&group_key);
+                    if !this.conversation.toggled_tool_groups.insert(group_key) {
+                        this.conversation.toggled_tool_groups.remove(&group_key);
                     }
                     cx.notify();
                 })),

@@ -25,6 +25,7 @@ impl Connection {
         command: &[String],
         cwd: &Path,
         ssh_host: Option<&str>,
+        claude_executable: Option<&Path>,
         events: Sender<Event>,
     ) -> Result<Self, String> {
         let (program, args) = command.split_first().ok_or("Agent command is empty")?;
@@ -55,6 +56,7 @@ impl Connection {
         if ssh_host.is_none() && uses_claude_agent_acp(command) {
             let claude = std::env::var_os("CLAUDE_CODE_EXECUTABLE")
                 .map(std::path::PathBuf::from)
+                .or_else(|| claude_executable.map(Path::to_path_buf))
                 .or_else(|| find_executable("claude"));
             if let Some(claude) = claude {
                 configure_claude_code_env(&mut process, claude);
@@ -157,7 +159,7 @@ mod tests {
         let script = "IFS= read -r request; printf '%s\\n' '{\"jsonrpc\":\"2.0\",\"id\":1,\"result\":{\"protocolVersion\":1}}'";
         let command = vec!["/bin/sh".into(), "-c".into(), script.into()];
         let (tx, rx) = mpsc::channel();
-        let connection = Connection::spawn(7, &command, Path::new("/"), None, tx).unwrap();
+        let connection = Connection::spawn(7, &command, Path::new("/"), None, None, tx).unwrap();
         connection
             .send(json!({"jsonrpc":"2.0","id":1,"method":"initialize","params":{}}))
             .unwrap();

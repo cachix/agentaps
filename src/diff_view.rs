@@ -12,8 +12,10 @@ pub(crate) const REMOVED_BG: u32 = 0x422a31;
 pub(crate) const ADDED_TEXT: u32 = 0x9cdbb5;
 pub(crate) const REMOVED_TEXT: u32 = 0xf0aaaa;
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "snake_case")]
 pub enum Presentation {
+    #[default]
     Unified,
     Split,
 }

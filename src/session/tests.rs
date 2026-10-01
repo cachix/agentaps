@@ -64,7 +64,8 @@ fn restored_turn_continues_automatically_before_queued_work() {
         "IFS= read -r request; printf '%s\\n' \"$request\"".into(),
     ];
     let (tx, rx) = mpsc::channel();
-    restored.connection = Some(Connection::spawn(1, &command, Path::new("/"), None, tx).unwrap());
+    restored.connection =
+        Some(Connection::spawn(1, &command, Path::new("/"), None, None, tx).unwrap());
     restored.recovery_due = Some(Instant::now() - Duration::from_secs(1));
 
     assert!(restored.auto_continue_interrupted_turn());
@@ -371,7 +372,7 @@ fn fork_supplies_only_active_conversation_to_first_prompt() {
     ];
     let (events_tx, events_rx) = mpsc::channel();
     fork.connection =
-        Some(Connection::spawn(2, &command, Path::new("/"), None, events_tx).unwrap());
+        Some(Connection::spawn(2, &command, Path::new("/"), None, None, events_tx).unwrap());
 
     fork.start_prompt("New direction".into()).unwrap();
     let Event::Message { value, .. } = events_rx.recv_timeout(Duration::from_secs(2)).unwrap()
@@ -621,7 +622,7 @@ fn claude_refresh_lock_retries_prompt_once_without_duplicating_user_message() {
     ];
     let (events_tx, events_rx) = mpsc::channel();
     agent.connection =
-        Some(Connection::spawn(1, &command, Path::new("/"), None, events_tx).unwrap());
+        Some(Connection::spawn(1, &command, Path::new("/"), None, None, events_tx).unwrap());
     agent.start_prompt("Please help".into()).unwrap();
     let Event::Message { value: first, .. } =
         events_rx.recv_timeout(Duration::from_secs(2)).unwrap()
@@ -693,7 +694,7 @@ fn claude_refresh_lock_retries_session_setup() {
     ];
     let (events_tx, events_rx) = mpsc::channel();
     agent.connection =
-        Some(Connection::spawn(1, &command, Path::new("/"), None, events_tx).unwrap());
+        Some(Connection::spawn(1, &command, Path::new("/"), None, None, events_tx).unwrap());
     SessionController::start_new_session(&mut agent, Path::new("/"));
     let Event::Message { value: first, .. } =
         events_rx.recv_timeout(Duration::from_secs(2)).unwrap()
@@ -745,7 +746,7 @@ fn queued_prompts_reach_the_agent_in_order_after_each_turn() {
     ];
     let (events_tx, events_rx) = mpsc::channel();
     agent.connection =
-        Some(Connection::spawn(1, &command, Path::new("/"), None, events_tx).unwrap());
+        Some(Connection::spawn(1, &command, Path::new("/"), None, None, events_tx).unwrap());
     agent.config.pending_prompts = vec!["First".into(), "!printf '%s' hi".into()];
 
     assert!(!agent.start_next_queued_prompt());
@@ -851,6 +852,7 @@ fn echo_requests(agent: &mut SessionController) -> mpsc::Receiver<Event> {
                 "while IFS= read -r request; do printf '%s\\n' \"$request\"; done".into(),
             ],
             Path::new("/"),
+            None,
             None,
             tx,
         )
@@ -1017,8 +1019,9 @@ fn harness_history_reloads_after_restart() {
     let connect = |config: AgentConfig| {
         let (tx, rx) = mpsc::channel();
         let mut session = SessionController::new(config, ImageStore::for_tests());
-        session.connection =
-            Some(Connection::spawn(session.config.id, &command, temp.path(), None, tx).unwrap());
+        session.connection = Some(
+            Connection::spawn(session.config.id, &command, temp.path(), None, None, tx).unwrap(),
+        );
         session
             .send(
                 json!({"jsonrpc":"2.0","id":1,"method":"initialize","params":initialize_params()}),
@@ -1164,7 +1167,7 @@ fn prompts_send_saved_images_to_agents_that_accept_them() {
     ];
     let (events_tx, events_rx) = mpsc::channel();
     agent.connection =
-        Some(Connection::spawn(1, &command, Path::new("/"), None, events_tx).unwrap());
+        Some(Connection::spawn(1, &command, Path::new("/"), None, None, events_tx).unwrap());
     agent.start_prompt(prompt).unwrap();
     let Event::Message { value, .. } = events_rx.recv_timeout(Duration::from_secs(2)).unwrap()
     else {
@@ -1287,7 +1290,7 @@ fn prompts_embed_text_files_and_link_the_rest() {
     ];
     let (events_tx, events_rx) = mpsc::channel();
     agent.connection =
-        Some(Connection::spawn(1, &command, Path::new("/"), None, events_tx).unwrap());
+        Some(Connection::spawn(1, &command, Path::new("/"), None, None, events_tx).unwrap());
     let sent = || {
         let Event::Message { value, .. } = events_rx.recv_timeout(Duration::from_secs(2)).unwrap()
         else {

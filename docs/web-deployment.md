@@ -14,7 +14,7 @@ The build output is `web/dist/`. To test it locally on the same computer as Agen
 python3 -m http.server 8080 --directory web/dist
 ```
 
-Set `AGENTAPS_WEB_URL=http://localhost:8080/` when starting the desktop app so its pairing link points to the local site. This local URL is for testing in a browser on the same computer. For phone testing, serve the site at an address the phone can reach and set `AGENTAPS_WEB_URL` to that address. Phone unlock requires HTTPS. By default, pairing links point to `https://agentaps.dev/`. The landing page forwards pairing links to `/connect/` without sending the secret to the server. Use the same site origin on the phone as the one in the desktop QR code. Browser storage and passkeys are tied to that origin.
+Set `AGENTAPS_WEB_URL=http://localhost:8080/` when starting the desktop app, or set Web Connect address in Settings > Advanced, so its pairing link points to the local site. This local URL is for testing in a browser on the same computer. For phone testing, serve the site at an address the phone can reach and set `AGENTAPS_WEB_URL` to that address. Phone unlock requires HTTPS. By default, pairing links point to `https://agentaps.dev/`. The landing page forwards pairing links to `/connect/` without sending the secret to the server. Use the same site origin on the phone as the one in the desktop QR code. Browser storage and passkeys are tied to that origin.
 
 ## Cloudflare Pages
 
