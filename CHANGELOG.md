@@ -11,6 +11,7 @@ Notable changes to Agentaps are recorded here.
 - Choose and remember a desktop theme from the sidebar, including light and dark presets ported from FactorSeal and a System option that follows GTK/Qt theme changes on Linux. Chat, activity, controls, and diffs share the selected palette while retaining zoom.
 
 - Paste or drop images into the composer and see images in conversations.
+- A **+** menu under the composer attaches files or images to a prompt. Dropped files attach too. Text files are sent with their contents when the agent accepts embedded context, and as links otherwise. Attached file contents echoed back by the agent show as a code block of the first few lines.
 
 ### Fixed
 

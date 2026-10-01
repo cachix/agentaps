@@ -359,9 +359,13 @@ impl Workspace {
         let shell = (entry.role == Role::User)
             .then(|| shell_command_in_message(&entry.text))
             .flatten();
-        let display_text = shell
-            .map(|command| format!("!{command}"))
-            .unwrap_or_else(|| entry.text.clone());
+        let display_text =
+            shell
+                .map(|command| format!("!{command}"))
+                .unwrap_or_else(|| match entry.role {
+                    Role::User => file_context_preview(&entry.text).into_owned(),
+                    _ => entry.text.clone(),
+                });
         let text_id: gpui_kit::ElementId = ("chat", agent.config.id).into();
         let content = TextView::markdown((text_id, index.to_string()), display_text)
             .style(self.chat_text_style(cx))

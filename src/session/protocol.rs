@@ -46,6 +46,19 @@ pub(super) fn accepts_images(protocol: ProtocolVersion, initialize: &Value) -> b
     }
 }
 
+pub(super) fn accepts_embedded_context(protocol: ProtocolVersion, initialize: &Value) -> bool {
+    match protocol {
+        ProtocolVersion::V2 => {
+            initialize["capabilities"]["session"]["prompt"]["embeddedContext"].is_object()
+        }
+        ProtocolVersion::V1 => {
+            initialize["agentCapabilities"]["promptCapabilities"]["embeddedContext"].as_bool()
+                == Some(true)
+        }
+        _ => false,
+    }
+}
+
 pub(super) struct ImageData {
     pub(super) mime_type: String,
     pub(super) data: String,
@@ -67,6 +80,9 @@ pub(super) fn message_content(content: &Value) -> (String, Vec<ImageData>) {
                 mime_type: mime_type.to_owned(),
                 data: data.to_owned(),
             }),
+            (Some("resource_link"), _, _) if block["name"].is_string() => {
+                text.push(file_placeholder(block["name"].as_str().unwrap_or_default()));
+            }
             _ => text.push(content_text(block)),
         }
     }

@@ -1,6 +1,6 @@
 use crate::acp::{Connection, Event};
 use crate::config::{
-    AgentConfig, ChatEntry, ChatImage, Config, ProjectConfig, Prompt, Role, SlashCommand,
+    AgentConfig, ChatEntry, ChatFile, ChatImage, Config, ProjectConfig, Prompt, Role, SlashCommand,
 };
 use crate::diff_view::{File as DiffFile, Presentation as DiffPresentation, Row as DiffRow};
 use crate::discovery::{AgentChoice, installed_agents, score};
@@ -982,6 +982,8 @@ impl Workspace {
                 base_line_height: composer_base_line_height,
                 session_composers: HashMap::new(),
                 draft_images: HashMap::new(),
+                draft_files: HashMap::new(),
+                file_dialog_open: false,
                 chat_list: ListState::new(0, ListAlignment::Bottom, px(300.)),
                 chat_list_agent: None,
                 chat_rows: Vec::new(),

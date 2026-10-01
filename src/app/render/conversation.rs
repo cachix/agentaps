@@ -1,7 +1,9 @@
 use super::*;
 use crate::diff_view;
 use gpui_kit::ExternalPaths;
-use gpui_kit::component::attachment::{Attachment, AttachmentGroup, AttachmentMedia};
+use gpui_kit::component::attachment::{
+    Attachment, AttachmentContent, AttachmentGroup, AttachmentMedia, AttachmentTitle,
+};
 use gpui_kit::component::progress::Progress;
 
 impl Workspace {
@@ -454,7 +456,14 @@ impl Workspace {
             .get(&agent_id)
             .map(Vec::as_slice)
             .unwrap_or_default();
+        let draft_files = self
+            .conversation
+            .draft_files
+            .get(&agent_id)
+            .map(Vec::as_slice)
+            .unwrap_or_default();
         let can_send = !draft_images.is_empty()
+            || !draft_files.is_empty()
             || !self
                 .conversation
                 .composer
@@ -520,9 +529,9 @@ impl Workspace {
                 })
         };
         let workspace = cx.entity().downgrade();
-        let attachments = (!draft_images.is_empty()).then(|| {
-            AttachmentGroup::new(("composer-images", agent_id)).children(
-                draft_images.iter().enumerate().map(|(index, image)| {
+        let attachments = (!draft_images.is_empty() || !draft_files.is_empty()).then(|| {
+            AttachmentGroup::new(("composer-images", agent_id))
+                .children(draft_images.iter().enumerate().map(|(index, image)| {
                     Attachment::new()
                         .id(("composer-image", index))
                         .axis(gpui_kit::Axis::Vertical)
@@ -530,8 +539,19 @@ impl Workspace {
                         .on_remove(cx.listener(move |this, _, _, cx| {
                             this.remove_draft_image(agent_id, index, cx);
                         }))
-                }),
-            )
+                }))
+                .children(draft_files.iter().enumerate().map(|(index, file)| {
+                    Attachment::new()
+                        .id(("composer-file", index))
+                        .tooltip(file.uri.clone())
+                        .media(AttachmentMedia::new().child(Icon::new(IconName::File)))
+                        .content(
+                            AttachmentContent::new().title(AttachmentTitle::new(file.name.clone())),
+                        )
+                        .on_remove(cx.listener(move |this, _, _, cx| {
+                            this.remove_draft_file(agent_id, index, cx);
+                        }))
+                }))
         });
         // A plain border that turns to the accent colour on focus, in place
         // of the text area's own focus ring.
@@ -555,7 +575,7 @@ impl Workspace {
                 style.border_color(palette.color(ACCENT))
             })
             .on_drop(cx.listener(|this, paths: &ExternalPaths, _, cx| {
-                this.drop_images(paths, cx);
+                this.drop_paths(paths, cx);
             }))
             .children(attachments.map(|attachments| div().px_2().pt_2().child(attachments)))
             .child(
@@ -628,6 +648,7 @@ impl Workspace {
                             .gap_2()
                             .text_xs()
                             .text_color(palette.color(MUTED))
+                            .child(self.render_attach_menu(project_index, agent_index, cx))
                             .children(self.render_mode_select(project_index, agent_index, cx))
                             .children(self.render_plan_toggle(project_index, agent_index, cx))
                             .children(status)
@@ -637,6 +658,42 @@ impl Workspace {
             ),
         );
         chat
+    }
+
+    /// Actions that add content to the prompt, starting with files and images.
+    fn render_attach_menu(
+        &self,
+        project_index: usize,
+        agent_index: usize,
+        cx: &mut Context<Self>,
+    ) -> impl IntoElement + use<> {
+        let agent = &self.projects[project_index].agents[agent_index];
+        let connected = agent.protocol.is_some() && agent.status != Status::Error;
+        let label = if agent.accepts_images {
+            "Add file or image…"
+        } else {
+            "Add file…"
+        };
+        let view = cx.entity().clone();
+        Button::new(format!("attach-menu-{}", agent.config.id))
+            .ghost()
+            .xsmall()
+            .icon(IconName::Plus)
+            .tooltip(if connected {
+                "Add to prompt"
+            } else {
+                "Wait for the agent to connect"
+            })
+            .disabled(!connected)
+            .dropdown_menu_with_anchor(Anchor::BottomLeft, move |menu, _, _| {
+                let view = view.clone();
+                menu.item(PopupMenuItem::new(label).icon(IconName::File).on_click(
+                    move |_, window, cx| {
+                        view.update(cx, |this, cx| this.choose_attachments(window, cx));
+                    },
+                ))
+                .min_w(px(160.))
+            })
     }
 
     /// The agent's session mode, shown at the bottom left of the composer

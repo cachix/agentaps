@@ -102,6 +102,9 @@ impl Workspace {
         if let Some(images) = self.conversation.draft_images.remove(&old_id) {
             self.conversation.draft_images.insert(new_id, images);
         }
+        if let Some(files) = self.conversation.draft_files.remove(&old_id) {
+            self.conversation.draft_files.insert(new_id, files);
+        }
         self.deferred_connections.retain(|id| *id != old_id);
         self.conversation
             .collapsed_tool_groups
@@ -207,6 +210,9 @@ impl Workspace {
         }
         if let Some(images) = self.conversation.draft_images.remove(&old_id) {
             self.conversation.draft_images.insert(new_id, images);
+        }
+        if let Some(files) = self.conversation.draft_files.remove(&old_id) {
+            self.conversation.draft_files.insert(new_id, files);
         }
         self.conversation
             .collapsed_tool_groups
@@ -324,8 +330,15 @@ impl Workspace {
                 .get(&agent.config.id)
                 .cloned()
                 .unwrap_or_default(),
+            files: self
+                .conversation
+                .draft_files
+                .get(&agent.config.id)
+                .cloned()
+                .unwrap_or_default(),
         };
         if prompt.images.is_empty()
+            && prompt.files.is_empty()
             && (prompt.text.trim().is_empty()
                 || (prompt.text.starts_with('!') && shell_command(&prompt.text).is_none()))
         {
@@ -364,6 +377,7 @@ impl Workspace {
         }
         agent.config.prompt_history.push(text);
         self.conversation.draft_images.remove(&agent.config.id);
+        self.conversation.draft_files.remove(&agent.config.id);
         self.persistence.dirty = true;
         self.conversation.prompt_recall = None;
         self.conversation

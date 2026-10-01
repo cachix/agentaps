@@ -172,6 +172,7 @@ mod tests {
         agent.pending_prompts.push(Prompt {
             text: "Next".into(),
             images: vec![queued.clone()],
+            ..Prompt::default()
         });
         let config = Config {
             projects: vec![ProjectConfig {
