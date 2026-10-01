@@ -13,6 +13,7 @@ impl Workspace {
         window: &Window,
         cx: &mut Context<Self>,
     ) -> Div {
+        let palette = theme::palette(cx);
         let project = &self.projects[project_index];
         let agent = &project.agents[agent_index];
         let (added, removed) = self.diff.counts.unwrap_or_default();
@@ -100,7 +101,7 @@ impl Workspace {
             .min_w(px(0.))
             .items_center()
             .gap_2()
-            .child(status_badge(agent))
+            .child(status_badge(agent, palette))
             .child(agent_selector)
             .child({
                 let agent_id = agent.config.id;
@@ -128,9 +129,13 @@ impl Workspace {
                         .truncate()
                         .text_sm()
                         .font_weight(gpui_kit::FontWeight::MEDIUM)
-                        .text_color(rgb(TEXT))
+                        .text_color(palette.color(TEXT))
                         .cursor(gpui_kit::CursorStyle::IBeam)
-                        .hover(|style| style.bg(rgb(SURFACE)).border_color(rgb(BORDER)))
+                        .hover(move |style| {
+                            style
+                                .bg(palette.color(SURFACE))
+                                .border_color(palette.color(BORDER))
+                        })
                         .child(
                             agent
                                 .config
@@ -204,9 +209,9 @@ impl Workspace {
                     .min_w(px(0.))
                     .truncate()
                     .text_xs()
-                    .text_color(rgb(MUTED))
+                    .text_color(palette.color(MUTED))
                     .cursor_pointer()
-                    .hover(|style| style.text_color(rgb(TEXT)))
+                    .hover(|style| style.text_color(palette.color(TEXT)))
                     .child(location.clone())
                     .tooltip(move |window, cx| {
                         Tooltip::new(format!("Change folder: {location}")).build(window, cx)
@@ -230,11 +235,11 @@ impl Workspace {
                     .py_1()
                     .rounded_md()
                     .border_1()
-                    .border_color(rgb(BORDER))
+                    .border_color(palette.color(BORDER))
                     .text_sm()
-                    .text_color(rgb(TEXT))
+                    .text_color(palette.color(TEXT))
                     .cursor_pointer()
-                    .hover(|style| style.bg(rgb(HOVER)))
+                    .hover(|style| style.bg(palette.color(HOVER)))
                     .child(
                         div()
                             .flex()
@@ -249,12 +254,12 @@ impl Workspace {
                                 element
                                     .child(
                                         div()
-                                            .text_color(rgb(diff_view::ADDED_TEXT))
+                                            .text_color(palette.color(diff_view::ADDED_TEXT))
                                             .child(format!("+{added}")),
                                     )
                                     .child(
                                         div()
-                                            .text_color(rgb(diff_view::REMOVED_TEXT))
+                                            .text_color(palette.color(diff_view::REMOVED_TEXT))
                                             .child(format!("-{removed}")),
                                     )
                             }),
@@ -274,7 +279,7 @@ impl Workspace {
                 .px_4()
                 .py_2()
                 .border_b_1()
-                .border_color(rgb(BORDER))
+                .border_color(palette.color(BORDER))
                 .flex()
                 .items_center()
                 .gap_3()
@@ -321,24 +326,29 @@ impl Workspace {
                 .p_1()
                 .rounded_md()
                 .border_1()
-                .border_color(rgb(BORDER))
-                .bg(rgb(SURFACE))
+                .border_color(palette.color(BORDER))
+                .bg(palette.color(SURFACE))
                 .flex()
                 .flex_col();
             if file_results.is_empty() {
                 menu = menu.child(
-                    div().px_3().py_2().text_sm().text_color(rgb(MUTED)).child(
-                        if self
-                            .conversation
-                            .file_search
-                            .as_ref()
-                            .is_some_and(FileSearch::loading)
-                        {
-                            "Looking for files…"
-                        } else {
-                            "No matching files"
-                        },
-                    ),
+                    div()
+                        .px_3()
+                        .py_2()
+                        .text_sm()
+                        .text_color(palette.color(MUTED))
+                        .child(
+                            if self
+                                .conversation
+                                .file_search
+                                .as_ref()
+                                .is_some_and(FileSearch::loading)
+                            {
+                                "Looking for files…"
+                            } else {
+                                "No matching files"
+                            },
+                        ),
                 );
             }
             for (index, file) in file_results.into_iter().enumerate() {
@@ -354,9 +364,9 @@ impl Workspace {
                         .items_center()
                         .gap_3()
                         .when(index == self.conversation.file_selection, |row| {
-                            row.bg(rgb(SELECTED))
+                            row.bg(palette.color(SELECTED))
                         })
-                        .hover(|style| style.bg(rgb(SELECTED)))
+                        .hover(|style| style.bg(palette.color(SELECTED)))
                         .child(
                             Icon::new(if file.ends_with('/') {
                                 IconName::Folder
@@ -364,7 +374,7 @@ impl Workspace {
                                 IconName::File
                             })
                             .size(px(16.))
-                            .text_color(rgb(ACCENT)),
+                            .text_color(palette.color(ACCENT)),
                         )
                         .child(div().min_w(px(0.)).truncate().text_sm().child(name))
                         .on_click(cx.listener(move |this, _, window, cx| {
@@ -383,8 +393,8 @@ impl Workspace {
                 .p_1()
                 .rounded_md()
                 .border_1()
-                .border_color(rgb(BORDER))
-                .bg(rgb(SURFACE))
+                .border_color(palette.color(BORDER))
+                .bg(palette.color(SURFACE))
                 .flex()
                 .flex_col();
             for (index, command) in slash_commands.into_iter().enumerate() {
@@ -402,13 +412,13 @@ impl Workspace {
                         .flex()
                         .items_center()
                         .gap_3()
-                        .when(selected, |row| row.bg(rgb(SELECTED)))
-                        .hover(|style| style.bg(rgb(SELECTED)))
+                        .when(selected, |row| row.bg(palette.color(SELECTED)))
+                        .hover(|style| style.bg(palette.color(SELECTED)))
                         .child(
                             div()
                                 .flex_shrink_0()
                                 .text_sm()
-                                .text_color(rgb(ACCENT))
+                                .text_color(palette.color(ACCENT))
                                 .child(name),
                         )
                         .child(
@@ -417,7 +427,7 @@ impl Workspace {
                                 .min_w(px(0.))
                                 .truncate()
                                 .text_xs()
-                                .text_color(rgb(MUTED))
+                                .text_color(palette.color(MUTED))
                                 .child(description),
                         )
                         .when_some(hint, |row, hint| {
@@ -425,7 +435,7 @@ impl Workspace {
                                 div()
                                     .flex_shrink_0()
                                     .text_xs()
-                                    .text_color(rgb(MUTED))
+                                    .text_color(palette.color(MUTED))
                                     .child(hint),
                             )
                         })
@@ -469,22 +479,22 @@ impl Workspace {
                 .gap_2()
                 .rounded_md()
                 .border_1()
-                .border_color(rgb(BORDER))
-                .bg(rgb(SURFACE))
+                .border_color(palette.color(BORDER))
+                .bg(palette.color(SURFACE))
                 .text_xs()
-                .text_color(rgb(if stopping { MUTED } else { TEXT }))
+                .text_color(palette.color(if stopping { MUTED } else { TEXT }))
                 .child(
                     div()
                         .size(px(8.))
                         .rounded_sm()
-                        .bg(rgb(if stopping { MUTED } else { TEXT })),
+                        .bg(palette.color(if stopping { MUTED } else { TEXT })),
                 )
                 .child(if stopping { "Stopping…" } else { "Stop" })
                 .tooltip(|window, cx| Tooltip::new("Stop agent (Esc)").build(window, cx))
                 .when(!stopping, |button| {
                     button
                         .cursor_pointer()
-                        .hover(|style| style.bg(rgb(HOVER)))
+                        .hover(|style| style.bg(palette.color(HOVER)))
                         .on_click(cx.listener(|this, _, _, cx| this.cancel_prompt(cx)))
                 })
         } else {
@@ -495,17 +505,17 @@ impl Workspace {
                 .items_center()
                 .justify_center()
                 .rounded_md()
-                .bg(rgb(if can_send { ACCENT_SURFACE } else { SURFACE }))
+                .bg(palette.color(if can_send { ACCENT_SURFACE } else { SURFACE }))
                 .child(
                     Icon::new(IconName::ArrowUp)
                         .size(px(14.))
-                        .text_color(rgb(if can_send { TEXT } else { MUTED })),
+                        .text_color(palette.color(if can_send { TEXT } else { MUTED })),
                 )
                 .tooltip(|window, cx| Tooltip::new("Send (Enter)").build(window, cx))
                 .when(can_send, |button| {
                     button
                         .cursor_pointer()
-                        .hover(|style| style.bg(rgb(SELECTED)))
+                        .hover(|style| style.bg(palette.color(SELECTED)))
                         .on_click(cx.listener(|this, _, window, cx| this.send_prompt(window, cx)))
                 })
         };
@@ -533,9 +543,17 @@ impl Workspace {
             .gap_1()
             .rounded_lg()
             .border_1()
-            .border_color(rgb(if focused { ACCENT } else { BORDER }))
-            .bg(rgb(SIDEBAR))
-            .drag_over::<ExternalPaths>(|style, _, _, _| style.border_color(rgb(ACCENT)))
+            .border_color(palette.color(if focused { ACCENT } else { BORDER }))
+            .bg(
+                if self.theme_choice == crate::appearance::Choice::Agentaps {
+                    palette.color(SIDEBAR)
+                } else {
+                    palette.input
+                },
+            )
+            .drag_over::<ExternalPaths>(move |style, _, _, _| {
+                style.border_color(palette.color(ACCENT))
+            })
             .on_drop(cx.listener(|this, paths: &ExternalPaths, _, cx| {
                 this.drop_images(paths, cx);
             }))
@@ -571,7 +589,7 @@ impl Workspace {
                                         .right(px(12.))
                                         .bottom(px(6.))
                                         .text_xs()
-                                        .text_color(rgb(MUTED))
+                                        .text_color(palette.color(MUTED))
                                         .child("shell"),
                                 )
                             }),
@@ -583,7 +601,7 @@ impl Workspace {
                 .flex()
                 .items_center()
                 .gap_2()
-                .child(status_dot(Status::Working.color()))
+                .child(status_dot(Status::Working.color(), palette))
                 .child(if agent.cancel_requested {
                     "Stopping agent"
                 } else if agent.awaiting_response {
@@ -609,7 +627,7 @@ impl Workspace {
                             .items_center()
                             .gap_2()
                             .text_xs()
-                            .text_color(rgb(MUTED))
+                            .text_color(palette.color(MUTED))
                             .children(self.render_mode_select(project_index, agent_index, cx))
                             .children(self.render_plan_toggle(project_index, agent_index, cx))
                             .children(status)
@@ -681,6 +699,7 @@ impl Workspace {
         agent_index: usize,
         cx: &mut Context<Self>,
     ) -> Option<impl IntoElement + use<>> {
+        let palette = theme::palette(cx);
         let agent = &self.projects[project_index].agents[agent_index];
         if agent.session_id.is_none() || agent.status == Status::Error {
             return None;
@@ -701,17 +720,17 @@ impl Workspace {
                 if active {
                     track
                         .justify_end()
-                        .bg(rgb(ACCENT))
-                        .border_color(rgb(ACCENT))
+                        .bg(palette.color(ACCENT))
+                        .border_color(palette.color(ACCENT))
                 } else {
-                    track.justify_start().border_color(rgb(MUTED))
+                    track.justify_start().border_color(palette.color(MUTED))
                 }
             })
             .child(
                 div()
                     .size(px(6.))
                     .rounded_full()
-                    .bg(rgb(if active { BG } else { MUTED })),
+                    .bg(palette.color(if active { BG } else { MUTED })),
             );
         let view = cx.entity().clone();
         // The label and switch explain themselves, so there is no tooltip.
@@ -728,7 +747,7 @@ impl Workspace {
                 .py_0p5()
                 .rounded_md()
                 .text_xs()
-                .text_color(rgb(if active { ACCENT } else { MUTED }))
+                .text_color(palette.color(if active { ACCENT } else { MUTED }))
                 .child(track)
                 .child("Plan")
                 .map(|toggle| {
@@ -737,8 +756,8 @@ impl Workspace {
                     } else {
                         toggle.cursor_pointer().hover(|style| {
                             style
-                                .bg(rgb(HOVER))
-                                .text_color(rgb(if active { ACCENT } else { TEXT }))
+                                .bg(palette.color(HOVER))
+                                .text_color(palette.color(if active { ACCENT } else { TEXT }))
                         })
                     }
                 })
@@ -772,6 +791,7 @@ impl Workspace {
         agent_index: usize,
         cx: &mut Context<Self>,
     ) -> Div {
+        let palette = theme::palette(cx);
         let agent = &self.projects[project_index].agents[agent_index];
         let selectable = agent.session_id.is_some() && agent.status != Status::Error;
         let pending = agent.setting_pending();
@@ -891,7 +911,7 @@ impl Workspace {
                             .child(
                                 Progress::new(format!("context-progress-{}", agent.config.id))
                                     .value(percent)
-                                    .color(rgb(color))
+                                    .color(palette.color(color))
                                     .accessibility_label("Context usage")
                                     .w(px(80.))
                                     .h(px(6.)),

@@ -4,6 +4,7 @@ use gpui_kit::component::{Sizable, spinner::Spinner};
 
 impl Workspace {
     pub(super) fn render_diff(&self, panel: Div, cx: &mut Context<Self>) -> Div {
+        let palette = theme::palette(cx);
         let (added, removed) = self
             .diff
             .file_stats
@@ -20,16 +21,16 @@ impl Workspace {
             .items_center()
             .gap_2()
             .border_b_1()
-            .border_color(rgb(BORDER))
+            .border_color(palette.color(BORDER))
             .text_xs()
-            .text_color(rgb(MUTED))
+            .text_color(palette.color(MUTED))
             .child(
                 div()
                     .id("diff-comparison")
                     .flex_1()
                     .min_w(px(0.))
                     .truncate()
-                    .text_color(rgb(TEXT))
+                    .text_color(palette.color(TEXT))
                     .child("Checkout vs HEAD")
                     .tooltip(|window, cx| {
                         Tooltip::new("Checkout changes compared with HEAD").build(window, cx)
@@ -44,7 +45,7 @@ impl Workspace {
                     .items_center()
                     .justify_center()
                     .when(self.diff.loading, |slot| {
-                        slot.child(Spinner::new().small().color(rgb(MUTED).into()))
+                        slot.child(Spinner::new().small().color(palette.color(MUTED)))
                             .tooltip(|window, cx| {
                                 Tooltip::new("Loading checkout changes").build(window, cx)
                             })
@@ -63,12 +64,12 @@ impl Workspace {
                     ))
                     .child(
                         div()
-                            .text_color(rgb(diff_view::ADDED_TEXT))
+                            .text_color(palette.color(diff_view::ADDED_TEXT))
                             .child(format!("+{added}")),
                     )
                     .child(
                         div()
-                            .text_color(rgb(diff_view::REMOVED_TEXT))
+                            .text_color(palette.color(diff_view::REMOVED_TEXT))
                             .child(format!("-{removed}")),
                     ),
             )
@@ -81,8 +82,8 @@ impl Workspace {
                     .py_1()
                     .rounded_md()
                     .cursor_pointer()
-                    .text_color(rgb(TEXT))
-                    .hover(|style| style.bg(rgb(HOVER)))
+                    .text_color(palette.color(TEXT))
+                    .hover(|style| style.bg(palette.color(HOVER)))
                     .child("Close")
                     .on_click(cx.listener(|this, _, window, cx| {
                         this.close_diff();
@@ -97,7 +98,7 @@ impl Workspace {
             div()
                 .flex_1()
                 .p_4()
-                .text_color(rgb(ERROR_TEXT))
+                .text_color(palette.color(ERROR_TEXT))
                 .child(format!("Could not load diff: {error}"))
                 .into_any_element()
         } else if self.diff.loading && self.diff.files.is_empty() {
@@ -106,7 +107,7 @@ impl Workspace {
             div()
                 .flex_1()
                 .p_4()
-                .text_color(rgb(MUTED))
+                .text_color(palette.color(MUTED))
                 .child("No changes in this checkout")
                 .into_any_element()
         } else {
@@ -136,6 +137,7 @@ impl Workspace {
         row: &DiffListRow,
         cx: &mut Context<Self>,
     ) -> gpui_kit::AnyElement {
+        let palette = theme::palette(cx);
         match row {
             DiffListRow::File {
                 path,
@@ -157,16 +159,16 @@ impl Workspace {
                     .items_center()
                     .gap_3()
                     .border_b_1()
-                    .border_color(rgb(BORDER))
+                    .border_color(palette.color(BORDER))
                     .cursor_pointer()
-                    .hover(|style| style.bg(rgb(HOVER)))
+                    .hover(|style| style.bg(palette.color(HOVER)))
                     .on_click(cx.listener(move |this, _, _, cx| {
                         this.select_diff_file(selected_path.clone(), cx);
                     }))
                     .child(
                         div()
                             .flex_shrink_0()
-                            .text_color(rgb(MUTED))
+                            .text_color(palette.color(MUTED))
                             .child(if *expanded { "▾" } else { "▸" }),
                     )
                     .child(
@@ -180,7 +182,7 @@ impl Workspace {
                                     .truncate()
                                     .font_family("monospace")
                                     .text_sm()
-                                    .text_color(rgb(TEXT))
+                                    .text_color(palette.color(TEXT))
                                     .child(path.clone()),
                             )
                             .when_some(visible_note, |element, note| {
@@ -188,7 +190,7 @@ impl Workspace {
                                     div()
                                         .truncate()
                                         .text_xs()
-                                        .text_color(rgb(MUTED))
+                                        .text_color(palette.color(MUTED))
                                         .child(note.clone()),
                                 )
                             }),
@@ -198,7 +200,7 @@ impl Workspace {
                             .flex_shrink_0()
                             .font_family("monospace")
                             .text_xs()
-                            .text_color(rgb(diff_view::ADDED_TEXT))
+                            .text_color(palette.color(diff_view::ADDED_TEXT))
                             .child(format!("+{added}")),
                     )
                     .child(
@@ -206,7 +208,7 @@ impl Workspace {
                             .flex_shrink_0()
                             .font_family("monospace")
                             .text_xs()
-                            .text_color(rgb(diff_view::REMOVED_TEXT))
+                            .text_color(palette.color(diff_view::REMOVED_TEXT))
                             .child(format!("-{removed}")),
                     )
                     .child(
@@ -221,18 +223,18 @@ impl Workspace {
                                 div()
                                     .w(px(*added_width))
                                     .h_full()
-                                    .bg(rgb(diff_view::ADDED_TEXT)),
+                                    .bg(palette.color(diff_view::ADDED_TEXT)),
                             )
                             .child(
                                 div()
                                     .w(px(*bar_width - *added_width))
                                     .h_full()
-                                    .bg(rgb(diff_view::REMOVED_TEXT)),
+                                    .bg(palette.color(diff_view::REMOVED_TEXT)),
                             ),
                     )
                     .into_any_element()
             }
-            DiffListRow::Content(row) => diff_view::render_row(row),
+            DiffListRow::Content(row) => diff_view::render_row(row, palette),
         }
     }
 
@@ -242,6 +244,7 @@ impl Workspace {
         label: &'static str,
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
+        let palette = theme::palette(cx);
         let selected = self.diff.presentation == presentation;
         div()
             .id(label)
@@ -249,8 +252,8 @@ impl Workspace {
             .py_1()
             .rounded_md()
             .cursor_pointer()
-            .bg(rgb(if selected { SELECTED } else { SURFACE }))
-            .text_color(rgb(if selected { TEXT } else { MUTED }))
+            .bg(palette.color(if selected { SELECTED } else { SURFACE }))
+            .text_color(palette.color(if selected { TEXT } else { MUTED }))
             .child(label)
             .on_click(cx.listener(move |this, _, _, cx| {
                 this.set_diff_presentation(presentation, cx);

@@ -3,11 +3,12 @@
 //! Original license: licenses/GPUI-Box-Kit-MIT.txt.
 //! Diff production and filesystem access belong to the caller.
 
+use crate::theme::Palette;
 use crate::theme::{ACCENT, BG, BORDER, MUTED, SURFACE, TEXT};
-use gpui_kit::{AnyElement, IntoElement, div, prelude::*, px, rgb};
+use gpui_kit::{AnyElement, IntoElement, div, prelude::*, px};
 
-const ADDED_BG: u32 = 0x19382e;
-const REMOVED_BG: u32 = 0x422a31;
+pub(crate) const ADDED_BG: u32 = 0x19382e;
+pub(crate) const REMOVED_BG: u32 = 0x422a31;
 pub(crate) const ADDED_TEXT: u32 = 0x9cdbb5;
 pub(crate) const REMOVED_TEXT: u32 = 0xf0aaaa;
 
@@ -142,17 +143,17 @@ pub fn flatten(files: &[File], presentation: Presentation) -> Vec<Row> {
     rows
 }
 
-pub(crate) fn render_row(row: &Row) -> AnyElement {
+pub(crate) fn render_row(row: &Row, palette: Palette) -> AnyElement {
     match row {
         Row::File(path) => div()
             .h(px(32.))
             .px_3()
             .flex()
             .items_center()
-            .bg(rgb(SURFACE))
+            .bg(palette.color(SURFACE))
             .text_sm()
             .font_weight(gpui_kit::FontWeight::SEMIBOLD)
-            .text_color(rgb(TEXT))
+            .text_color(palette.color(TEXT))
             .child(path.clone())
             .into_any_element(),
         Row::Hunk(header) => div()
@@ -160,10 +161,10 @@ pub(crate) fn render_row(row: &Row) -> AnyElement {
             .px_3()
             .flex()
             .items_center()
-            .bg(rgb(BORDER))
+            .bg(palette.color(BORDER))
             .text_xs()
             .font_family("monospace")
-            .text_color(rgb(ACCENT))
+            .text_color(palette.color(ACCENT))
             .child(header.clone())
             .into_any_element(),
         Row::Note(note) => div()
@@ -172,7 +173,7 @@ pub(crate) fn render_row(row: &Row) -> AnyElement {
             .flex()
             .items_center()
             .text_sm()
-            .text_color(rgb(MUTED))
+            .text_color(palette.color(MUTED))
             .child(note.clone())
             .into_any_element(),
         Row::Unified {
@@ -183,13 +184,13 @@ pub(crate) fn render_row(row: &Row) -> AnyElement {
             .h(px(24.))
             .flex()
             .items_center()
-            .bg(rgb(mark_bg(side.mark)))
+            .bg(palette.color(mark_bg(side.mark)))
             .font_family("monospace")
             .text_xs()
-            .child(number(*old_number))
-            .child(number(*new_number))
-            .child(prefix(side.mark))
-            .child(code(&side.text))
+            .child(number(*old_number, palette))
+            .child(number(*new_number, palette))
+            .child(prefix(side.mark, palette))
+            .child(code(&side.text, palette))
             .into_any_element(),
         Row::Split { old, new } => div()
             .w_full()
@@ -198,13 +199,13 @@ pub(crate) fn render_row(row: &Row) -> AnyElement {
             .items_center()
             .font_family("monospace")
             .text_xs()
-            .child(split_side(old.as_ref(), true))
-            .child(split_side(new.as_ref(), false))
+            .child(split_side(old.as_ref(), true, palette))
+            .child(split_side(new.as_ref(), false, palette))
             .into_any_element(),
     }
 }
 
-fn split_side(side: Option<&Side>, divider: bool) -> impl IntoElement {
+fn split_side(side: Option<&Side>, divider: bool, palette: Palette) -> impl IntoElement {
     let mark = side.map_or(Mark::Context, |side| side.mark);
     div()
         .flex()
@@ -212,24 +213,26 @@ fn split_side(side: Option<&Side>, divider: bool) -> impl IntoElement {
         .min_w(px(0.))
         .h_full()
         .items_center()
-        .bg(rgb(mark_bg(mark)))
-        .when(divider, |side| side.border_r_1().border_color(rgb(BORDER)))
-        .child(number(side.map(|side| side.number)))
-        .child(prefix(mark))
-        .child(code(side.map_or("", |side| side.text.as_str())))
+        .bg(palette.color(mark_bg(mark)))
+        .when(divider, |side| {
+            side.border_r_1().border_color(palette.color(BORDER))
+        })
+        .child(number(side.map(|side| side.number), palette))
+        .child(prefix(mark, palette))
+        .child(code(side.map_or("", |side| side.text.as_str()), palette))
 }
 
-fn number(value: Option<usize>) -> impl IntoElement {
+fn number(value: Option<usize>, palette: Palette) -> impl IntoElement {
     div()
         .flex_shrink_0()
         .w(px(42.))
         .pr_2()
         .text_right()
-        .text_color(rgb(MUTED))
+        .text_color(palette.color(MUTED))
         .child(value.map_or_else(String::new, |number| number.to_string()))
 }
 
-fn prefix(mark: Mark) -> impl IntoElement {
+fn prefix(mark: Mark, palette: Palette) -> impl IntoElement {
     let (symbol, color) = match mark {
         Mark::Context => (" ", MUTED),
         Mark::Added => ("+", ADDED_TEXT),
@@ -238,17 +241,17 @@ fn prefix(mark: Mark) -> impl IntoElement {
     div()
         .flex_shrink_0()
         .w(px(18.))
-        .text_color(rgb(color))
+        .text_color(palette.color(color))
         .child(symbol)
 }
 
-fn code(value: &str) -> impl IntoElement {
+fn code(value: &str, palette: Palette) -> impl IntoElement {
     div()
         .flex_1()
         .min_w(px(0.))
         .overflow_hidden()
         .whitespace_nowrap()
-        .text_color(rgb(TEXT))
+        .text_color(palette.color(TEXT))
         .child(value.to_owned())
 }
 

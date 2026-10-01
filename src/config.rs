@@ -175,6 +175,8 @@ pub struct ProjectConfig {
 #[derive(Serialize, Deserialize)]
 pub struct Config {
     #[serde(default)]
+    pub theme: crate::appearance::Choice,
+    #[serde(default)]
     pub projects: Vec<ProjectConfig>,
     #[serde(default)]
     pub sidebar_order: Vec<u64>,
@@ -195,6 +197,7 @@ fn default_font_scale() -> f32 {
 impl Default for Config {
     fn default() -> Self {
         Self {
+            theme: crate::appearance::Choice::default(),
             projects: Vec::new(),
             sidebar_order: Vec::new(),
             sidebar_fraction: default_sidebar_fraction(),
@@ -480,18 +483,21 @@ mod tests {
         let old: Config = serde_json::from_str(r#"{"projects":[]}"#).unwrap();
         assert!(old.sidebar_order.is_empty());
         assert_eq!(old.font_scale, 1.0);
+        assert_eq!(old.theme, crate::appearance::Choice::Agentaps);
 
         let config = Config {
             projects: vec![],
             sidebar_order: vec![3, 1, 2],
             sidebar_fraction: 0.32,
             font_scale: 1.25,
+            theme: crate::appearance::Choice::SolarizedLight,
         };
         let restored: Config =
             serde_json::from_slice(&serde_json::to_vec(&config).unwrap()).unwrap();
         assert_eq!(restored.sidebar_order, vec![3, 1, 2]);
         assert_eq!(restored.sidebar_fraction, 0.32);
         assert_eq!(restored.font_scale, 1.25);
+        assert_eq!(restored.theme, crate::appearance::Choice::SolarizedLight);
     }
 
     #[test]

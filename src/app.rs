@@ -145,7 +145,7 @@ const MAX_FONT_SCALE: f32 = 2.0;
 const FONT_SCALE_STEP: f32 = 0.1;
 const ZOOM_NOTICE_TIMEOUT: Duration = Duration::from_millis(1500);
 
-fn set_theme_font_scale(theme: &mut Theme, scale: f32) {
+pub(crate) fn set_theme_font_scale(theme: &mut Theme, scale: f32) {
     theme.font_size = px(BASE_FONT_SIZE * scale);
     theme.mono_font_size = px(BASE_MONO_FONT_SIZE * scale);
 }
@@ -366,14 +366,15 @@ struct AgentDrag {
 }
 
 impl Render for AgentDrag {
-    fn render(&mut self, _: &mut Window, _: &mut Context<Self>) -> impl IntoElement {
+    fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        let palette = theme::palette(cx);
         div()
             .px_3()
             .py_2()
             .rounded_md()
-            .bg(rgb(SELECTED))
+            .bg(palette.color(SELECTED))
             .text_sm()
-            .text_color(rgb(TEXT))
+            .text_color(palette.color(TEXT))
             .child(self.label.clone())
     }
 }
@@ -459,6 +460,7 @@ struct Workspace {
     sidebar_order: Vec<u64>,
     sidebar_fraction: f32,
     font_scale: f32,
+    theme_choice: crate::appearance::Choice,
     conversation: ConversationState,
     next_agent_id: u64,
     events_tx: Sender<Event>,
@@ -912,7 +914,10 @@ impl Workspace {
         } else {
             1.0
         };
-        Theme::update(cx, |theme| set_theme_font_scale(theme, font_scale));
+        let theme_choice = config.theme;
+        if let Err(error) = crate::appearance::select(theme_choice, font_scale, cx) {
+            eprintln!("could not apply theme: {error:#}");
+        }
         let (composer_viewport_height, composer_base_line_height) =
             ConversationState::composer_geometry(window);
         let composer_max_rows = ConversationState::composer_max_rows(
@@ -968,6 +973,7 @@ impl Workspace {
             sidebar_order,
             sidebar_fraction,
             font_scale,
+            theme_choice,
             conversation: ConversationState {
                 renaming: None,
                 composer,
@@ -1061,6 +1067,13 @@ impl Workspace {
             zoom_notice_generation: 0,
             _subscriptions,
         };
+        #[cfg(not(target_os = "linux"))]
+        this._subscriptions
+            .push(cx.observe_window_appearance(window, |_, window, cx| {
+                Theme::sync_system_appearance(Some(window), cx);
+                crate::theming::set_input_background(Theme::global(cx).input_background(), cx);
+                crate::appearance::system_changed(cx);
+            }));
         let composer = this.conversation.composer.clone();
         this.subscribe_composer(&composer, window, cx);
         this._subscriptions
@@ -1217,6 +1230,7 @@ impl Workspace {
             sidebar_order: self.sidebar_order.clone(),
             sidebar_fraction: self.sidebar_fraction,
             font_scale: self.font_scale,
+            theme: self.theme_choice,
         }
     }
 
@@ -1730,12 +1744,32 @@ impl Workspace {
         self.set_font_scale(1.0, cx);
     }
 
+    fn select_theme(&mut self, choice: crate::appearance::Choice, cx: &mut Context<Self>) {
+        match crate::appearance::select(choice, self.font_scale, cx) {
+            Ok(()) => {
+                self.theme_choice = choice;
+                // Font and background changes can alter Markdown layout.
+                let scroll_top = self.conversation.chat_list.logical_scroll_top();
+                self.conversation
+                    .chat_list
+                    .reset(self.conversation.chat_rows.len());
+                self.conversation.chat_list.scroll_to(scroll_top);
+                self.persist();
+            }
+            Err(error) => {
+                self.notice = Some(Notice::Error(format!("Could not apply theme: {error:#}")))
+            }
+        }
+        cx.notify();
+    }
+
     fn set_font_scale(&mut self, scale: f32, cx: &mut Context<Self>) {
         let scale = ((scale * 10.).round() / 10.).clamp(MIN_FONT_SCALE, MAX_FONT_SCALE);
         if scale == self.font_scale {
             return;
         }
         self.font_scale = scale;
+        crate::appearance::set_scale(scale, cx);
         let acknowledgement = format!("Zoom {:.0}%", scale * 100.);
         self.notice = Some(Notice::Info(acknowledgement.clone()));
         self.persist();
@@ -2130,7 +2164,8 @@ pub(crate) fn run() {
                 KeyBinding::new("ctrl--", ZoomOut, None),
                 KeyBinding::new("ctrl-0", ZoomReset, None),
             ]);
-            theme::apply(cx);
+            crate::theming::initialize(cx);
+            crate::appearance::initialize(cx);
             let bounds = Bounds::centered(None, size(px(1200.), px(760.)), cx);
             let window_handle = gpui_kit::open_window(
                 WindowOptions {

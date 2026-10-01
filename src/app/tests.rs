@@ -554,6 +554,24 @@ fn zoom_shortcuts_and_menu_actions_change_the_font_scale(cx: &mut gpui_kit::Test
         });
     }
 
+    // Theme changes must retain zoom, save the selection, and restore it on launch.
+    cx.update(|_, cx| {
+        workspace.update(cx, |this, cx| {
+            this.select_theme(crate::appearance::Choice::SolarizedLight, cx);
+            assert_eq!(
+                Theme::global(cx).mode,
+                gpui_kit::component::theme::ThemeMode::Light
+            );
+            assert_eq!(Theme::global(cx).font_size, px(BASE_FONT_SIZE * 1.3));
+            assert_eq!(theme::palette(cx).color(BG), Theme::global(cx).background);
+        })
+    });
+    cx.update(|_, cx| workspace.update(cx, |this, _| this.persistence.wait().unwrap()));
+    assert_eq!(
+        config::load().unwrap().0.theme,
+        crate::appearance::Choice::SolarizedLight
+    );
+
     // Finish the previous snapshot before replacing the writer with a failing one.
     cx.update(|_, cx| workspace.update(cx, |this, _| this.persistence.wait().unwrap()));
     let blocked = temp.path().join("blocked");
@@ -584,6 +602,14 @@ fn zoom_shortcuts_and_menu_actions_change_the_font_scale(cx: &mut gpui_kit::Test
     cx.update(|_, cx| {
         let restored = restored.read(cx);
         assert_eq!(restored.font_scale, 1.3);
+        assert_eq!(
+            restored.theme_choice,
+            crate::appearance::Choice::SolarizedLight
+        );
+        assert_eq!(
+            Theme::global(cx).mode,
+            gpui_kit::component::theme::ThemeMode::Light
+        );
         assert_eq!(Theme::global(cx).font_size, px(BASE_FONT_SIZE * 1.3));
         assert_eq!(
             Theme::global(cx).mono_font_size,

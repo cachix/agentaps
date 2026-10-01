@@ -15,11 +15,11 @@ mod tool_group;
 const CHAT_COLUMN_WIDTH: f32 = 760.;
 const MESSAGE_IMAGE_HEIGHT: f32 = 240.;
 
-fn status_dot(color: u32) -> Div {
-    div().size(px(7.)).rounded_full().bg(rgb(color))
+fn status_dot(color: u32, palette: theme::Palette) -> Div {
+    div().size(px(7.)).rounded_full().bg(palette.color(color))
 }
 
-fn status_badge(agent: &AgentView) -> impl IntoElement {
+fn status_badge(agent: &AgentView, palette: theme::Palette) -> impl IntoElement {
     let pending = agent.elicitations.len();
     let color = if pending > 0 {
         STATUS_QUESTION
@@ -43,7 +43,7 @@ fn status_badge(agent: &AgentView) -> impl IntoElement {
         .items_center()
         .justify_start()
         .when(agent.status != Status::Idle || pending > 0, |badge| {
-            badge.child(status_dot(color))
+            badge.child(status_dot(color, palette))
         })
         .tooltip(move |window, cx| Tooltip::new(label.clone()).build(window, cx))
 }
@@ -72,6 +72,7 @@ impl Workspace {
         id: &'static str,
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
+        let palette = theme::palette(cx);
         let (background, foreground) = match notice {
             Notice::Info(_) => (ACCENT_SURFACE, ACCENT),
             Notice::Error(_) => (ERROR_SURFACE, ERROR_TEXT),
@@ -84,9 +85,9 @@ impl Workspace {
             .gap_3()
             .px_4()
             .py_2()
-            .bg(rgb(background))
+            .bg(palette.color(background))
             .text_sm()
-            .text_color(rgb(foreground))
+            .text_color(palette.color(foreground))
             .child(
                 div()
                     .flex_1()
@@ -104,6 +105,7 @@ impl Workspace {
     }
 
     fn render_mobile_loading(&self, cx: &mut Context<Self>) -> gpui_kit::Stateful<Div> {
+        let palette = theme::palette(cx);
         div()
             .id("mobile-loading-overlay")
             .absolute()
@@ -116,19 +118,16 @@ impl Workspace {
             .justify_center()
             .gap_4()
             .p_6()
-            .bg(rgb(BG))
-            .text_color(rgb(TEXT))
+            .bg(palette.color(BG))
+            .text_color(palette.color(TEXT))
             .child(div().text_2xl().child("Connect your phone"))
-            .child(
-                div()
-                    .text_sm()
-                    .text_color(rgb(MUTED))
-                    .child(if self.mobile_access.loading {
-                        "Loading mobile secrets from SecretSpec…"
-                    } else {
-                        "Starting mobile connection…"
-                    }),
-            )
+            .child(div().text_sm().text_color(palette.color(MUTED)).child(
+                if self.mobile_access.loading {
+                    "Loading mobile secrets from SecretSpec…"
+                } else {
+                    "Starting mobile connection…"
+                },
+            ))
             .child(
                 div().w_full().max_w(px(360.)).child(
                     Progress::new("mobile-secrets-loading")
@@ -143,7 +142,7 @@ impl Workspace {
                     .rounded_md()
                     .px_4()
                     .py_2()
-                    .bg(rgb(SURFACE))
+                    .bg(palette.color(SURFACE))
                     .child("Close")
                     .on_click(cx.listener(|this, _, _, cx| {
                         this.mobile_access.pairing_visible = false;
@@ -153,6 +152,7 @@ impl Workspace {
     }
 
     fn render_linked_clients(&self, cx: &mut Context<Self>) -> gpui_kit::Stateful<Div> {
+        let palette = theme::palette(cx);
         let clients = self
             .mobile_access
             .server
@@ -171,7 +171,7 @@ impl Workspace {
             list = list.child(
                 div()
                     .text_sm()
-                    .text_color(rgb(MUTED))
+                    .text_color(palette.color(MUTED))
                     .child("No browsers linked yet."),
             );
         }
@@ -188,13 +188,18 @@ impl Workspace {
                 .id(format!("linked-mobile-{id}"))
                 .rounded_md()
                 .border_1()
-                .border_color(rgb(BORDER))
+                .border_color(palette.color(BORDER))
                 .p_3()
                 .flex()
                 .flex_col()
                 .gap_2()
                 .child(div().text_sm().child(client.name))
-                .child(div().text_xs().text_color(rgb(MUTED)).child(description))
+                .child(
+                    div()
+                        .text_xs()
+                        .text_color(palette.color(MUTED))
+                        .child(description),
+                )
                 .child(
                     div().flex().gap_2().child(
                         div()
@@ -203,9 +208,9 @@ impl Workspace {
                             .rounded_md()
                             .px_3()
                             .py_1()
-                            .bg(rgb(if confirming { ERROR_SURFACE } else { SURFACE }))
+                            .bg(palette.color(if confirming { ERROR_SURFACE } else { SURFACE }))
                             .text_xs()
-                            .text_color(rgb(if confirming { ERROR_TEXT } else { TEXT }))
+                            .text_color(palette.color(if confirming { ERROR_TEXT } else { TEXT }))
                             .child(if confirming {
                                 "Confirm revoke"
                             } else {
@@ -222,7 +227,7 @@ impl Workspace {
                         .id(format!("cancel-revoke-mobile-{id}"))
                         .cursor_pointer()
                         .text_xs()
-                        .text_color(rgb(MUTED))
+                        .text_color(palette.color(MUTED))
                         .child("Cancel")
                         .on_click(cx.listener(|this, _, _, cx| {
                             this.mobile_access.revoke_confirm = None;
@@ -231,7 +236,7 @@ impl Workspace {
                 );
             }
             if legacy {
-                row = row.border_color(rgb(ACCENT));
+                row = row.border_color(palette.color(ACCENT));
             }
             list = list.child(row);
         }
@@ -243,6 +248,7 @@ impl Workspace {
         error: &str,
         cx: &mut Context<Self>,
     ) -> gpui_kit::Stateful<Div> {
+        let palette = theme::palette(cx);
         div()
             .id("mobile-provider-overlay")
             .absolute()
@@ -253,26 +259,26 @@ impl Workspace {
             .items_center()
             .justify_center()
             .p_4()
-            .bg(rgb(BG))
-            .text_color(rgb(TEXT))
+            .bg(palette.color(BG))
+            .text_color(palette.color(TEXT))
             .child(
                 div()
                     .w_full()
                     .max_w(px(560.))
                     .rounded_md()
                     .border_1()
-                    .border_color(rgb(BORDER))
-                    .bg(rgb(SURFACE))
+                    .border_color(palette.color(BORDER))
+                    .bg(palette.color(SURFACE))
                     .p_6()
                     .flex()
                     .flex_col()
                     .gap_4()
                     .child(div().text_2xl().child("Choose a SecretSpec provider"))
-                    .child(div().text_sm().text_color(rgb(ERROR_TEXT)).child(error.to_owned()))
+                    .child(div().text_sm().text_color(palette.color(ERROR_TEXT)).child(error.to_owned()))
                     .child(
                         div()
                             .text_sm()
-                            .text_color(rgb(MUTED))
+                            .text_color(palette.color(MUTED))
                             .child("Use a provider for this run:"),
                     )
                     .child(
@@ -286,7 +292,7 @@ impl Workspace {
                                     .rounded_md()
                                     .px_4()
                                     .py_2()
-                                    .bg(rgb(ACCENT_SURFACE))
+                                    .bg(palette.color(ACCENT_SURFACE))
                                     .child("System keyring")
                                     .on_click(cx.listener(|this, _, _, cx| {
                                         this.use_mobile_provider_named("keyring", cx)
@@ -299,7 +305,7 @@ impl Workspace {
                                     .rounded_md()
                                     .px_4()
                                     .py_2()
-                                    .bg(rgb(ACCENT_SURFACE))
+                                    .bg(palette.color(ACCENT_SURFACE))
                                     .child("1Password")
                                     .on_click(cx.listener(|this, _, _, cx| {
                                         this.use_mobile_provider_named("onepassword", cx)
@@ -318,7 +324,7 @@ impl Workspace {
                                     .rounded_md()
                                     .px_4()
                                     .py_2()
-                                    .bg(rgb(ACCENT_SURFACE))
+                                    .bg(palette.color(ACCENT_SURFACE))
                                     .child("Use provider")
                                     .on_click(cx.listener(|this, _, _, cx| {
                                         this.use_mobile_provider(cx)
@@ -331,7 +337,7 @@ impl Workspace {
                                     .rounded_md()
                                     .px_4()
                                     .py_2()
-                                    .bg(rgb(BG))
+                                    .bg(palette.color(BG))
                                     .child("Close")
                                     .on_click(cx.listener(|this, _, _, cx| {
                                         this.mobile_access.provider_prompt = None;
@@ -342,7 +348,7 @@ impl Workspace {
                     .child(
                         div()
                             .text_sm()
-                            .text_color(rgb(MUTED))
+                            .text_color(palette.color(MUTED))
                             .child("To keep a default provider for future launches, run `secretspec config global init`."),
                     ),
             )
@@ -353,6 +359,7 @@ impl Workspace {
         window: &Window,
         cx: &mut Context<Self>,
     ) -> gpui_kit::Stateful<Div> {
+        let palette = theme::palette(cx);
         let viewport = window.viewport_size();
         let sidebar_width = (f32::from(viewport.width) * self.sidebar_fraction).max(180.);
         let available = (f32::from(viewport.width) - sidebar_width - 70.)
@@ -390,7 +397,7 @@ impl Workspace {
                     .rounded_md()
                     .px_4()
                     .py_2()
-                    .bg(rgb(ACCENT_SURFACE))
+                    .bg(palette.color(ACCENT_SURFACE))
                     .child("Copy link")
                     .on_click(cx.listener(|this, _, _, cx| this.copy_mobile_link(cx))),
             )
@@ -401,7 +408,7 @@ impl Workspace {
                     .rounded_md()
                     .px_4()
                     .py_2()
-                    .bg(rgb(SURFACE))
+                    .bg(palette.color(SURFACE))
                     .child("Close")
                     .on_click(cx.listener(|this, _, _, cx| {
                         this.mobile_access.pairing_visible = false;
@@ -430,12 +437,12 @@ impl Workspace {
             .gap_4()
             .p_4()
             .overflow_y_scroll()
-            .bg(rgb(BG))
-            .text_color(rgb(TEXT))
+            .bg(palette.color(BG))
+            .text_color(palette.color(TEXT))
             .child(div().text_2xl().child("Connect your phone"))
             .child(
                 div()
-                    .text_color(rgb(MUTED))
+                    .text_color(palette.color(MUTED))
                     .text_center()
                     .child(format!("Open {site} on your phone and scan this code.")),
             )
@@ -458,6 +465,7 @@ impl Workspace {
 
 impl Render for Workspace {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        let palette = theme::palette(cx);
         let mobile_pairing = (self.mobile_access.pairing_visible
             && self.mobile_access.endpoint_id.is_some())
         .then(|| self.render_mobile_pairing(window, cx));
@@ -476,8 +484,8 @@ impl Render for Workspace {
             .h_full()
             .flex_shrink_0()
             .cursor_ew_resize()
-            .bg(rgb(BORDER))
-            .hover(|style| style.bg(rgb(ACCENT)))
+            .bg(palette.color(BORDER))
+            .hover(|style| style.bg(palette.color(ACCENT)))
             .on_drag(SidebarResize, |drag, _, _, cx| {
                 cx.stop_propagation();
                 cx.new(|_| drag.clone())
@@ -490,7 +498,7 @@ impl Render for Workspace {
             .relative()
             .flex()
             .flex_col()
-            .bg(rgb(BG));
+            .bg(palette.color(BG));
         if matches!(self.view, WorkspaceView::NewSession { .. }) {
             chat = self.render_picker(chat, cx);
         } else if let Some(SessionLocation {
@@ -515,7 +523,7 @@ impl Render for Workspace {
                         .flex()
                         .flex_col()
                         .border_l_1()
-                        .border_color(rgb(BORDER)),
+                        .border_color(palette.color(BORDER)),
                     cx,
                 );
                 chat = chat.child(
@@ -532,25 +540,28 @@ impl Render for Workspace {
             }
         } else {
             let archived = matches!(self.view, WorkspaceView::Archive { .. });
-            chat = chat.child(
-                div()
-                    .flex_1()
-                    .flex()
-                    .flex_col()
-                    .items_center()
-                    .justify_center()
-                    .gap_3()
-                    .child(div().text_2xl().text_color(rgb(TEXT)).child(if archived {
-                        "Archived sessions"
-                    } else {
-                        "Ready when you are."
-                    }))
-                    .child(div().text_color(rgb(MUTED)).child(if archived {
-                        "Select a session to restore it."
-                    } else {
-                        "Press Ctrl+P to find a folder and start an agent."
-                    })),
-            );
+            chat =
+                chat.child(
+                    div()
+                        .flex_1()
+                        .flex()
+                        .flex_col()
+                        .items_center()
+                        .justify_center()
+                        .gap_3()
+                        .child(div().text_2xl().text_color(palette.color(TEXT)).child(
+                            if archived {
+                                "Archived sessions"
+                            } else {
+                                "Ready when you are."
+                            },
+                        ))
+                        .child(div().text_color(palette.color(MUTED)).child(if archived {
+                            "Select a session to restore it."
+                        } else {
+                            "Press Ctrl+P to find a folder and start an agent."
+                        })),
+                );
         }
         if let Some(notice) = &self.notice {
             chat = chat.child(self.render_notice(notice, "workspace-notice", cx));
@@ -562,7 +573,7 @@ impl Render for Workspace {
         div()
             .size_full()
             .flex()
-            .bg(rgb(BG))
+            .bg(palette.color(BG))
             .on_action(cx.listener(Self::quick_open))
             .on_action(cx.listener(Self::zoom_in))
             .on_action(cx.listener(Self::zoom_out))

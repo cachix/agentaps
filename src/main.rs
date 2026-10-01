@@ -1,5 +1,6 @@
 mod acp;
 mod app;
+mod appearance;
 mod config;
 mod diff_view;
 mod diff_watch;
@@ -16,8 +17,16 @@ mod session;
 #[cfg(unix)]
 mod shell_env;
 mod theme;
+mod theming;
 
 fn main() {
+    #[cfg(target_os = "linux")]
+    match std::env::args().nth(1).as_deref() {
+        Some("--gtk-theme-probe") => theming::exit_after_probe(theming::Backend::Gtk),
+        Some("--qt-theme-probe") => theming::exit_after_probe(theming::Backend::Qt),
+        _ => {}
+    }
+
     if std::env::args_os()
         .nth(1)
         .is_some_and(|arg| arg == "--version")

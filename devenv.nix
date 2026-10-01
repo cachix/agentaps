@@ -6,6 +6,8 @@
     trunk
     python312
   ] ++ lib.optionals stdenv.hostPlatform.isLinux [
+    gtk4
+    qt6.qtbase
     fontconfig
     freetype
     libxcb
@@ -13,6 +15,10 @@
     wayland
     vulkan-loader
   ];
+
+  enterShell = lib.optionalString pkgs.stdenv.hostPlatform.isLinux ''
+    unset NIX_CFLAGS_COMPILE NIX_LDFLAGS
+  '';
 
   languages.rust = {
     enable = true;
@@ -24,6 +30,8 @@
   env = lib.mkMerge [
     (lib.optionalAttrs pkgs.stdenv.hostPlatform.isLinux {
       LD_LIBRARY_PATH = lib.makeLibraryPath [
+        pkgs.gtk4
+        pkgs.qt6.qtbase
         pkgs.fontconfig
         pkgs.freetype
         pkgs.libxcb

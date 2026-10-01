@@ -15,6 +15,7 @@ If Codex or Claude is installed without its ACP adapter, Agentaps can offer to s
 ## Work in Agentaps
 
 - **Keep projects and conversations together.** Agentaps saves harness session references and queued prompts. Conversation history stays in the harness and is replayed when you reopen a session. Agent-supplied session titles appear in the desktop header and when you hover over a session in the sidebar. Select the project path beside Diff to move a session to another folder; the agent reconnects there with fresh context, and the previous session remains in the archive. On launch, Agentaps reconnects agents and resumes sessions when they support it. You can archive sessions or reset an agent's context, which archives the previous session. Forking a reply starts a new session with the visible conversation as context.
+- **Choose your theme.** Open **Theme** using the settings button at the bottom of the sidebar. Choose Agentaps, System, or a bundled light or dark palette. Agentaps follows the desktop light/dark scheme using its own palettes; bundled presets keep their selected scheme. The choice and zoom are remembered across restarts. On Linux, System follows the current GTK or Qt theme, including desktop settings changes.
 - **Review local changes.** Select **Diff** in a conversation to inspect staged and unstaged changes against HEAD. Open files in unified or split view. The diff refreshes as the checkout changes.
 - **Use your agent's controls.** Choose a model or reasoning effort when the agent offers them, run its slash commands, and answer ACP form questions in the chat.
 - **Work over SSH.** Enter a path such as `ssh://user@server.example/home/user/project` when creating a project. Agentaps runs the agent on that server using your existing SSH configuration and keys. The agent and its ACP adapter must be installed there, and the server's host key must already be known. Try `ssh user@server.example` first. Diff review is currently available for local projects only.
@@ -40,7 +41,9 @@ On a system with Rust and GPUI's native build dependencies, install from crates.
 cargo install agentaps
 ```
 
-On Linux, fontconfig and FreeType development files must be available to `pkg-config`. To run this checkout with [devenv](https://devenv.sh/) installed:
+Theme conversion currently uses a pinned upstream `native-theme-gpui` Git revision for GPUI Kit 0.7 support, ahead of its crates.io release. GTK/Qt probing stays in Agentaps.
+
+On Linux, fontconfig, FreeType, GTK 4.10 or later, and Qt 6 Widgets development files must be available to `pkg-config`. Ubuntu 24.04 provides these through `libfontconfig-dev`, `libfreetype6-dev`, `libgtk-4-dev`, and `qt6-base-dev`. To run this checkout with [devenv](https://devenv.sh/) installed:
 
 ```sh
 devenv shell cargo run --release

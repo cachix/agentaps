@@ -187,14 +187,17 @@ impl Workspace {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> Div {
+        let palette = theme::palette(cx);
         let content = match row {
-            ChatRowKind::Empty => div().mt_8().text_center().text_color(rgb(MUTED)).child(
-                if agent.status == Status::Connecting {
+            ChatRowKind::Empty => div()
+                .mt_8()
+                .text_center()
+                .text_color(palette.color(MUTED))
+                .child(if agent.status == Status::Connecting {
                     "Connecting to agent…"
                 } else {
                     "Ask the agent to work on this project."
-                },
-            ),
+                }),
             ChatRowKind::Tools(start, end) => {
                 self.render_tool_group(agent, start, end, self.chat_text_style(cx), window, cx)
             }
@@ -210,8 +213,8 @@ impl Workspace {
                         .px_3()
                         .py_2()
                         .rounded_md()
-                        .bg(rgb(USER_BUBBLE))
-                        .child(div().text_xs().text_color(rgb(ACCENT)).child(
+                        .bg(palette.color(USER_BUBBLE))
+                        .child(div().text_xs().text_color(palette.color(ACCENT)).child(
                             if shell_command(&prompt.text).is_some() {
                                 format!("Queued {} · Shell command", index + 1)
                             } else {
@@ -226,7 +229,7 @@ impl Workspace {
                             bubble.child(
                                 div()
                                     .text_sm()
-                                    .text_color(rgb(TEXT))
+                                    .text_color(palette.color(TEXT))
                                     .whitespace_normal()
                                     .child(prompt.text.clone()),
                             )
@@ -282,12 +285,13 @@ impl Workspace {
         TextViewStyle {
             paragraph_gap: rems(0.25),
             highlight_theme: cx.theme().highlight_theme.clone(),
-            is_dark: true,
+            is_dark: cx.theme().mode.is_dark(),
             ..Default::default()
         }
     }
 
     fn render_thought(&self, agent: &AgentView, index: usize, cx: &mut Context<Self>) -> Div {
+        let palette = theme::palette(cx);
         let key = (agent.config.id, index);
         let expanded = self.conversation.expanded_thought_rows.contains(&key);
         let row_id: gpui_kit::ElementId = ("thought-row", agent.config.id).into();
@@ -299,7 +303,7 @@ impl Workspace {
                 .items_center()
                 .gap_2()
                 .text_sm()
-                .text_color(rgb(MUTED))
+                .text_color(palette.color(MUTED))
                 .child(div().w(px(14.)).flex_shrink_0().text_center().child("•"))
                 .child("Thought")
                 .child(div().text_xs().child(if expanded { "⌄" } else { "›" }))
@@ -319,7 +323,7 @@ impl Workspace {
                     .mt_1()
                     .p_2()
                     .rounded_md()
-                    .bg(rgb(SURFACE))
+                    .bg(palette.color(SURFACE))
                     .children(self.render_images(
                         format!("thought-images-{}-{index}", agent.config.id),
                         &entry.images,
@@ -330,7 +334,7 @@ impl Workspace {
                                 .style(self.chat_text_style(cx))
                                 .selectable(true)
                                 .text_sm()
-                                .text_color(rgb(TEXT)),
+                                .text_color(palette.color(TEXT)),
                         )
                     }),
             );
@@ -347,6 +351,7 @@ impl Workspace {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> Div {
+        let palette = theme::palette(cx);
         let entry = &agent.messages[index];
         if entry.role == Role::Thought {
             return self.render_thought(agent, index, cx);
@@ -362,7 +367,7 @@ impl Workspace {
             .style(self.chat_text_style(cx))
             .selectable(true)
             .text_sm()
-            .text_color(rgb(TEXT));
+            .text_color(palette.color(TEXT));
         let images =
             self.render_images(format!("images-{}-{index}", agent.config.id), &entry.images);
         match entry.role {
@@ -377,15 +382,15 @@ impl Workspace {
                             .px_3()
                             .py_2()
                             .rounded_lg()
-                            .bg(rgb(USER_BUBBLE))
+                            .bg(palette.color(USER_BUBBLE))
                             .text_sm()
-                            .text_color(rgb(TEXT))
+                            .text_color(palette.color(TEXT))
                             .whitespace_normal()
                             .when(shell.is_some(), |element| {
                                 element.child(
                                     div()
                                         .text_xs()
-                                        .text_color(rgb(ACCENT))
+                                        .text_color(palette.color(ACCENT))
                                         .child("Shell command"),
                                 )
                             })
@@ -417,9 +422,9 @@ impl Workspace {
                             .px_3()
                             .py_2()
                             .rounded_lg()
-                            .bg(rgb(AGENT_BUBBLE))
+                            .bg(palette.color(AGENT_BUBBLE))
                             .text_sm()
-                            .text_color(rgb(TEXT))
+                            .text_color(palette.color(TEXT))
                             .whitespace_normal()
                             .children(images)
                             .when(!entry.text.is_empty(), |bubble| bubble.child(content)),
@@ -493,17 +498,17 @@ impl Workspace {
                 .items_center()
                 .gap_3()
                 .py_2()
-                .child(div().flex_1().h(px(1.)).bg(rgb(BORDER)))
+                .child(div().flex_1().h(px(1.)).bg(palette.color(BORDER)))
                 .child(
                     div()
                         .max_w(relative(0.8))
                         .text_center()
                         .text_xs()
-                        .text_color(rgb(MUTED))
+                        .text_color(palette.color(MUTED))
                         .whitespace_normal()
                         .child(entry.text.clone()),
                 )
-                .child(div().flex_1().h(px(1.)).bg(rgb(BORDER))),
+                .child(div().flex_1().h(px(1.)).bg(palette.color(BORDER))),
             role => {
                 let (label, color) = match role {
                     Role::Tool => ("TOOL", TOOL_MARKER),
@@ -515,14 +520,14 @@ impl Workspace {
                     .px_3()
                     .py_2()
                     .rounded_md()
-                    .bg(rgb(SURFACE))
+                    .bg(palette.color(SURFACE))
                     .flex()
                     .gap_2()
                     .child(
                         div()
                             .text_xs()
                             .font_weight(gpui_kit::FontWeight::SEMIBOLD)
-                            .text_color(rgb(color))
+                            .text_color(palette.color(color))
                             .child(label),
                     )
                     .child(
@@ -530,7 +535,7 @@ impl Workspace {
                             .flex_1()
                             .min_w(px(0.))
                             .text_sm()
-                            .text_color(rgb(TEXT))
+                            .text_color(palette.color(TEXT))
                             .whitespace_normal()
                             .child(content),
                     )
@@ -544,6 +549,7 @@ impl Workspace {
         permission_index: usize,
         cx: &mut Context<Self>,
     ) -> Div {
+        let palette = theme::palette(cx);
         let permission = &agent.permissions[permission_index];
         let mut choices = div().flex().gap_2().mt_3();
         for (option_index, (option_id, label)) in permission.options.iter().enumerate() {
@@ -556,11 +562,11 @@ impl Workspace {
                     ))
                     .cursor_pointer()
                     .rounded_md()
-                    .bg(rgb(ACCENT_SURFACE))
+                    .bg(palette.color(ACCENT_SURFACE))
                     .px_3()
                     .py_2()
                     .text_sm()
-                    .text_color(rgb(TEXT))
+                    .text_color(palette.color(TEXT))
                     .child(label.clone())
                     .on_click(cx.listener(move |this, _, _, cx| {
                         this.choose_permission(permission_index, option_id.clone(), cx)
@@ -571,11 +577,11 @@ impl Workspace {
             .p_4()
             .rounded_lg()
             .border_1()
-            .border_color(rgb(PERMISSION_BORDER))
+            .border_color(palette.color(PERMISSION_BORDER))
             .child(
                 div()
                     .text_sm()
-                    .text_color(rgb(TEXT))
+                    .text_color(palette.color(TEXT))
                     .child(permission.title.clone()),
             )
             .when_some(permission.description.as_ref(), |element, description| {
@@ -583,7 +589,7 @@ impl Workspace {
                     div()
                         .mt_2()
                         .text_sm()
-                        .text_color(rgb(MUTED))
+                        .text_color(palette.color(MUTED))
                         .child(description.clone()),
                 )
             })
@@ -596,24 +602,25 @@ impl Workspace {
         question_index: usize,
         cx: &mut Context<Self>,
     ) -> Div {
+        let palette = theme::palette(cx);
         let question = &agent.elicitations[question_index];
         let mut fields = div().flex().flex_col().gap_3().mt_3();
         for (field_index, field) in question.fields.iter().enumerate() {
-            let mut row =
+            let mut row = div().flex().flex_col().gap_1().child(
                 div()
-                    .flex()
-                    .flex_col()
-                    .gap_1()
-                    .child(div().text_sm().text_color(rgb(TEXT)).child(format!(
+                    .text_sm()
+                    .text_color(palette.color(TEXT))
+                    .child(format!(
                         "{}{}",
                         field.title,
                         if field.required { " *" } else { "" }
-                    )));
+                    )),
+            );
             if let Some(description) = &field.description {
                 row = row.child(
                     div()
                         .text_xs()
-                        .text_color(rgb(MUTED))
+                        .text_color(palette.color(MUTED))
                         .child(description.clone()),
                 );
             }
@@ -623,7 +630,7 @@ impl Workspace {
                         div()
                             .rounded_md()
                             .border_1()
-                            .border_color(rgb(BORDER))
+                            .border_color(palette.color(BORDER))
                             .child(Input::new(input)),
                     );
                 }
@@ -663,18 +670,18 @@ impl Workspace {
             .p_4()
             .rounded_lg()
             .border_1()
-            .border_color(rgb(STATUS_QUESTION))
+            .border_color(palette.color(STATUS_QUESTION))
             .child(
                 div()
                     .text_xs()
-                    .text_color(rgb(STATUS_QUESTION))
+                    .text_color(palette.color(STATUS_QUESTION))
                     .child(format!("QUESTION FROM {}", agent.name)),
             )
             .child(
                 div()
                     .mt_1()
                     .text_sm()
-                    .text_color(rgb(TEXT))
+                    .text_color(palette.color(TEXT))
                     .child(question.message.clone()),
             )
             .child(fields)
@@ -683,7 +690,7 @@ impl Workspace {
                     div()
                         .mt_2()
                         .text_sm()
-                        .text_color(rgb(STATUS_ERROR))
+                        .text_color(palette.color(STATUS_ERROR))
                         .child(error.clone()),
                 )
             })
@@ -724,6 +731,7 @@ impl Workspace {
         is_selected: impl Fn(usize) -> bool,
         cx: &mut Context<Self>,
     ) -> Div {
+        let palette = theme::palette(cx);
         let mut choices = div().flex().flex_wrap().gap_2();
         for (option_index, (_, label)) in options.iter().enumerate() {
             choices = choices.child(
@@ -737,12 +745,12 @@ impl Workspace {
                     .cursor_pointer()
                     .rounded_md()
                     .border_1()
-                    .border_color(rgb(if is_selected(option_index) {
+                    .border_color(palette.color(if is_selected(option_index) {
                         ACCENT
                     } else {
                         BORDER
                     }))
-                    .bg(rgb(if is_selected(option_index) {
+                    .bg(palette.color(if is_selected(option_index) {
                         ACCENT_SURFACE
                     } else {
                         SURFACE
@@ -750,7 +758,7 @@ impl Workspace {
                     .px_3()
                     .py_2()
                     .text_sm()
-                    .text_color(rgb(TEXT))
+                    .text_color(palette.color(TEXT))
                     .child(label.clone())
                     .on_click(cx.listener(move |this, _, _, cx| {
                         this.select_elicitation_option(
@@ -773,6 +781,7 @@ impl Workspace {
         primary: bool,
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
+        let palette = theme::palette(cx);
         div()
             .id((
                 "question-action",
@@ -788,8 +797,8 @@ impl Workspace {
             .px_3()
             .py_2()
             .text_sm()
-            .bg(rgb(if primary { ACCENT_SURFACE } else { SURFACE }))
-            .text_color(rgb(TEXT))
+            .bg(palette.color(if primary { ACCENT_SURFACE } else { SURFACE }))
+            .text_color(palette.color(TEXT))
             .child(label)
             .on_click(cx.listener(move |this, _, _, cx| {
                 this.answer_elicitation(question_index, action, cx)

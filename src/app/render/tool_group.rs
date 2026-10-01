@@ -1,6 +1,6 @@
 use super::*;
 
-fn tool_status_marker(marker: &'static str, color: u32) -> Div {
+fn tool_status_marker(marker: &'static str, color: u32, palette: theme::Palette) -> Div {
     let indicator = div()
         .w(px(14.))
         .h(px(18.))
@@ -8,9 +8,9 @@ fn tool_status_marker(marker: &'static str, color: u32) -> Div {
         .flex()
         .items_center()
         .justify_center()
-        .text_color(rgb(color));
+        .text_color(palette.color(color));
     if marker == "◌" {
-        indicator.child(status_dot(color))
+        indicator.child(status_dot(color, palette))
     } else {
         indicator.child(marker)
     }
@@ -26,6 +26,7 @@ impl Workspace {
         _window: &mut Window,
         cx: &mut Context<Self>,
     ) -> Div {
+        let palette = theme::palette(cx);
         let tool_entries = &agent.messages[message_index..end];
         let group_key = (agent.config.id, message_index);
         let expanded = !self.conversation.collapsed_tool_groups.contains(&group_key);
@@ -69,24 +70,25 @@ impl Workspace {
                 .items_center()
                 .gap_2()
                 .text_sm()
-                .child(tool_status_marker(marker, marker_color))
+                .child(tool_status_marker(marker, marker_color, palette))
                 .child(
                     div()
                         .min_w(px(0.))
                         .truncate()
-                        .text_color(rgb(TEXT))
+                        .text_color(palette.color(TEXT))
                         .child(heading),
                 )
-                .child(div().text_xs().text_color(rgb(MUTED)).child(if expanded {
-                    "⌄"
-                } else {
-                    "›"
-                }))
+                .child(
+                    div()
+                        .text_xs()
+                        .text_color(palette.color(MUTED))
+                        .child(if expanded { "⌄" } else { "›" }),
+                )
                 .when(!expanded && action_count > 0, |row| {
                     row.child(
                         div()
                             .text_xs()
-                            .text_color(rgb(MUTED))
+                            .text_color(palette.color(MUTED))
                             .child(format!("{action_count} steps")),
                     )
                 })
@@ -110,12 +112,12 @@ impl Workspace {
                         .items_center()
                         .gap_2()
                         .text_xs()
-                        .text_color(rgb(MUTED))
+                        .text_color(palette.color(MUTED))
                         .child(
                             div()
                                 .w(px(14.))
                                 .flex_shrink_0()
-                                .text_color(rgb(STATUS_DONE))
+                                .text_color(palette.color(STATUS_DONE))
                                 .child("✓"),
                         )
                         .child(format!("{completed_count} completed steps"))
@@ -162,12 +164,12 @@ impl Workspace {
                         .items_start()
                         .gap_2()
                         .text_sm()
-                        .child(tool_status_marker(status_marker, status_color))
+                        .child(tool_status_marker(status_marker, status_color, palette))
                         .child(
                             div()
                                 .min_w(px(0.))
                                 .truncate()
-                                .text_color(rgb(label_color))
+                                .text_color(palette.color(label_color))
                                 .child(label),
                         )
                         .child(div().text_xs().child(if row_expanded { "⌄" } else { "›" }))
@@ -189,7 +191,7 @@ impl Workspace {
                             .mt_1()
                             .p_2()
                             .rounded_md()
-                            .bg(rgb(SURFACE))
+                            .bg(palette.color(SURFACE))
                             .child(
                                 TextView::markdown(
                                     (text_id, row_key.1.to_string()),
@@ -198,7 +200,7 @@ impl Workspace {
                                 .style(text_style.clone())
                                 .selectable(true)
                                 .text_xs()
-                                .text_color(rgb(TEXT)),
+                                .text_color(palette.color(TEXT)),
                             ),
                     );
                 }

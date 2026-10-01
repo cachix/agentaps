@@ -19,6 +19,7 @@ license-file = "LICENSE"
 icons = ["assets/packaging/icon.png"]
 
 [package.metadata.packager.deb]
+depends = ["libgtk-4-1 (>= 4.10)", "libqt6widgets6t64 (>= 6.2) | libqt6widgets6 (>= 6.2)", "qt6-qpa-plugins"]
 files = { "LICENSE" = "usr/share/doc/agentaps/copyright" }
 
 [package.metadata.packager.macos]
@@ -28,6 +29,9 @@ signing-identity = "-"
 installer-icon = "assets/packaging/icon.ico"
 
 [dependencies]
+anyhow = "1"
+# GPUI Kit 0.7 support is on upstream main, ahead of the published 0.5.9.
+native-theme-gpui = { git = "https://github.com/tiborgats/native-theme.git", rev = "0edab06a4a56114fe6994bfbbc17c70d8e0c4572", default-features = false }
 agentaps-control-protocol = { path = "crates/control-protocol" }
 agent-client-protocol-schema = { version = "1.9.1", default-features = false, features = ["unstable_protocol_v2"] }
 base64 = "0.22"
@@ -57,3 +61,12 @@ tempfile = "3"
 [workspace]
 members = ["crates/control-protocol"]
 exclude = ["web", "crates/gpui-kit-reqwest-compat"]
+
+[target.'cfg(target_os = "linux")'.dependencies]
+ashpd = { version = "=0.13.13", default-features = false, features = ["async-io", "settings"] }
+detect-desktop-environment = "=1.3.0"
+futures-util = "0.3"
+native-theme-gtk = "=0.1.1"
+native-theme-qt = "=0.1.0"
+smol = "2"
+xdg = "=3.0.0"

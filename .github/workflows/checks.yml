@@ -21,7 +21,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-22.04, macos-15, windows-2022]
+        os: [ubuntu-24.04, macos-15, windows-2022]
     steps:
       - uses: actions/checkout@v5
       - name: Install Linux libraries
@@ -32,7 +32,7 @@ jobs:
             pkg-config libfontconfig-dev libfreetype6-dev \
             libxkbcommon-dev libxkbcommon-x11-dev libwayland-dev libx11-dev \
             libxcb-shape0-dev libxcb-xfixes0-dev libxcb-randr0-dev \
-            libxcb-xinput-dev libegl1-mesa-dev libgles2-mesa-dev libglib2.0-dev
+            libxcb-xinput-dev libegl1-mesa-dev libgles2-mesa-dev libglib2.0-dev libgtk-4-dev qt6-base-dev
       - name: Install Rust toolchain
         shell: bash
         run: |

@@ -8,9 +8,13 @@ Notable changes to Agentaps are recorded here.
 
 - Rename sessions inline by clicking the header title or choosing Rename session in the session menu. Hovering the title reveals an edit box. Custom names are searchable in the sidebar and survive restarts and agent title updates.
 
+- Choose and remember a desktop theme from the sidebar, including light and dark presets ported from FactorSeal and a System option that follows GTK/Qt theme changes on Linux. Chat, activity, controls, and diffs share the selected palette while retaining zoom.
+
 - Paste or drop images into the composer and see images in conversations.
 
 ### Fixed
+
+- The default Agentaps theme now follows the desktop light/dark scheme with matching light and dark palettes across the conversation, sidebar, controls, and diffs.
 
 - Conversation history comes from harness session replay instead of a duplicate local transcript. Config saves contain only session references and app state, skip unchanged data, and retain prior session references in the archive after context resets or folder moves. An opt-in smoke test verifies history replay after restarting an authenticated harness.
 - Web Connect pairs and connects in Safari, which previously could not reach the default Iroh relays.
@@ -22,6 +26,10 @@ Notable changes to Agentaps are recorded here.
 - The website calls browser access Remote Control and retains the GitHub stars count and latest release version.
 
 - The website keeps the original dark blue palette in a refreshed layout with a centered hero, install and quickstart panels, a full desktop screenshot, and clearer agent and Remote Control sections.
+
+- Desktop theme conversion uses the upstream native-theme-gpui connector pinned to its GPUI Kit 0.7 revision, while retaining live GTK/Qt detection, saved theme choices, and zoom.
+
+- Linux builds and packages now require GTK 4.10 or later and Qt 6 Widgets for native desktop theming; Linux desktop CI now builds on Ubuntu 24.04.
 
 - Context usage beneath the composer includes a progress bar that turns from green to amber at 60% and red at 85%, with token counts and Reset context still available.
 

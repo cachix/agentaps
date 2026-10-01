@@ -2,6 +2,7 @@ use super::*;
 
 impl Workspace {
     pub(super) fn render_picker(&self, mut chat: Div, cx: &mut Context<Self>) -> Div {
+        let palette = theme::palette(cx);
         let WorkspaceView::NewSession { step, return_to } = self.view else {
             return chat;
         };
@@ -12,7 +13,7 @@ impl Workspace {
         if is_folders {
             let matches = self.picker.folder_search.results();
             if matches.is_empty() {
-                results = results.child(div().p_5().text_sm().text_color(rgb(MUTED)).child(
+                results = results.child(div().p_5().text_sm().text_color(palette.color(MUTED)).child(
                     if self.picker.folder_search.searching() {
                         "Searching recent folders…"
                     } else {
@@ -36,16 +37,16 @@ impl Workspace {
                         .flex()
                         .items_center()
                         .gap_3()
-                        .bg(rgb(if index == self.picker.selection {
+                        .bg(palette.color(if index == self.picker.selection {
                             SELECTED
                         } else {
                             SURFACE
                         }))
-                        .hover(|style| style.bg(rgb(HOVER)))
+                        .hover(|style| style.bg(palette.color(HOVER)))
                         .child(
                             Icon::new(IconName::Folder)
                                 .size(px(18.))
-                                .text_color(rgb(ACCENT)),
+                                .text_color(palette.color(ACCENT)),
                         )
                         .child(
                             div()
@@ -54,19 +55,25 @@ impl Workspace {
                                 .flex()
                                 .flex_col()
                                 .gap_1()
-                                .child(div().truncate().text_sm().text_color(rgb(TEXT)).child(name))
+                                .child(
+                                    div()
+                                        .truncate()
+                                        .text_sm()
+                                        .text_color(palette.color(TEXT))
+                                        .child(name),
+                                )
                                 .child(
                                     div()
                                         .truncate()
                                         .text_xs()
-                                        .text_color(rgb(MUTED))
+                                        .text_color(palette.color(MUTED))
                                         .child(path_label),
                                 ),
                         )
                         .child(
                             Icon::new(IconName::ChevronRight)
                                 .size(px(16.))
-                                .text_color(rgb(MUTED)),
+                                .text_color(palette.color(MUTED)),
                         )
                         .on_click(cx.listener(move |this, _, window, cx| {
                             this.select_folder(path.clone(), window, cx)
@@ -81,7 +88,7 @@ impl Workspace {
                     div()
                         .p_5()
                         .text_sm()
-                        .text_color(rgb(MUTED))
+                        .text_color(palette.color(MUTED))
                         .child("No matching installed agents. Enter an ACP command below."),
                 );
             }
@@ -98,16 +105,16 @@ impl Workspace {
                         .flex()
                         .items_center()
                         .gap_3()
-                        .bg(rgb(if index == self.picker.selection {
+                        .bg(palette.color(if index == self.picker.selection {
                             SELECTED
                         } else {
                             SURFACE
                         }))
-                        .hover(|style| style.bg(rgb(HOVER)))
+                        .hover(|style| style.bg(palette.color(HOVER)))
                         .child(
                             Icon::new(IconName::Bot)
                                 .size(px(18.))
-                                .text_color(rgb(ACCENT)),
+                                .text_color(palette.color(ACCENT)),
                         )
                         .child(
                             div()
@@ -120,21 +127,21 @@ impl Workspace {
                                     div()
                                         .truncate()
                                         .text_sm()
-                                        .text_color(rgb(TEXT))
+                                        .text_color(palette.color(TEXT))
                                         .child(agent.name),
                                 )
                                 .child(
                                     div()
                                         .truncate()
                                         .text_xs()
-                                        .text_color(rgb(MUTED))
+                                        .text_color(palette.color(MUTED))
                                         .child(agent.detail),
                                 ),
                         )
                         .child(
                             Icon::new(IconName::ChevronRight)
                                 .size(px(16.))
-                                .text_color(rgb(MUTED)),
+                                .text_color(palette.color(MUTED)),
                         )
                         .on_click(cx.listener(move |this, _, window, cx| {
                             this.start_agent(command.clone(), Some(name.clone()), window, cx)
@@ -149,8 +156,8 @@ impl Workspace {
                         .cursor_pointer()
                         .rounded_lg()
                         .border_1()
-                        .border_color(rgb(if custom_selected { ACCENT } else { BORDER }))
-                        .bg(rgb(SURFACE))
+                        .border_color(palette.color(if custom_selected { ACCENT } else { BORDER }))
+                        .bg(palette.color(SURFACE))
                         .px_4()
                         .py_3()
                         .flex()
@@ -159,14 +166,14 @@ impl Workspace {
                         .child(
                             div()
                                 .text_sm()
-                                .text_color(rgb(ACCENT))
+                                .text_color(palette.color(ACCENT))
                                 .child("Run custom ACP command"),
                         )
                         .child(
                             div()
                                 .truncate()
                                 .text_xs()
-                                .text_color(rgb(MUTED))
+                                .text_color(palette.color(MUTED))
                                 .child(query.trim().to_owned()),
                         )
                         .on_click(
@@ -208,7 +215,7 @@ impl Workspace {
                                     div()
                                         .text_xs()
                                         .font_weight(gpui_kit::FontWeight::SEMIBOLD)
-                                        .text_color(rgb(ACCENT))
+                                        .text_color(palette.color(ACCENT))
                                         .child(if changing_folder {
                                             "SESSION FOLDER"
                                         } else {
@@ -224,9 +231,9 @@ impl Workspace {
                                             .px_2()
                                             .py_1()
                                             .text_sm()
-                                            .text_color(rgb(MUTED))
+                                            .text_color(palette.color(MUTED))
                                             .hover(|style| {
-                                                style.bg(rgb(HOVER)).text_color(rgb(TEXT))
+                                                style.bg(palette.color(HOVER)).text_color(palette.color(TEXT))
                                             })
                                             .child(if is_folders { "Close" } else { "Back" })
                                             .on_click(cx.listener(|this, _, window, cx| {
@@ -239,7 +246,7 @@ impl Workspace {
                             div()
                                 .text_2xl()
                                 .font_weight(gpui_kit::FontWeight::SEMIBOLD)
-                                .text_color(rgb(TEXT))
+                                .text_color(palette.color(TEXT))
                                 .child(if changing_folder {
                                     "Change session folder"
                                 } else if is_folders {
@@ -248,7 +255,7 @@ impl Workspace {
                                     "Choose an agent"
                                 }),
                         )
-                        .child(div().text_sm().text_color(rgb(MUTED)).child(if is_folders {
+                        .child(div().text_sm().text_color(palette.color(MUTED)).child(if is_folders {
                             if changing_folder {
                                 "Choose a local or SSH folder. The agent will reconnect there with fresh context; the previous session will be archived."
                             } else {
@@ -262,18 +269,18 @@ impl Workspace {
                                 div()
                                     .min_w(px(0.))
                                     .rounded_md()
-                                    .bg(rgb(SURFACE))
+                                    .bg(palette.color(SURFACE))
                                     .px_3()
                                     .py_2()
                                     .flex()
                                     .items_center()
                                     .gap_2()
                                     .text_sm()
-                                    .text_color(rgb(MUTED))
+                                    .text_color(palette.color(MUTED))
                                     .child(
                                         Icon::new(IconName::Folder)
                                             .size(px(16.))
-                                            .text_color(rgb(ACCENT)),
+                                            .text_color(palette.color(ACCENT)),
                                     )
                                     .child(div().min_w(px(0.)).truncate().child(project_path)),
                             )
@@ -282,8 +289,8 @@ impl Workspace {
                             div()
                                 .rounded_lg()
                                 .border_1()
-                                .border_color(rgb(BORDER))
-                                .bg(rgb(SURFACE))
+                                .border_color(palette.color(BORDER))
+                                .bg(palette.color(SURFACE))
                                 .p_2()
                                 .child(Input::new(&self.picker.input).cleanable(true)),
                         )
@@ -294,18 +301,18 @@ impl Workspace {
                                     .cursor_pointer()
                                     .rounded_lg()
                                     .border_1()
-                                    .border_color(rgb(BORDER))
-                                    .bg(rgb(SURFACE))
+                                    .border_color(palette.color(BORDER))
+                                    .bg(palette.color(SURFACE))
                                     .px_4()
                                     .py_3()
                                     .flex()
                                     .items_center()
                                     .gap_3()
-                                    .hover(|style| style.bg(rgb(HOVER)))
+                                    .hover(|style| style.bg(palette.color(HOVER)))
                                     .child(
                                         Icon::new(IconName::Folder)
                                             .size(px(18.))
-                                            .text_color(rgb(ACCENT)),
+                                            .text_color(palette.color(ACCENT)),
                                     )
                                     .child("Choose Folder…")
                                     .on_click(cx.listener(|this, _, window, cx| {
@@ -317,7 +324,7 @@ impl Workspace {
                             div()
                                 .text_xs()
                                 .font_weight(gpui_kit::FontWeight::SEMIBOLD)
-                                .text_color(rgb(MUTED))
+                                .text_color(palette.color(MUTED))
                                 .child(if is_folders {
                                     "RECENT FOLDERS"
                                 } else {
@@ -325,7 +332,7 @@ impl Workspace {
                                 }),
                         )
                         .child(results)
-                        .child(div().pt_3().text_xs().text_color(rgb(MUTED)).child(
+                        .child(div().pt_3().text_xs().text_color(palette.color(MUTED)).child(
                             if is_folders && return_to.is_none() {
                                 "↑ ↓ Navigate  ·  Enter Select"
                             } else {
