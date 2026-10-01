@@ -466,6 +466,48 @@ impl Workspace {
 impl Render for Workspace {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let palette = theme::palette(cx);
+        let root = div()
+            .size_full()
+            .flex()
+            .bg(palette.color(BG))
+            .on_action(cx.listener(Self::quick_open))
+            .on_action(cx.listener(Self::zoom_in))
+            .on_action(cx.listener(Self::zoom_out))
+            .on_action(cx.listener(Self::zoom_reset))
+            .capture_key_down(cx.listener(Self::workspace_key_down))
+            .capture_action(cx.listener(|this, _: &MoveUp, window, cx| {
+                this.handle_slash_action(SlashAction::Up, window, cx)
+            }))
+            .capture_action(cx.listener(|this, _: &MoveDown, window, cx| {
+                this.handle_slash_action(SlashAction::Down, window, cx)
+            }))
+            .capture_action(cx.listener(|this, action: &Enter, window, cx| {
+                if enter_sends_prompt(this.send_key, action) && this.composer_focused(window, cx) {
+                    cx.stop_propagation();
+                    this.send_prompt(window, cx);
+                } else if !action.secondary {
+                    this.handle_slash_action(SlashAction::Complete, window, cx);
+                }
+            }))
+            .capture_action(cx.listener(|this, _: &IndentInline, window, cx| {
+                this.handle_slash_action(SlashAction::Complete, window, cx)
+            }))
+            .capture_action(
+                cx.listener(|this, _: &Escape, window, cx| this.handle_escape(window, cx)),
+            )
+            .on_drag_move(
+                cx.listener(|this, event: &DragMoveEvent<SidebarResize>, window, cx| {
+                    let viewport_width = f32::from(window.viewport_size().width);
+                    let position = f32::from(event.event.position.x);
+                    let max_width = (viewport_width - 320.).max(180.);
+                    this.sidebar_fraction = position.clamp(180., max_width) / viewport_width;
+                    this.persistence.dirty = true;
+                    cx.notify();
+                }),
+            );
+        if let Some(page) = &self.settings {
+            return root.child(self.render_settings(page, cx));
+        }
         let mobile_pairing = (self.mobile_access.pairing_visible
             && self.mobile_access.endpoint_id.is_some())
         .then(|| self.render_mobile_pairing(window, cx));
@@ -570,44 +612,6 @@ impl Render for Workspace {
             .when_some(mobile_loading, |chat, loading| chat.child(loading))
             .when_some(mobile_pairing, |chat, pairing| chat.child(pairing))
             .when_some(mobile_provider, |chat, provider| chat.child(provider));
-        div()
-            .size_full()
-            .flex()
-            .bg(palette.color(BG))
-            .on_action(cx.listener(Self::quick_open))
-            .on_action(cx.listener(Self::zoom_in))
-            .on_action(cx.listener(Self::zoom_out))
-            .on_action(cx.listener(Self::zoom_reset))
-            .capture_key_down(cx.listener(Self::workspace_key_down))
-            .capture_action(cx.listener(|this, _: &MoveUp, window, cx| {
-                this.handle_slash_action(SlashAction::Up, window, cx)
-            }))
-            .capture_action(cx.listener(|this, _: &MoveDown, window, cx| {
-                this.handle_slash_action(SlashAction::Down, window, cx)
-            }))
-            .capture_action(cx.listener(|this, action: &Enter, window, cx| {
-                if !action.secondary {
-                    this.handle_slash_action(SlashAction::Complete, window, cx);
-                }
-            }))
-            .capture_action(cx.listener(|this, _: &IndentInline, window, cx| {
-                this.handle_slash_action(SlashAction::Complete, window, cx)
-            }))
-            .capture_action(
-                cx.listener(|this, _: &Escape, window, cx| this.handle_escape(window, cx)),
-            )
-            .on_drag_move(
-                cx.listener(|this, event: &DragMoveEvent<SidebarResize>, window, cx| {
-                    let viewport_width = f32::from(window.viewport_size().width);
-                    let position = f32::from(event.event.position.x);
-                    let max_width = (viewport_width - 320.).max(180.);
-                    this.sidebar_fraction = position.clamp(180., max_width) / viewport_width;
-                    this.persistence.dirty = true;
-                    cx.notify();
-                }),
-            )
-            .child(sidebar)
-            .child(divider)
-            .child(chat)
+        root.child(sidebar).child(divider).child(chat)
     }
 }

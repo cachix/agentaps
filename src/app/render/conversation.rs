@@ -27,19 +27,26 @@ impl Workspace {
             Button::new(format!("agent-select-{}", agent.config.id))
                 .ghost()
                 .compact()
+                .when_some(known_agent(&agent.config.command), |button, known| {
+                    button.icon(agent_icon(known))
+                })
                 .label(agent.name.clone())
-                .icon(IconName::ChevronDown)
+                .dropdown_caret(true)
                 .dropdown_menu(move |mut menu, _, _| {
-                    menu = menu.item(PopupMenuItem::label("Start a new session with"));
+                    menu = menu
+                        .check_side(gpui_kit::component::Side::Right)
+                        .item(PopupMenuItem::label("Start a new session with"));
                     if !available_agents
                         .iter()
                         .any(|choice| choice.command == current_command)
                     {
-                        menu = menu.item(
-                            PopupMenuItem::new(current_name.clone())
-                                .checked(true)
-                                .disabled(true),
-                        );
+                        let mut item = PopupMenuItem::new(current_name.clone())
+                            .checked(true)
+                            .disabled(true);
+                        if let Some(known) = known_agent(&current_command) {
+                            item = item.icon(agent_icon(known));
+                        }
+                        menu = menu.item(item);
                     }
                     for choice in &available_agents {
                         let current = choice.command == current_command;
@@ -56,22 +63,23 @@ impl Workspace {
                         let command = choice.command.clone();
                         let name = choice.name.clone();
                         let view = view.clone();
-                        menu = menu.item(
-                            PopupMenuItem::new(label)
-                                .checked(current)
-                                .disabled(current)
-                                .on_click(move |_, window, cx| {
-                                    view.update(cx, |this, cx| {
-                                        this.start_agent_for_project(
-                                            project_index,
-                                            command.clone(),
-                                            Some(name.clone()),
-                                            window,
-                                            cx,
-                                        );
-                                    });
-                                }),
-                        );
+                        let mut item = PopupMenuItem::new(label);
+                        if let Some(known) = known_agent(&choice.command) {
+                            item = item.icon(agent_icon(known));
+                        }
+                        menu = menu.item(item.checked(current).disabled(current).on_click(
+                            move |_, window, cx| {
+                                view.update(cx, |this, cx| {
+                                    this.start_agent_for_project(
+                                        project_index,
+                                        command.clone(),
+                                        Some(name.clone()),
+                                        window,
+                                        cx,
+                                    );
+                                });
+                            },
+                        ));
                     }
                     let view = view.clone();
                     menu.item(PopupMenuItem::separator())
@@ -462,6 +470,7 @@ impl Workspace {
             .get(&agent_id)
             .map(Vec::as_slice)
             .unwrap_or_default();
+        let send_tooltip = format!("Send ({})", settings::send_key_label(self.send_key));
         let can_send = !draft_images.is_empty()
             || !draft_files.is_empty()
             || !self
@@ -520,7 +529,7 @@ impl Workspace {
                         .size(px(14.))
                         .text_color(palette.color(if can_send { TEXT } else { MUTED })),
                 )
-                .tooltip(|window, cx| Tooltip::new("Send (Enter)").build(window, cx))
+                .tooltip(move |window, cx| Tooltip::new(send_tooltip.clone()).build(window, cx))
                 .when(can_send, |button| {
                     button
                         .cursor_pointer()

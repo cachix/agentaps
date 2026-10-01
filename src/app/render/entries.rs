@@ -16,10 +16,12 @@ fn text_signature(text: &str, hasher: &mut impl Hasher) {
 
 fn chat_rows(
     agent: &AgentView,
-    collapsed_tool_groups: &HashSet<(u64, usize)>,
+    toggled_tool_groups: &HashSet<(u64, usize)>,
     expanded_tool_history: &HashSet<(u64, usize)>,
     expanded_tool_rows: &HashSet<(u64, usize)>,
-    expanded_thought_rows: &HashSet<(u64, usize)>,
+    toggled_thought_rows: &HashSet<(u64, usize)>,
+    thoughts_expanded: bool,
+    tool_activity_expanded: bool,
 ) -> Vec<ChatRow> {
     let mut rows = Vec::new();
     let mut index = 0;
@@ -32,8 +34,7 @@ fn chat_rows(
                 .iter()
                 .any(|tool| !is_approval_review(&tool.text))
             {
-                collapsed_tool_groups
-                    .contains(&(agent.config.id, index))
+                (tool_activity_expanded != toggled_tool_groups.contains(&(agent.config.id, index)))
                     .hash(&mut hasher);
                 expanded_tool_history
                     .contains(&(agent.config.id, index))
@@ -57,7 +58,8 @@ fn chat_rows(
             if !entry.text.is_empty() || !entry.images.is_empty() {
                 (entry.role as u8).hash(&mut hasher);
                 if entry.role == Role::Thought {
-                    let expanded = expanded_thought_rows.contains(&(agent.config.id, index));
+                    let expanded = thoughts_expanded
+                        != toggled_thought_rows.contains(&(agent.config.id, index));
                     expanded.hash(&mut hasher);
                     if expanded {
                         text_signature(&entry.text, &mut hasher);
@@ -149,10 +151,12 @@ impl Workspace {
         let agent = &self.projects[project_index].agents[agent_index];
         let rows = chat_rows(
             agent,
-            &self.conversation.collapsed_tool_groups,
+            &self.conversation.toggled_tool_groups,
             &self.conversation.expanded_tool_history,
             &self.conversation.expanded_tool_rows,
-            &self.conversation.expanded_thought_rows,
+            &self.conversation.toggled_thought_rows,
+            self.conversation.thoughts_expanded,
+            self.conversation.tool_activity_expanded,
         );
 
         if self.conversation.chat_list_agent != Some(agent.config.id) {
@@ -293,7 +297,8 @@ impl Workspace {
     fn render_thought(&self, agent: &AgentView, index: usize, cx: &mut Context<Self>) -> Div {
         let palette = theme::palette(cx);
         let key = (agent.config.id, index);
-        let expanded = self.conversation.expanded_thought_rows.contains(&key);
+        let expanded = self.conversation.thoughts_expanded
+            != self.conversation.toggled_thought_rows.contains(&key);
         let row_id: gpui_kit::ElementId = ("thought-row", agent.config.id).into();
         let mut row = div().max_w(px(900.)).min_w(px(0.)).py_1().child(
             div()
@@ -308,8 +313,8 @@ impl Workspace {
                 .child("Thought")
                 .child(div().text_xs().child(if expanded { "⌄" } else { "›" }))
                 .on_click(cx.listener(move |this, _, _, cx| {
-                    if !this.conversation.expanded_thought_rows.insert(key) {
-                        this.conversation.expanded_thought_rows.remove(&key);
+                    if !this.conversation.toggled_thought_rows.insert(key) {
+                        this.conversation.toggled_thought_rows.remove(&key);
                     }
                     cx.notify();
                 })),
@@ -850,28 +855,68 @@ mod tests {
         let collapsed = HashSet::new();
         let history = HashSet::new();
         let expanded = HashSet::new();
-        let before = chat_rows(&agent, &collapsed, &history, &expanded, &HashSet::new());
+        let before = chat_rows(
+            &agent,
+            &collapsed,
+            &history,
+            &expanded,
+            &HashSet::new(),
+            false,
+            true,
+        );
         assert_eq!(before.len(), 3);
         assert_eq!(before[1].kind, ChatRowKind::Tools(1, 3));
 
         agent.messages[0].text.push('!');
-        let after = chat_rows(&agent, &collapsed, &history, &expanded, &HashSet::new());
+        let after = chat_rows(
+            &agent,
+            &collapsed,
+            &history,
+            &expanded,
+            &HashSet::new(),
+            false,
+            true,
+        );
         assert_eq!(changed_row_range(&before, &after), Some((0..1, 1)));
         assert_eq!(changed_row_range(&after, &after), None);
 
         let collapsed = HashSet::from([(agent.config.id, 1)]);
-        let collapsed_rows = chat_rows(&agent, &collapsed, &history, &expanded, &HashSet::new());
+        let collapsed_rows = chat_rows(
+            &agent,
+            &collapsed,
+            &history,
+            &expanded,
+            &HashSet::new(),
+            false,
+            true,
+        );
         assert_eq!(changed_row_range(&after, &collapsed_rows), Some((1..2, 1)));
 
         let history = HashSet::from([(agent.config.id, 1)]);
-        let history_rows = chat_rows(&agent, &collapsed, &history, &expanded, &HashSet::new());
+        let history_rows = chat_rows(
+            &agent,
+            &collapsed,
+            &history,
+            &expanded,
+            &HashSet::new(),
+            false,
+            true,
+        );
         assert_eq!(
             changed_row_range(&collapsed_rows, &history_rows),
             Some((1..2, 1))
         );
 
         agent.config.pending_prompts.push("Next".into());
-        let queued_rows = chat_rows(&agent, &collapsed, &history, &expanded, &HashSet::new());
+        let queued_rows = chat_rows(
+            &agent,
+            &collapsed,
+            &history,
+            &expanded,
+            &HashSet::new(),
+            false,
+            true,
+        );
         assert_eq!(
             changed_row_range(&history_rows, &queued_rows),
             Some((3..3, 1))
@@ -884,28 +929,28 @@ mod tests {
         agent.log(Role::Thought, "Consider the options");
         agent.log(Role::Agent, "Answer");
         let empty = HashSet::new();
-        let collapsed = chat_rows(&agent, &empty, &empty, &empty, &empty);
+        let collapsed = chat_rows(&agent, &empty, &empty, &empty, &empty, false, true);
         agent.messages[0].text.push_str(" before replying");
-        let streaming = chat_rows(&agent, &empty, &empty, &empty, &empty);
+        let streaming = chat_rows(&agent, &empty, &empty, &empty, &empty, false, true);
         assert_eq!(changed_row_range(&collapsed, &streaming), None);
 
         let expanded = HashSet::from([(agent.config.id, 0)]);
-        let visible = chat_rows(&agent, &empty, &empty, &empty, &expanded);
+        let visible = chat_rows(&agent, &empty, &empty, &empty, &expanded, false, true);
         assert_eq!(changed_row_range(&streaming, &visible), Some((0..1, 1)));
         agent.messages[0].text.push('.');
-        let updated = chat_rows(&agent, &empty, &empty, &empty, &expanded);
+        let updated = chat_rows(&agent, &empty, &empty, &empty, &expanded, false, true);
         assert_eq!(changed_row_range(&visible, &updated), Some((0..1, 1)));
         agent.messages[0].images.push(ChatImage {
             mime_type: "image/png".into(),
             sha256: "thought-image".into(),
         });
-        let with_image = chat_rows(&agent, &empty, &empty, &empty, &expanded);
+        let with_image = chat_rows(&agent, &empty, &empty, &empty, &expanded, false, true);
         assert_eq!(changed_row_range(&updated, &with_image), Some((0..1, 1)));
-        let closed = chat_rows(&agent, &empty, &empty, &empty, &empty);
+        let closed = chat_rows(&agent, &empty, &empty, &empty, &empty, false, true);
         assert_eq!(changed_row_range(&with_image, &closed), Some((0..1, 1)));
 
         agent.config.id += 1;
-        let other_session = chat_rows(&agent, &empty, &empty, &empty, &expanded);
+        let other_session = chat_rows(&agent, &empty, &empty, &empty, &expanded, false, true);
         assert_eq!(other_session[0].signature, collapsed[0].signature);
     }
 
@@ -914,17 +959,17 @@ mod tests {
         let mut agent = agent();
         agent.log(Role::Tool, "Guardian Review · pending");
         let empty = HashSet::new();
-        let rows = chat_rows(&agent, &empty, &empty, &empty, &empty);
+        let rows = chat_rows(&agent, &empty, &empty, &empty, &empty, false, true);
         assert_eq!(rows.len(), 1);
         assert_eq!(rows[0].kind, ChatRowKind::Empty);
 
         agent.log(Role::Tool, "cat README.md · completed");
-        let rows = chat_rows(&agent, &empty, &empty, &empty, &empty);
+        let rows = chat_rows(&agent, &empty, &empty, &empty, &empty, false, true);
         assert_eq!(rows.len(), 1);
         assert_eq!(rows[0].kind, ChatRowKind::Tools(0, 2));
 
         agent.messages[0].text = "Guardian Review · failed".into();
-        let updated = chat_rows(&agent, &empty, &empty, &empty, &empty);
+        let updated = chat_rows(&agent, &empty, &empty, &empty, &empty, false, true);
         assert_eq!(changed_row_range(&rows, &updated), None);
     }
 }

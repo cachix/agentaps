@@ -107,7 +107,7 @@ impl Workspace {
         }
         self.deferred_connections.retain(|id| *id != old_id);
         self.conversation
-            .collapsed_tool_groups
+            .toggled_tool_groups
             .retain(|(id, _)| *id != old_id);
         self.conversation
             .expanded_tool_history
@@ -116,7 +116,7 @@ impl Workspace {
             .expanded_tool_rows
             .retain(|(id, _)| *id != old_id);
         self.conversation
-            .expanded_thought_rows
+            .toggled_thought_rows
             .retain(|(id, _)| *id != old_id);
         self.conversation.chat_list_agent = None;
         self.conversation.chat_rows.clear();
@@ -215,7 +215,7 @@ impl Workspace {
             self.conversation.draft_files.insert(new_id, files);
         }
         self.conversation
-            .collapsed_tool_groups
+            .toggled_tool_groups
             .retain(|(id, _)| *id != old_id);
         self.conversation
             .expanded_tool_history
@@ -224,7 +224,7 @@ impl Workspace {
             .expanded_tool_rows
             .retain(|(id, _)| *id != old_id);
         self.conversation
-            .expanded_thought_rows
+            .toggled_thought_rows
             .retain(|(id, _)| *id != old_id);
         self.conversation.chat_list_agent = None;
         self.conversation.chat_rows.clear();
@@ -294,6 +294,7 @@ impl Workspace {
             &agent.config.command,
             &project.path,
             project.ssh_host.as_deref(),
+            self.claude_executable.as_deref().map(Path::new),
             self.events_tx.clone(),
         ) {
             Ok(connection) => {
@@ -622,7 +623,9 @@ impl Workspace {
                             })
                         })
                         .flatten();
+                    let attention = self.attention(agent_id);
                     self.handle_message(agent_id, value, window, cx);
+                    self.notify_attention(agent_id, attention, window, cx);
                     if let Some((path, host)) = running_project
                         && self.projects.iter().any(|project| {
                             project.path == path

@@ -2,6 +2,7 @@
 
 use std::fmt;
 
+use crate::config::ThemeSource;
 use gpui_kit::{App, Global};
 
 pub(crate) fn hsla(color: gpui_kit::Rgba) -> gpui_kit::Hsla {
@@ -134,6 +135,26 @@ impl ChangeSources {
     }
 }
 
+struct SourcePreference(ThemeSource);
+
+impl Global for SourcePreference {}
+
+fn source(cx: &App) -> ThemeSource {
+    cx.try_global::<SourcePreference>()
+        .map_or(ThemeSource::default(), |preference| preference.0)
+}
+
+pub(crate) fn set_source(theme_source: ThemeSource, cx: &mut App) {
+    if source(cx) == theme_source {
+        return;
+    }
+    cx.set_global(SourcePreference(theme_source));
+    #[cfg(target_os = "linux")]
+    if cx.has_global::<ThemeState>() {
+        refresh_native_theme(cx);
+    }
+}
+
 /// Load the native theme and start monitoring it for changes.
 pub(crate) fn initialize(cx: &mut App) {
     gpui_kit::component::theme::Theme::sync_system_appearance(None, cx);
@@ -153,7 +174,7 @@ pub(crate) fn initialize(cx: &mut App) {
 
 #[cfg(target_os = "linux")]
 fn initialize_linux(cx: &mut App) {
-    let initial = load_automatic();
+    let initial = load_automatic(source(cx));
     let state = match initial {
         Ok(loaded) => {
             install_theme(&loaded, cx);
@@ -182,7 +203,7 @@ fn initialize_linux(cx: &mut App) {
 /// Reload the native theme and repaint all GPUI windows.
 #[cfg(target_os = "linux")]
 fn refresh_native_theme(cx: &mut App) {
-    match load_automatic() {
+    match load_automatic(source(cx)) {
         Ok(loaded) => {
             install_theme(&loaded, cx);
             let backend = loaded.backend;
@@ -438,8 +459,12 @@ fn preference_from(
 }
 
 #[cfg(target_os = "linux")]
-fn preferred_backends() -> [Backend; 2] {
-    let explicit = env::var("NATIVE_THEME_BACKEND").ok();
+fn preferred_backends(source: ThemeSource) -> [Backend; 2] {
+    let explicit = env::var("NATIVE_THEME_BACKEND").ok().or(match source {
+        ThemeSource::Automatic => None,
+        ThemeSource::Gtk => Some("gtk".to_owned()),
+        ThemeSource::Qt => Some("qt".to_owned()),
+    });
     preference_from(
         explicit.as_deref(),
         DesktopEnvironment::detect(),
@@ -580,8 +605,8 @@ fn load_backend(backend: Backend) -> Result<LoadedTheme> {
 }
 
 #[cfg(target_os = "linux")]
-fn load_automatic() -> Result<LoadedTheme> {
-    let [preferred, fallback] = preferred_backends();
+fn load_automatic(source: ThemeSource) -> Result<LoadedTheme> {
+    let [preferred, fallback] = preferred_backends(source);
     match load_backend(preferred) {
         Ok(theme) => Ok(theme),
         Err(preferred_error) => load_backend(fallback)

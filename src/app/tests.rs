@@ -420,6 +420,7 @@ fn zoom_shortcuts_and_menu_actions_change_the_font_scale(cx: &mut gpui_kit::Test
     // test runs; Workspace::new is only constructed here.
     unsafe { std::env::set_var(config_env, temp.path()) };
     cx.update(|cx| {
+        cx.set_app_identity(APP_IDENTIFIER, "Agentaps");
         gpui_kit::init(cx);
         theme::apply(cx);
         cx.bind_keys([
@@ -645,6 +646,8 @@ fn zoom_shortcuts_and_menu_actions_change_the_font_scale(cx: &mut gpui_kit::Test
     mobile::verify_session_switching_and_mobile_routing(&restored, temp.path(), cx);
     verify_resets_and_folder_moves_preserve_harness_references(&restored, temp.path(), cx);
     verify_inline_session_renaming(&restored, cx);
+    verify_settings_apply_and_persist(&restored, temp.path(), cx);
+    verify_notifications_for_background_sessions(&restored, temp.path(), cx);
     // SAFETY: restore the process environment modified for this test.
     unsafe {
         if let Some(original) = original_config_home {
@@ -830,4 +833,356 @@ fn verify_inline_session_renaming(
             });
         });
     }
+}
+
+fn verify_settings_apply_and_persist(
+    workspace: &Entity<Workspace>,
+    path: &Path,
+    cx: &mut gpui_kit::VisualTestContext,
+) {
+    let pending = |cx: &mut gpui_kit::VisualTestContext| {
+        cx.update(|_, cx| {
+            workspace.read(cx).projects[0].agents[0]
+                .config
+                .pending_prompts
+                .clone()
+        })
+    };
+    let draft = |cx: &mut gpui_kit::VisualTestContext| {
+        cx.update(|_, cx| {
+            workspace
+                .read(cx)
+                .conversation
+                .composer
+                .read(cx)
+                .value()
+                .to_string()
+        })
+    };
+    let type_draft = |text: &str, cx: &mut gpui_kit::VisualTestContext| {
+        cx.update(|window, cx| {
+            workspace.update(cx, |this, cx| {
+                this.conversation.composer.update(cx, |input, cx| {
+                    input.set_value(text, window, cx);
+                    input.set_cursor_position(Position::new(0, text.len() as u32), window, cx);
+                    input.focus(window, cx);
+                });
+            })
+        });
+    };
+    cx.update(|window, cx| {
+        workspace.update(cx, |this, cx| {
+            let mut agent = test_agent(ProtocolVersion::V2);
+            agent.config.command.clear();
+            agent.status = Status::Connecting;
+            this.projects = vec![ProjectView {
+                path: path.to_owned(),
+                ssh_host: None,
+                branch: "main".into(),
+                sync_counts: None,
+                agents: vec![AgentView {
+                    controller: agent,
+                    elicitations: Vec::new(),
+                }],
+            }];
+            this.set_view(
+                WorkspaceView::Conversation(SessionLocation {
+                    project_index: 0,
+                    agent_index: 0,
+                }),
+                window,
+                cx,
+            );
+            this.set_send_key(SendKey::CtrlEnter, cx);
+            this.set_reduced_motion(true, cx);
+            assert!(cx.reduce_motion());
+            this.persistence.wait().unwrap();
+        })
+    });
+    let (saved, _) = config::load().expect("changing a setting should save the config");
+    assert_eq!(saved.send_key, SendKey::CtrlEnter);
+    assert!(saved.reduced_motion);
+
+    type_draft("first", cx);
+    cx.simulate_keystrokes("enter");
+    assert_eq!(draft(cx), "first\n", "Enter should add a line");
+    cx.simulate_keystrokes("shift-enter");
+    assert!(pending(cx).is_empty());
+    cx.simulate_keystrokes("secondary-enter");
+    assert_eq!(pending(cx), [Prompt::from("first\n")]);
+    assert!(draft(cx).is_empty());
+
+    for (send_key, keystroke) in [
+        (SendKey::ShiftEnter, "shift-enter"),
+        (SendKey::AltEnter, "alt-enter"),
+    ] {
+        cx.update(|_, cx| workspace.update(cx, |this, cx| this.set_send_key(send_key, cx)));
+        type_draft("line", cx);
+        cx.simulate_keystrokes("enter");
+        assert_eq!(draft(cx), "line\n", "{send_key:?}: Enter should add a line");
+        cx.simulate_keystrokes(keystroke);
+        assert!(draft(cx).is_empty(), "{send_key:?} should send");
+    }
+
+    cx.update(|window, cx| workspace.update(cx, |this, cx| this.reset_settings(window, cx)));
+    type_draft("second", cx);
+    cx.simulate_keystrokes("enter");
+    assert_eq!(pending(cx).len(), 4);
+    assert_eq!(pending(cx)[3], Prompt::from("second"));
+    cx.update(|_, cx| workspace.update(cx, |this, _| this.persistence.wait().unwrap()));
+    let (saved, _) = config::load().unwrap();
+    assert_eq!(saved.send_key, SendKey::Enter);
+    assert_eq!(saved.font_scale, 1.0);
+    assert!(!saved.reduced_motion);
+    assert!(cx.update(|_, cx| !cx.reduce_motion()));
+
+    let selected_text_size = |cx: &mut gpui_kit::VisualTestContext| {
+        cx.update(|_, cx| {
+            workspace
+                .read(cx)
+                .settings
+                .as_ref()
+                .and_then(|page| page.text_size.read(cx).selected_value().copied())
+        })
+    };
+    let selected_theme = |cx: &mut gpui_kit::VisualTestContext| {
+        cx.update(|_, cx| {
+            workspace
+                .read(cx)
+                .settings
+                .as_ref()
+                .and_then(|page| page.theme.read(cx).selected_value().copied())
+        })
+    };
+    cx.update(|window, cx| {
+        workspace.update(cx, |this, cx| {
+            this.select_theme(crate::appearance::Choice::Dracula, cx);
+            this.open_settings(window, cx);
+        })
+    });
+    cx.run_until_parked();
+    assert_eq!(selected_theme(cx), Some(crate::appearance::Choice::Dracula));
+    assert_eq!(selected_text_size(cx), Some(100));
+    cx.dispatch_action(ZoomIn);
+    assert_eq!(
+        selected_text_size(cx),
+        Some(110),
+        "zoom shortcuts should move the text size dropdown"
+    );
+    cx.update(|_, cx| {
+        workspace.update(cx, |this, cx| {
+            this.conversation.toggled_thought_rows.insert((1, 0));
+            this.conversation.toggled_tool_groups.insert((1, 1));
+            this.set_thoughts_expanded(true, cx);
+            this.set_tool_activity_expanded(false, cx);
+            this.set_diff_layout(DiffPresentation::Split, cx);
+            assert!(this.conversation.toggled_thought_rows.is_empty());
+            assert!(this.conversation.toggled_tool_groups.is_empty());
+            assert_eq!(this.diff.presentation, DiffPresentation::Split);
+            this.persistence.wait().unwrap();
+        })
+    });
+    let (saved, _) = config::load().unwrap();
+    assert!(saved.thoughts_expanded);
+    assert!(!saved.tool_activity_expanded);
+    assert_eq!(saved.diff_layout, DiffPresentation::Split);
+    let default_font = cx.update(|_, cx| Theme::global(cx).font_family.clone());
+    cx.update(|_, cx| {
+        workspace.update(cx, |this, cx| {
+            this.set_font(Some("Agentaps Test Sans".into()), cx)
+        });
+        assert_eq!(Theme::global(cx).font_family.as_ref(), "Agentaps Test Sans");
+        workspace.update(cx, |this, _| this.persistence.wait().unwrap());
+    });
+    assert_eq!(
+        config::load().unwrap().0.font.as_deref(),
+        Some("Agentaps Test Sans")
+    );
+    cx.update(|window, cx| workspace.update(cx, |this, cx| this.reset_settings(window, cx)));
+    assert_eq!(
+        cx.update(|_, cx| Theme::global(cx).font_family.clone()),
+        default_font
+    );
+    cx.update(|_, cx| {
+        let this = workspace.read(cx);
+        assert!(!this.conversation.thoughts_expanded);
+        assert!(this.conversation.tool_activity_expanded);
+        assert_eq!(this.diff.presentation, DiffPresentation::Unified);
+    });
+    assert_eq!(selected_text_size(cx), Some(100));
+    assert_eq!(
+        selected_theme(cx),
+        Some(crate::appearance::Choice::Agentaps)
+    );
+    cx.update(|_, cx| workspace.update(cx, |this, _| this.persistence.wait().unwrap()));
+    let (saved, _) = config::load().unwrap();
+    assert_eq!(saved.theme, crate::appearance::Choice::Agentaps);
+    cx.simulate_keystrokes("escape");
+    assert_eq!(selected_text_size(cx), None);
+    cx.update(|window, cx| workspace.update(cx, |this, cx| this.open_settings(window, cx)));
+    cx.update(|window, cx| {
+        workspace.update(cx, |this, cx| {
+            this.settings.as_mut().unwrap().section = settings::SettingsSection::Agents;
+            let page = this.settings.as_ref().unwrap();
+            let claude = page.claude_executable.clone();
+            let name = page.new_agent_name.clone();
+            let command = page.new_agent_command.clone();
+            claude.update(cx, |input, cx| input.focus(window, cx));
+            name.update(cx, |input, cx| input.set_value("Wrapped Codex", window, cx));
+            command.update(cx, |input, cx| {
+                input.set_value("codex-wrapper --profile 'work laptop'", window, cx)
+            });
+        })
+    });
+    cx.run_until_parked();
+    cx.simulate_input("  /opt/claude  ");
+    cx.simulate_keystrokes("enter");
+    cx.update(|window, cx| {
+        workspace.update(cx, |this, cx| {
+            this.add_saved_agent(window, cx);
+            this.set_theme_source(ThemeSource::Qt, cx);
+            assert_eq!(this.claude_executable.as_deref(), Some("/opt/claude"));
+            let choice = &this.picker.available_agents[0];
+            assert_eq!(choice.name, "Wrapped Codex");
+            assert_eq!(choice.detail, "Saved in settings");
+            assert_eq!(
+                choice.command,
+                ["codex-wrapper", "--profile", "work laptop"]
+            );
+            let page = this.settings.as_ref().unwrap();
+            assert!(page.new_agent_name.read(cx).value().is_empty());
+            this.persistence.wait().unwrap();
+        })
+    });
+    let (saved, _) = config::load().unwrap();
+    assert_eq!(saved.claude_executable.as_deref(), Some("/opt/claude"));
+    assert_eq!(saved.saved_agents.len(), 1);
+    assert_eq!(saved.theme_source, ThemeSource::Qt);
+    cx.update(|window, cx| {
+        workspace.update(cx, |this, cx| {
+            this.set_agent_executable(KnownAgent::OpenCode, Some("/opt/opencode".into()), cx);
+            let opencode = this
+                .picker
+                .available_agents
+                .iter()
+                .find(|choice| choice.name == "OpenCode")
+                .unwrap();
+            assert_eq!(opencode.command, ["/opt/opencode", "acp"]);
+            this.remove_saved_agent(0, cx);
+            assert!(
+                this.picker
+                    .available_agents
+                    .iter()
+                    .all(|choice| choice.name != "Wrapped Codex")
+            );
+            this.reset_settings(window, cx);
+            assert!(this.claude_executable.is_none());
+            assert!(this.agent_executables.is_empty());
+            assert_eq!(this.theme_source, ThemeSource::Automatic);
+            let page = this.settings.as_ref().unwrap();
+            assert!(page.claude_executable.read(cx).value().is_empty());
+        })
+    });
+    cx.update(|window, cx| workspace.update(cx, |this, cx| this.close_settings(window, cx)));
+}
+
+fn verify_notifications_for_background_sessions(
+    workspace: &Entity<Workspace>,
+    path: &Path,
+    cx: &mut gpui_kit::VisualTestContext,
+) {
+    let finish = |agent_id: u64, cx: &mut gpui_kit::VisualTestContext| {
+        cx.update(|window, cx| {
+            workspace.update(cx, |this, cx| {
+                let before = this.attention(agent_id);
+                this.agent_mut(agent_id).unwrap().0.status = Status::Done;
+                this.notify_attention(agent_id, before, window, cx);
+                this.agent_mut(agent_id).unwrap().0.status = Status::Idle;
+            })
+        })
+    };
+    cx.update(|window, cx| {
+        workspace.update(cx, |this, cx| {
+            let agents = [401, 402].map(|id| {
+                let mut agent = test_agent(ProtocolVersion::V2);
+                agent.config.id = id;
+                agent.config.command.clear();
+                agent.config.custom_title = Some(format!("Session {id}"));
+                AgentView {
+                    controller: agent,
+                    elicitations: Vec::new(),
+                }
+            });
+            this.projects = vec![ProjectView {
+                path: path.to_owned(),
+                ssh_host: None,
+                branch: "main".into(),
+                sync_counts: None,
+                agents: agents.into(),
+            }];
+            this.set_notifications(true, cx);
+            this.set_view(
+                WorkspaceView::Conversation(SessionLocation {
+                    project_index: 0,
+                    agent_index: 0,
+                }),
+                window,
+                cx,
+            );
+        })
+    });
+
+    cx.update(|window, _| window.activate_window());
+    cx.run_until_parked();
+    let shown = cx.shown_system_notifications().len();
+    finish(401, cx);
+    assert_eq!(
+        cx.shown_system_notifications().len(),
+        shown,
+        "the session on screen should not notify"
+    );
+    cx.deactivate_window();
+    finish(401, cx);
+    assert_eq!(
+        cx.shown_system_notifications().len(),
+        shown + 1,
+        "a session in a background window should notify"
+    );
+    finish(402, cx);
+    let notification = cx.shown_system_notifications().last().cloned().unwrap();
+    assert_eq!(notification.title.as_ref(), "Session 402");
+    assert_eq!(notification.body.as_ref(), "Finished");
+
+    cx.simulate_system_notification_response(gpui_kit::SystemNotificationResponse {
+        tag: notification.tag,
+        action_id: None,
+    });
+    cx.run_until_parked();
+    assert_eq!(
+        cx.update(|_, cx| workspace.read(cx).view.displayed_session()),
+        Some(SessionLocation {
+            project_index: 0,
+            agent_index: 1,
+        })
+    );
+
+    cx.update(|_, cx| workspace.update(cx, |this, cx| this.set_notifications(false, cx)));
+    let shown = cx.shown_system_notifications().len();
+    finish(401, cx);
+    assert_eq!(cx.shown_system_notifications().len(), shown);
+    cx.update(|window, cx| {
+        workspace.update(cx, |this, cx| {
+            this.open_settings(window, cx);
+            let agent = &mut this.projects[0].agents[1];
+            agent.active_work = true;
+            agent.status = Status::Done;
+            this.mark_displayed_agent_viewed();
+            assert_eq!(this.projects[0].agents[1].status, Status::Done);
+            this.handle_escape(window, cx);
+            assert!(this.projects[0].agents[1].active_work);
+            assert!(!this.projects[0].agents[1].cancel_requested);
+            this.close_settings(window, cx);
+            this.projects[0].agents[1].active_work = false;
+        })
+    });
 }

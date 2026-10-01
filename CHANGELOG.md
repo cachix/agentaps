@@ -8,7 +8,9 @@ Notable changes to Agentaps are recorded here.
 
 - Rename sessions inline by clicking the header title or choosing Rename session in the session menu. Hovering the title reveals an edit box. Custom names are searchable in the sidebar and survive restarts and agent title updates.
 
-- Choose and remember a desktop theme from the sidebar, including light and dark presets ported from FactorSeal and a System option that follows GTK/Qt theme changes on Linux. Chat, activity, controls, and diffs share the selected palette while retaining zoom.
+- Choose and remember a desktop theme in settings, including light and dark presets ported from FactorSeal and a System option that follows GTK/Qt theme changes on Linux. Chat, activity, controls, and diffs share the selected palette while retaining zoom.
+
+- A settings page, opened from the cog in the bottom left corner, sets the font, text size, send key, desktop notifications, reduced motion, whether thoughts and tool activity start collapsed or expanded, and the default diff layout. It also sets where Codex, Claude, Gemini CLI, OpenCode, and Claude Code are installed, saves custom agent commands for new sessions, changes the Web Connect address, and picks GTK or Qt for the System theme on Linux. Agents show their logos in the header, the agent menu, and the new session picker.
 
 - Paste or drop images into the composer and see images in conversations.
 - A **+** menu under the composer attaches files or images to a prompt. Dropped files attach too. Text files are sent with their contents when the agent accepts embedded context, and as links otherwise. Attached file contents echoed back by the agent show as a code block of the first few lines.

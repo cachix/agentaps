@@ -112,9 +112,10 @@ impl Workspace {
                         }))
                         .hover(|style| style.bg(palette.color(HOVER)))
                         .child(
-                            Icon::new(IconName::Bot)
+                            known_agent(&agent.command)
+                                .map_or_else(|| Icon::new(IconName::Bot), agent_icon)
                                 .size(px(18.))
-                                .text_color(palette.color(ACCENT)),
+                                .text_color(palette.color(TEXT)),
                         )
                         .child(
                             div()
@@ -322,13 +323,34 @@ impl Workspace {
                         })
                         .child(
                             div()
-                                .text_xs()
-                                .font_weight(gpui_kit::FontWeight::SEMIBOLD)
-                                .text_color(palette.color(MUTED))
-                                .child(if is_folders {
-                                    "RECENT FOLDERS"
-                                } else {
-                                    "AVAILABLE AGENTS"
+                                .flex()
+                                .items_center()
+                                .justify_between()
+                                .child(
+                                    div()
+                                        .text_xs()
+                                        .font_weight(gpui_kit::FontWeight::SEMIBOLD)
+                                        .text_color(palette.color(MUTED))
+                                        .child(if is_folders {
+                                            "RECENT FOLDERS"
+                                        } else {
+                                            "AVAILABLE AGENTS"
+                                        }),
+                                )
+                                .when(!is_folders, |heading| {
+                                    heading.child(
+                                        Button::new("manage-agents")
+                                            .ghost()
+                                            .compact()
+                                            .icon(IconName::Settings)
+                                            .label("Manage agents")
+                                            .on_click(cx.listener(|this, _, window, cx| {
+                                                this.open_settings(window, cx);
+                                                if let Some(page) = &mut this.settings {
+                                                    page.section = settings::SettingsSection::Agents;
+                                                }
+                                            })),
+                                    )
                                 }),
                         )
                         .child(results)

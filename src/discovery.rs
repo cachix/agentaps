@@ -1,4 +1,6 @@
+use crate::config::KnownAgent;
 use std::{
+    collections::BTreeMap,
     env, fs,
     path::{Path, PathBuf},
 };
@@ -62,9 +64,22 @@ fn executable(name: &str) -> bool {
     find_executable(name).is_some()
 }
 
-pub fn installed_agents() -> Vec<AgentChoice> {
-    let mut agents = Vec::new();
+pub fn installed_agents(executables: &BTreeMap<KnownAgent, String>) -> Vec<AgentChoice> {
+    let mut agents: Vec<_> = executables
+        .iter()
+        .map(|(agent, path)| AgentChoice {
+            name: agent_name(*agent).into(),
+            detail: "Set in settings".into(),
+            command: std::iter::once(path.clone())
+                .chain(agent_args(*agent).iter().map(|arg| (*arg).into()))
+                .collect(),
+        })
+        .collect();
+    let configured = |name: &str| executables.keys().any(|agent| agent_name(*agent) == name);
     let mut add = |name: &str, detail: &str, command: &[&str]| {
+        if configured(name) {
+            return;
+        }
         if let Some(executable) = find_executable(command[0]) {
             let program = if cfg!(windows) {
                 executable.to_string_lossy().into_owned()
@@ -120,6 +135,39 @@ pub fn installed_agents() -> Vec<AgentChoice> {
     agents
 }
 
+pub fn known_agent(command: &[String]) -> Option<KnownAgent> {
+    let (program, args) = command.split_first()?;
+    let packages = args.iter().filter(|arg| arg.starts_with('@'));
+    std::iter::once(program).chain(packages).find_map(|part| {
+        let name = Path::new(part).file_name()?.to_str()?.to_ascii_lowercase();
+        [
+            ("codex", KnownAgent::Codex),
+            ("claude", KnownAgent::Claude),
+            ("gemini", KnownAgent::GeminiCli),
+            ("opencode", KnownAgent::OpenCode),
+        ]
+        .into_iter()
+        .find_map(|(needle, agent)| name.contains(needle).then_some(agent))
+    })
+}
+
+pub fn agent_name(agent: KnownAgent) -> &'static str {
+    match agent {
+        KnownAgent::Codex => "Codex",
+        KnownAgent::Claude => "Claude",
+        KnownAgent::GeminiCli => "Gemini CLI",
+        KnownAgent::OpenCode => "OpenCode",
+    }
+}
+
+fn agent_args(agent: KnownAgent) -> &'static [&'static str] {
+    match agent {
+        KnownAgent::Codex | KnownAgent::Claude => &[],
+        KnownAgent::GeminiCli => &["--acp"],
+        KnownAgent::OpenCode => &["acp"],
+    }
+}
+
 pub fn score(query: &str, candidate: &str) -> Option<i32> {
     let query = query.to_lowercase();
     let candidate = candidate.to_lowercase();
@@ -169,6 +217,58 @@ mod tests {
                 .unwrap()
                 .success()
         );
+    }
+
+    #[test]
+    fn recognizes_known_agents_from_commands() {
+        let command = |parts: &[&str]| {
+            parts
+                .iter()
+                .map(|part| (*part).to_owned())
+                .collect::<Vec<_>>()
+        };
+        assert_eq!(
+            known_agent(&command(&["codex-acp"])),
+            Some(KnownAgent::Codex)
+        );
+        assert_eq!(
+            known_agent(&command(&[
+                "npx",
+                "-y",
+                "@agentclientprotocol/claude-agent-acp"
+            ])),
+            Some(KnownAgent::Claude)
+        );
+        assert_eq!(
+            known_agent(&command(&["/opt/gemini", "--acp"])),
+            Some(KnownAgent::GeminiCli)
+        );
+        assert_eq!(
+            known_agent(&command(&["/usr/bin/opencode", "acp"])),
+            Some(KnownAgent::OpenCode)
+        );
+        assert_eq!(known_agent(&command(&["my-agent", "--stdio"])), None);
+        assert_eq!(
+            known_agent(&command(&["my-agent", "--model", "claude-sonnet-4"])),
+            None
+        );
+    }
+
+    #[test]
+    fn configured_executables_replace_path_lookup() {
+        let agents = installed_agents(&BTreeMap::from([
+            (KnownAgent::GeminiCli, "/opt/gemini".into()),
+            (KnownAgent::OpenCode, "/opt/opencode".into()),
+        ]));
+        for (name, command) in [
+            ("Gemini CLI", ["/opt/gemini", "--acp"]),
+            ("OpenCode", ["/opt/opencode", "acp"]),
+        ] {
+            let matching: Vec<_> = agents.iter().filter(|agent| agent.name == name).collect();
+            assert_eq!(matching.len(), 1, "{name}");
+            assert_eq!(matching[0].command, command);
+            assert_eq!(matching[0].detail, "Set in settings");
+        }
     }
 
     #[test]

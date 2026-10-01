@@ -489,6 +489,29 @@ impl Workspace {
                     .gap_1()
                     .child(
                         div()
+                            .id("open-settings")
+                            .cursor_pointer()
+                            .rounded_md()
+                            .border_1()
+                            .border_color(palette.color(SIDEBAR))
+                            .px_2()
+                            .py_2()
+                            .flex()
+                            .items_center()
+                            .text_color(palette.color(MUTED))
+                            .hover(|style| {
+                                style
+                                    .bg(palette.color(HOVER))
+                                    .text_color(palette.color(TEXT))
+                            })
+                            .child(Icon::new(IconName::Settings).size(px(14.)))
+                            .tooltip(|window, cx| Tooltip::new("Settings").build(window, cx))
+                            .on_click(
+                                cx.listener(|this, _, window, cx| this.open_settings(window, cx)),
+                            ),
+                    )
+                    .child(
+                        div()
                             .id("archived-toggle")
                             .cursor_pointer()
                             .rounded_md()
@@ -550,33 +573,6 @@ impl Workspace {
                                     this.show_mobile_link(window, cx)
                                 }),
                             ),
-                    )
-                    .child(
-                        Button::new("theme-select")
-                            .ghost()
-                            .compact()
-                            .icon(IconName::Settings)
-                            .tooltip("Theme")
-                            .dropdown_menu_with_anchor(Anchor::BottomLeft, {
-                                let view = cx.entity().clone();
-                                let current = self.theme_choice;
-                                move |mut menu, _, _| {
-                                    menu = menu.item(PopupMenuItem::label("Theme"));
-                                    for choice in crate::appearance::Choice::all() {
-                                        let view = view.clone();
-                                        menu = menu.item(
-                                            PopupMenuItem::new(choice.label())
-                                                .checked(choice == current)
-                                                .on_click(move |_, _, cx| {
-                                                    view.update(cx, |this, cx| {
-                                                        this.select_theme(choice, cx)
-                                                    });
-                                                }),
-                                        );
-                                    }
-                                    menu.min_w(px(220.)).max_h(px(480.)).scrollable(true)
-                                }
-                            }),
                     )
                     .child(div().flex_1())
                     .child(

@@ -15,7 +15,7 @@ fn mobile_text(text: &str) -> String {
 
 impl Workspace {
     pub(super) fn mobile_link(&self) -> Option<String> {
-        self.mobile_access.link()
+        self.mobile_access.link(self.web_connect_url.as_deref())
     }
 
     pub(super) fn show_mobile_link(&mut self, _window: &mut Window, cx: &mut Context<Self>) {
