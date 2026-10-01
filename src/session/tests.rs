@@ -121,6 +121,7 @@ pub(crate) fn agent(protocol: ProtocolVersion) -> SessionController {
             archived: false,
             display_name: None,
             title: None,
+            custom_title: None,
             session_id: None,
             model: None,
             context: None,
@@ -181,6 +182,38 @@ fn agent_session_titles_update_and_survive_restarts() {
             }}}),
         );
         assert!(agent.config.title.is_none());
+    }
+}
+
+#[test]
+fn custom_session_names_override_agent_updates_and_survive_saved_config() {
+    for protocol in [ProtocolVersion::V1, ProtocolVersion::V2] {
+        let mut agent = agent(protocol);
+        agent.config.rename_session("  My   task\nname  ");
+        assert_eq!(agent.config.session_title(), Some("My task name"));
+        SessionController::handle_update(
+            &mut agent,
+            &json!({"params":{"sessionId":"session-1","update":{
+                "sessionUpdate":"session_info_update","title":"Agent's latest title"
+            }}}),
+        );
+        assert_eq!(agent.config.session_title(), Some("My task name"));
+
+        let saved = serde_json::to_vec(&agent.snapshot()).unwrap();
+        let config: AgentConfig = serde_json::from_slice(&saved).unwrap();
+        let mut restored = SessionController::new(config, ImageStore::for_tests());
+        assert_eq!(restored.config.session_title(), Some("My task name"));
+        assert_eq!(
+            restored.reset_config(2, Vec::new()).session_title(),
+            Some("My task name")
+        );
+        restored.config.rename_session(" \n\t ");
+        assert_eq!(
+            restored.config.session_title(),
+            Some("Agent's latest title")
+        );
+        let saved = serde_json::to_value(restored.snapshot()).unwrap();
+        assert!(saved.get("custom_title").is_none());
     }
 }
 

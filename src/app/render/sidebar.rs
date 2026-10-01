@@ -107,6 +107,7 @@ impl Workspace {
                 .file_name()
                 .map(|name| name.to_string_lossy().into_owned())
                 .unwrap_or_else(|| project.path.display().to_string());
+            let name = agent.config.custom_title.clone().unwrap_or(name);
             visible_sessions += 1;
             let selected = if session_query.is_empty() {
                 self.view.highlighted_session() == Some(location)
@@ -167,8 +168,8 @@ impl Workspace {
                         .update(cx, |input, cx| input.focus(window, cx));
                     cx.notify();
                 }))
-                .when_some(agent.config.title.as_ref(), |row, title| {
-                    let title = title.clone();
+                .when_some(agent.config.session_title(), |row, title| {
+                    let title = title.to_owned();
                     row.tooltip(move |window, cx| Tooltip::new(title.clone()).build(window, cx))
                 })
                 .when(!archived, |element| {

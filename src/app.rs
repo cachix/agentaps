@@ -627,6 +627,7 @@ impl Workspace {
     }
 
     fn set_view(&mut self, view: WorkspaceView, window: &mut Window, cx: &mut Context<Self>) {
+        self.finish_rename_session(true, cx);
         if let Some(session) = view.displayed_session() {
             let agent_id = self.projects[session.project_index].agents[session.agent_index]
                 .config
@@ -968,6 +969,7 @@ impl Workspace {
             sidebar_fraction,
             font_scale,
             conversation: ConversationState {
+                renaming: None,
                 composer,
                 max_rows: composer_max_rows,
                 viewport_height: composer_viewport_height,
@@ -1343,7 +1345,7 @@ impl Workspace {
                             &project.path,
                             &project.branch,
                             &agent.name,
-                            agent.config.title.as_deref(),
+                            agent.config.session_title(),
                         )?;
                         let order = self
                             .sidebar_order
@@ -1571,6 +1573,7 @@ impl Workspace {
             archived: false,
             display_name: name,
             title: None,
+            custom_title: None,
             session_id: None,
             model: None,
             context: None,
@@ -2001,6 +2004,14 @@ impl Workspace {
     }
 
     fn handle_escape(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if self.conversation.renaming.is_some() {
+            self.finish_rename_session(false, cx);
+            self.conversation
+                .composer
+                .update(cx, |input, cx| input.focus(window, cx));
+            cx.stop_propagation();
+            return;
+        }
         if self.mobile_access.provider_prompt.take().is_some() {
             cx.stop_propagation();
             cx.notify();

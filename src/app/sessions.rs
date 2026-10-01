@@ -1,6 +1,58 @@
 use super::*;
 
 impl Workspace {
+    pub(super) fn open_rename_session(
+        &mut self,
+        agent_id: u64,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let Some((agent, _)) = self.agent_mut(agent_id) else {
+            return;
+        };
+        let title = agent.config.session_title().unwrap_or_default().to_owned();
+        let input = cx.new(|cx| {
+            let mut input = InputState::new(window, cx).placeholder("Session name");
+            input.set_value(title, window, cx);
+            input
+        });
+        let subscription =
+            cx.subscribe_in(&input, window, |this, _, event, window, cx| match event {
+                InputEvent::PressEnter {
+                    secondary: false,
+                    shift: false,
+                } => {
+                    this.finish_rename_session(true, cx);
+                    this.conversation
+                        .composer
+                        .update(cx, |input, cx| input.focus(window, cx));
+                }
+                InputEvent::Blur => this.finish_rename_session(true, cx),
+                _ => {}
+            });
+        self.conversation.renaming = Some(SessionRename {
+            agent_id,
+            input: input.clone(),
+            _subscription: subscription,
+        });
+        input.update(cx, |input, cx| input.focus(window, cx));
+        cx.notify();
+    }
+
+    pub(super) fn finish_rename_session(&mut self, save: bool, cx: &mut Context<Self>) {
+        let Some(rename) = self.conversation.renaming.take() else {
+            return;
+        };
+        if save {
+            let title = rename.input.read(cx).value().to_string();
+            if let Some((agent, _)) = self.agent_mut(rename.agent_id) {
+                agent.config.rename_session(&title);
+                self.persist();
+            }
+        }
+        cx.notify();
+    }
+
     pub(super) fn move_session_to_project(
         &mut self,
         session: SessionLocation,

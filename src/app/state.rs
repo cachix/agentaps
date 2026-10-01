@@ -45,7 +45,14 @@ pub(super) struct PickerState {
     pub(super) input: Entity<InputState>,
 }
 
+pub(super) struct SessionRename {
+    pub(super) agent_id: u64,
+    pub(super) input: Entity<InputState>,
+    pub(super) _subscription: Subscription,
+}
+
 pub(super) struct ConversationState {
+    pub(super) renaming: Option<SessionRename>,
     pub(super) composer: Entity<TextareaState>,
     pub(super) max_rows: usize,
     pub(super) viewport_height: f32,

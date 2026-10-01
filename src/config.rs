@@ -115,6 +115,8 @@ pub struct AgentConfig {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub title: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub custom_title: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub session_id: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub model: Option<String>,
@@ -139,6 +141,17 @@ pub struct AgentConfig {
     pub fork_pending: bool,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub fork_source: Option<ForkSource>,
+}
+
+impl AgentConfig {
+    pub fn session_title(&self) -> Option<&str> {
+        self.custom_title.as_deref().or(self.title.as_deref())
+    }
+
+    pub fn rename_session(&mut self, title: &str) {
+        let title = title.split_whitespace().collect::<Vec<_>>().join(" ");
+        self.custom_title = (!title.is_empty()).then_some(title);
+    }
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]

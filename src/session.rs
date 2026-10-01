@@ -366,6 +366,7 @@ impl SessionController {
             archived: self.config.archived,
             display_name: self.config.display_name.clone(),
             title: None,
+            custom_title: self.config.custom_title.clone(),
             session_id: None,
             model: None,
             context: None,
@@ -395,6 +396,7 @@ impl SessionController {
             archived: false,
             display_name: self.config.display_name.clone(),
             title: None,
+            custom_title: None,
             session_id: None,
             model: None,
             context: None,
@@ -512,6 +514,7 @@ impl SessionController {
             archived: self.config.archived,
             display_name: self.config.display_name.clone(),
             title: self.config.title.clone(),
+            custom_title: self.config.custom_title.clone(),
             session_id: self
                 .session_id
                 .clone()

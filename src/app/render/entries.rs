@@ -809,6 +809,7 @@ mod tests {
                 archived: false,
                 display_name: None,
                 title: None,
+                custom_title: None,
                 session_id: None,
                 model: None,
                 context: None,

@@ -102,18 +102,49 @@ impl Workspace {
             .gap_2()
             .child(status_badge(agent))
             .child(agent_selector)
-            .when_some(agent.config.title.as_ref(), |element, title| {
-                element.child(
+            .child({
+                let agent_id = agent.config.id;
+                if let Some(rename) = self
+                    .conversation
+                    .renaming
+                    .as_ref()
+                    .filter(|rename| rename.agent_id == agent_id)
+                {
                     div()
+                        .id(("session-title-input", agent_id))
+                        .w(px(240.))
+                        .min_w(px(0.))
+                        .child(Input::new(&rename.input))
+                } else {
+                    div()
+                        .id(("session-title", agent_id))
+                        .px_2()
+                        .py_1()
+                        .rounded_md()
+                        .border_1()
+                        .border_color(gpui_kit::rgba(0))
                         .min_w(px(0.))
                         .max_w(px(360.))
                         .truncate()
                         .text_sm()
                         .font_weight(gpui_kit::FontWeight::MEDIUM)
                         .text_color(rgb(TEXT))
-                        .child(title.clone()),
-                )
+                        .cursor(gpui_kit::CursorStyle::IBeam)
+                        .hover(|style| style.bg(rgb(SURFACE)).border_color(rgb(BORDER)))
+                        .child(
+                            agent
+                                .config
+                                .session_title()
+                                .unwrap_or("Name session…")
+                                .to_owned(),
+                        )
+                        .tooltip(|window, cx| Tooltip::new("Rename session").build(window, cx))
+                        .on_click(cx.listener(move |this, _, window, cx| {
+                            this.open_rename_session(agent_id, window, cx);
+                        }))
+                }
             });
+        let agent_id = agent.config.id;
         let menu_view = cx.entity().clone();
         let session_menu = Button::new(format!("session-menu-{}", agent.config.id))
             .ghost()
@@ -121,10 +152,18 @@ impl Workspace {
             .icon(IconName::Ellipsis)
             .tooltip("Session")
             .dropdown_menu_with_anchor(Anchor::TopRight, move |menu, _, _| {
+                let rename_view = menu_view.clone();
                 let reset_view = menu_view.clone();
                 let agent_view = menu_view.clone();
                 let archive_view = menu_view.clone();
                 menu.item(
+                    PopupMenuItem::new("Rename session…").on_click(move |_, window, cx| {
+                        rename_view.update(cx, |this, cx| {
+                            this.open_rename_session(agent_id, window, cx);
+                        });
+                    }),
+                )
+                .item(
                     PopupMenuItem::new("Reset context")
                         .disabled(!can_reset)
                         .on_click(move |_, _, cx| {

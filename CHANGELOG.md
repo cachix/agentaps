@@ -6,6 +6,8 @@ Notable changes to Agentaps are recorded here.
 
 ### Added
 
+- Rename sessions inline by clicking the header title or choosing Rename session in the session menu. Hovering the title reveals an edit box. Custom names are searchable in the sidebar and survive restarts and agent title updates.
+
 - Paste or drop images into the composer and see images in conversations.
 
 ### Fixed

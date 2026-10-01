@@ -618,6 +618,7 @@ fn zoom_shortcuts_and_menu_actions_change_the_font_scale(cx: &mut gpui_kit::Test
     cx.update(|_, cx| restored.update(cx, |this, _| this.persistence.wait().unwrap()));
     mobile::verify_session_switching_and_mobile_routing(&restored, temp.path(), cx);
     verify_resets_and_folder_moves_preserve_harness_references(&restored, temp.path(), cx);
+    verify_inline_session_renaming(&restored, cx);
     // SAFETY: restore the process environment modified for this test.
     unsafe {
         if let Some(original) = original_config_home {
@@ -740,4 +741,67 @@ fn verify_resets_and_folder_moves_preserve_harness_references(
             this.persistence.dirty = false;
         })
     });
+}
+
+fn verify_inline_session_renaming(
+    workspace: &Entity<Workspace>,
+    cx: &mut gpui_kit::VisualTestContext,
+) {
+    let agent_id = 301;
+    cx.update(|window, cx| {
+        workspace.update(cx, |this, cx| {
+            let mut agent = test_agent(ProtocolVersion::V2);
+            agent.config.id = agent_id;
+            agent.config.command.clear();
+            this.projects = vec![ProjectView {
+                path: PathBuf::from("."),
+                ssh_host: None,
+                branch: String::new(),
+                sync_counts: None,
+                agents: vec![AgentView {
+                    controller: agent,
+                    elicitations: Vec::new(),
+                }],
+            }];
+            this.set_view(
+                WorkspaceView::Conversation(SessionLocation {
+                    project_index: 0,
+                    agent_index: 0,
+                }),
+                window,
+                cx,
+            );
+        });
+    });
+    for (draft, save) in [("Inline name", true), ("Discard this", false)] {
+        cx.update(|window, cx| {
+            workspace.update(cx, |this, cx| {
+                this.open_rename_session(agent_id, window, cx);
+                let input = this.conversation.renaming.as_ref().unwrap().input.clone();
+                input.update(cx, |input, cx| input.set_value(draft, window, cx));
+            });
+        });
+        cx.run_until_parked();
+        if save {
+            cx.dispatch_action(Enter {
+                secondary: false,
+                shift: false,
+            });
+        } else {
+            cx.dispatch_action(Escape);
+        }
+        cx.run_until_parked();
+        cx.update(|_, cx| {
+            workspace.update(cx, |this, _| {
+                assert!(
+                    this.conversation.renaming.is_none(),
+                    "editor remained open: save={save}"
+                );
+                assert_eq!(
+                    this.agent_mut(agent_id).unwrap().0.config.session_title(),
+                    Some("Inline name")
+                );
+            });
+        });
+    }
 }
