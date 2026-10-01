@@ -36,6 +36,43 @@ pub(crate) fn initialize_params() -> Value {
     params
 }
 
+pub(super) fn accepts_images(protocol: ProtocolVersion, initialize: &Value) -> bool {
+    match protocol {
+        ProtocolVersion::V2 => initialize["capabilities"]["session"]["prompt"]["image"].is_object(),
+        ProtocolVersion::V1 => {
+            initialize["agentCapabilities"]["promptCapabilities"]["image"].as_bool() == Some(true)
+        }
+        _ => false,
+    }
+}
+
+pub(super) struct ImageData {
+    pub(super) mime_type: String,
+    pub(super) data: String,
+}
+
+pub(super) fn message_content(content: &Value) -> (String, Vec<ImageData>) {
+    let blocks = content
+        .as_array()
+        .map_or_else(|| vec![content], |items| items.iter().collect());
+    let mut text = Vec::new();
+    let mut images = Vec::new();
+    for block in blocks {
+        match (
+            block["type"].as_str(),
+            block["mimeType"].as_str(),
+            block["data"].as_str(),
+        ) {
+            (Some("image"), Some(mime_type), Some(data)) => images.push(ImageData {
+                mime_type: mime_type.to_owned(),
+                data: data.to_owned(),
+            }),
+            _ => text.push(content_text(block)),
+        }
+    }
+    (text.join("\n"), images)
+}
+
 /// Both ACP versions become the same events before changing session state.
 pub(super) enum SessionUpdate {
     Title(Option<String>),
@@ -49,6 +86,7 @@ pub(super) enum SessionUpdate {
         role: Role,
         id: Option<String>,
         text: String,
+        images: Vec<ImageData>,
         append: bool,
     },
     Tool(Value),
@@ -109,9 +147,12 @@ pub(super) fn decode_update(
             | "agent_message_chunk"
             | "agent_thought"
             | "agent_thought_chunk"),
-        ) if v2 => update["messageId"]
-            .as_str()
-            .map(|id| SessionUpdate::Message {
+        ) if v2 => update["messageId"].as_str().map(|id| {
+            let (text, images) = update
+                .get("content")
+                .map(message_content)
+                .unwrap_or_default();
+            SessionUpdate::Message {
                 role: if kind.starts_with("user_") {
                     Role::User
                 } else if kind.starts_with("agent_thought") {
@@ -120,22 +161,26 @@ pub(super) fn decode_update(
                     Role::Agent
                 },
                 id: Some(id.into()),
-                text: update.get("content").map(content_text).unwrap_or_default(),
+                text,
+                images,
                 append: kind.ends_with("_chunk"),
-            }),
+            }
+        }),
         Some(kind @ ("user_message_chunk" | "agent_message_chunk" | "agent_thought_chunk")) => {
-            update["content"]["text"]
-                .as_str()
-                .map(|text| SessionUpdate::Message {
+            let (text, images) = message_content(&update["content"]);
+            (update["content"]["text"].is_string() || !images.is_empty()).then(|| {
+                SessionUpdate::Message {
                     role: match kind {
                         "user_message_chunk" => Role::User,
                         "agent_thought_chunk" => Role::Thought,
                         _ => Role::Agent,
                     },
                     id: None,
-                    text: text.into(),
+                    text,
+                    images,
                     append: true,
-                })
+                }
+            })
         }
         Some("tool_call_update") => Some(SessionUpdate::Tool(update.clone())),
         Some("tool_call") if !v2 => Some(SessionUpdate::Tool(update.clone())),

@@ -20,7 +20,7 @@ If Codex or Claude is installed without its ACP adapter, Agentaps can offer to s
 - **Work over SSH.** Enter a path such as `ssh://user@server.example/home/user/project` when creating a project. Agentaps runs the agent on that server using your existing SSH configuration and keys. The agent and its ACP adapter must be installed there, and the server's host key must already be known. Try `ssh user@server.example` first. Diff review is currently available for local projects only.
 - **Continue in a browser.** Pair a phone browser with the desktop app to read conversations, send prompts, stop turns, and answer permission requests. Agent processes and project files stay on the desktop computer.
 
-In the composer, **Enter** sends a prompt and **Ctrl+Enter** inserts a newline. Type `/` for agent commands, `@` to find a project file, or start with `!` to ask the agent to run a shell command. Prompts sent while an agent is busy are queued. **Up/Down** recalls earlier prompts when the composer is empty.
+In the composer, **Enter** sends a prompt and **Ctrl+Enter** inserts a newline. Type `/` for agent commands, `@` to find a project file, or start with `!` to ask the agent to run a shell command. Prompts sent while an agent is busy are queued. **Up/Down** recalls earlier prompts when the composer is empty. Paste an image or drop an image file on the composer to send it with your prompt when the agent accepts images.
 
 ## Web Connect
 

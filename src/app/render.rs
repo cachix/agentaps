@@ -13,6 +13,7 @@ mod tool_group;
 
 /// Maximum width of the conversation and composer, for comfortable line length.
 const CHAT_COLUMN_WIDTH: f32 = 760.;
+const MESSAGE_IMAGE_HEIGHT: f32 = 240.;
 
 fn status_dot(color: u32) -> Div {
     div().size(px(7.)).rounded_full().bg(rgb(color))

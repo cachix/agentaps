@@ -248,7 +248,7 @@ impl Workspace {
                                 .skip(agent.messages.len().saturating_sub(100))
                                 .map(|message| RemoteMessage {
                                     role: format!("{:?}", message.role).to_lowercase(),
-                                    text: mobile_text(&message.text),
+                                    text: mobile_text(&message.transcript_text()),
                                 })
                                 .collect(),
                             permissions: agent
@@ -364,8 +364,8 @@ impl Workspace {
                     return Err("Agent is still connecting".into());
                 }
                 if agent.active_work || !agent.config.pending_prompts.is_empty() {
-                    agent.config.pending_prompts.push(text.clone());
-                } else if let Err(error) = agent.start_prompt(text.clone()) {
+                    agent.config.pending_prompts.push(text.clone().into());
+                } else if let Err(error) = agent.start_prompt(text.clone().into()) {
                     agent.status = Status::Error;
                     agent.log(Role::System, error);
                     cx.notify();
@@ -523,7 +523,7 @@ pub(super) fn verify_session_switching_and_mobile_routing(
             assert!(this.projects[0].agents[0].config.pending_prompts.is_empty());
             assert_eq!(
                 this.projects[0].agents[1].config.pending_prompts,
-                ["Remote request"]
+                [Prompt::from("Remote request")]
             );
             assert_eq!(second_composer.read(cx).value().as_ref(), "Second draft");
             assert_eq!(this.view, WorkspaceView::Conversation(first));

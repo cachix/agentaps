@@ -51,6 +51,7 @@ pub(super) struct ConversationState {
     pub(super) viewport_height: f32,
     pub(super) base_line_height: f32,
     pub(super) session_composers: HashMap<u64, Entity<TextareaState>>,
+    pub(super) draft_images: HashMap<u64, Vec<ChatImage>>,
     pub(super) chat_list: ListState,
     pub(super) chat_list_agent: Option<u64>,
     pub(super) chat_rows: Vec<ChatRow>,

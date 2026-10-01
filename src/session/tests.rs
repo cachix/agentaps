@@ -12,9 +12,10 @@ fn old_sessions_seed_prompt_history_from_messages_and_queue() {
         role: Role::User,
         key: None,
         text: "sent".into(),
+        images: Vec::new(),
     });
     config.pending_prompts.push("queued".into());
-    let restored = SessionController::new(config);
+    let restored = SessionController::new(config, ImageStore::for_tests());
     assert_eq!(restored.config.prompt_history, ["sent", "queued"]);
 }
 
@@ -24,7 +25,7 @@ fn interrupted_turn_waits_for_recovery_before_queued_prompts() {
     config.was_working = true;
     config.prompt_history = vec!["Earlier".into(), "Active request".into(), "Queued".into()];
     config.pending_prompts.push("Queued".into());
-    let mut restored = SessionController::new(config);
+    let mut restored = SessionController::new(config, ImageStore::for_tests());
     restored.status = Status::Idle;
     restored.session_id = Some("session-1".into());
 
@@ -35,7 +36,10 @@ fn interrupted_turn_waits_for_recovery_before_queued_prompts() {
 
     restored.config.prompt_history.push("Continuation".into());
     let saved = serde_json::to_vec(&restored.snapshot()).unwrap();
-    let reloaded = SessionController::new(serde_json::from_slice(&saved).unwrap());
+    let reloaded = SessionController::new(
+        serde_json::from_slice(&saved).unwrap(),
+        ImageStore::for_tests(),
+    );
     assert_eq!(reloaded.messages.len(), restored.messages.len());
     assert!(reloaded.continuation_prompt().contains("Active request"));
     assert!(!reloaded.continuation_prompt().contains("Queued"));
@@ -50,7 +54,7 @@ fn restored_turn_continues_automatically_before_queued_work() {
     config.was_working = true;
     config.active_prompt = Some("Finish the work".into());
     config.pending_prompts.push("Next task".into());
-    let mut restored = SessionController::new(config);
+    let mut restored = SessionController::new(config, ImageStore::for_tests());
     restored.protocol = Some(ProtocolVersion::V1);
     restored.session_id = Some("session-1".into());
     restored.status = Status::Idle;
@@ -70,7 +74,7 @@ fn restored_turn_continues_automatically_before_queued_work() {
         restored.config.active_prompt.as_deref(),
         Some("Finish the work")
     );
-    assert_eq!(restored.config.pending_prompts, ["Next task"]);
+    assert_eq!(restored.config.pending_prompts, [Prompt::from("Next task")]);
     assert!(!restored.auto_continue_interrupted_turn());
 
     let Event::Message { value, .. } = rx.recv_timeout(Duration::from_secs(2)).unwrap() else {
@@ -90,7 +94,7 @@ fn live_v2_turn_after_restore_does_not_start_a_second_prompt() {
     let mut config = agent(ProtocolVersion::V2).snapshot();
     config.was_working = true;
     config.active_prompt = Some("Finish the work".into());
-    let mut restored = SessionController::new(config);
+    let mut restored = SessionController::new(config, ImageStore::for_tests());
     restored.protocol = Some(ProtocolVersion::V2);
     restored.session_id = Some("session-1".into());
     restored.status = Status::Idle;
@@ -110,25 +114,28 @@ fn live_v2_turn_after_restore_does_not_start_a_second_prompt() {
 }
 
 pub(crate) fn agent(protocol: ProtocolVersion) -> SessionController {
-    let mut agent = SessionController::new(AgentConfig {
-        id: 1,
-        command: vec!["fixture".into()],
-        archived: false,
-        display_name: None,
-        title: None,
-        session_id: None,
-        model: None,
-        context: None,
-        messages: Vec::new(),
-        available_commands: Vec::new(),
-        pending_prompts: Vec::new(),
-        active_prompt: None,
-        prompt_history: Vec::new(),
-        was_working: false,
-        session_has_activity: false,
-        fork_pending: false,
-        fork_source: None,
-    });
+    let mut agent = SessionController::new(
+        AgentConfig {
+            id: 1,
+            command: vec!["fixture".into()],
+            archived: false,
+            display_name: None,
+            title: None,
+            session_id: None,
+            model: None,
+            context: None,
+            messages: Vec::new(),
+            available_commands: Vec::new(),
+            pending_prompts: Vec::new(),
+            active_prompt: None,
+            prompt_history: Vec::new(),
+            was_working: false,
+            session_has_activity: false,
+            fork_pending: false,
+            fork_source: None,
+        },
+        ImageStore::for_tests(),
+    );
     agent.protocol = Some(protocol);
     agent.session_id = Some("session-1".into());
     agent.status = Status::Working;
@@ -156,7 +163,7 @@ fn agent_session_titles_update_and_survive_restarts() {
         );
         assert_eq!(agent.config.title.as_deref(), Some("Fix login flow"));
 
-        let restored = SessionController::new(agent.snapshot());
+        let restored = SessionController::new(agent.snapshot(), ImageStore::for_tests());
         assert_eq!(restored.config.title.as_deref(), Some("Fix login flow"));
 
         SessionController::handle_update(
@@ -244,6 +251,7 @@ fn resetting_context_reuses_agent_settings_without_reusing_session_state() {
         role: Role::ContextReset,
         key: None,
         text: "Context reset".into(),
+        images: Vec::new(),
     });
     let config = previous.reset_config(2, history);
     assert_eq!(config.id, 2);
@@ -259,7 +267,7 @@ fn resetting_context_reuses_agent_settings_without_reusing_session_state() {
     let saved = serde_json::to_vec(&config).unwrap();
     let restored: AgentConfig = serde_json::from_slice(&saved).unwrap();
     assert!(restored.messages.is_empty());
-    let mut reset = SessionController::new(config);
+    let mut reset = SessionController::new(config, ImageStore::for_tests());
     assert_eq!(reset.status, Status::Connecting);
     assert_eq!(reset.session_id, None);
     assert_eq!(reset.messages.len(), 3);
@@ -320,7 +328,7 @@ fn fork_supplies_only_active_conversation_to_first_prompt() {
     source.log(Role::Tool, "Reading file");
     source.log(Role::Agent, "Current answer");
     let config = source.fork_config(2, 4).unwrap();
-    let mut fork = SessionController::new(config);
+    let mut fork = SessionController::new(config, ImageStore::for_tests());
     fork.protocol = Some(ProtocolVersion::V1);
     fork.session_id = Some("fork-session".into());
     let command = vec![
@@ -527,7 +535,10 @@ fn session_references_and_pending_work_survive_without_local_history() {
     agent.config.pending_prompts.push("Follow up next".into());
     let saved = agent.snapshot();
     let encoded = serde_json::to_vec(&saved).unwrap();
-    let restored = SessionController::new(serde_json::from_slice(&encoded).unwrap());
+    let restored = SessionController::new(
+        serde_json::from_slice(&encoded).unwrap(),
+        ImageStore::for_tests(),
+    );
     assert_eq!(restored.config.session_id.as_deref(), Some("session-1"));
     assert_eq!(restored.model.as_deref(), Some("Example Model"));
     assert_eq!(restored.context, Some((3_000, 64_000)));
@@ -541,7 +552,10 @@ fn session_references_and_pending_work_survive_without_local_history() {
             .all(|entry| entry.role == Role::System)
     );
     assert_eq!(restored.config.prompt_history, ["Follow up next"]);
-    assert_eq!(restored.config.pending_prompts, vec!["Follow up next"]);
+    assert_eq!(
+        restored.config.pending_prompts,
+        vec![Prompt::from("Follow up next")]
+    );
 }
 
 #[test]
@@ -557,7 +571,10 @@ fn queued_prompt_stays_saved_when_agent_cannot_send_it() {
     );
     assert!(agent.start_next_queued_prompt());
     assert_eq!(agent.status, Status::Error);
-    assert_eq!(agent.config.pending_prompts, vec!["Next request"]);
+    assert_eq!(
+        agent.config.pending_prompts,
+        vec![Prompt::from("Next request")]
+    );
 }
 
 #[cfg(unix)]
@@ -861,13 +878,22 @@ fn unsubmitted_fork_reloads_its_source_after_restart_without_saving_a_transcript
     let mut source = agent(ProtocolVersion::V2);
     source.active_work = false;
     source.log(Role::User, "First question");
-    source.upsert_message_text(Role::Agent, "agent-1", "First reply".into(), false);
+    source.upsert_message_text(
+        Role::Agent,
+        "agent-1",
+        "First reply".into(),
+        Vec::new(),
+        false,
+    );
     source.log(Role::User, "Later question");
     source.log(Role::Agent, "Later reply");
     let fork = source.fork_config(2, 1).unwrap();
     let bytes = serde_json::to_vec(&fork).unwrap();
     assert!(!String::from_utf8_lossy(&bytes).contains("First reply"));
-    let mut fork = SessionController::new(serde_json::from_slice(&bytes).unwrap());
+    let mut fork = SessionController::new(
+        serde_json::from_slice(&bytes).unwrap(),
+        ImageStore::for_tests(),
+    );
     let rx = echo_requests(&mut fork);
     fork.handle_message(
         Path::new("/"),
@@ -925,11 +951,19 @@ fn fork_replay_requires_the_original_reply_when_history_has_been_trimmed() {
         Role::Agent,
         "original-reply",
         "Original reply".into(),
+        Vec::new(),
         false,
     );
-    let mut fork = SessionController::new(source.fork_config(2, 1).unwrap());
+    let mut fork =
+        SessionController::new(source.fork_config(2, 1).unwrap(), ImageStore::for_tests());
     fork.messages.clear();
-    fork.upsert_message_text(Role::Agent, "different-reply", "Other reply".into(), false);
+    fork.upsert_message_text(
+        Role::Agent,
+        "different-reply",
+        "Other reply".into(),
+        Vec::new(),
+        false,
+    );
     assert!(!fork.restore_fork_history());
 }
 
@@ -949,7 +983,7 @@ fn harness_history_reloads_after_restart() {
     let config_path = temp.path().join("agentaps/config.json");
     let connect = |config: AgentConfig| {
         let (tx, rx) = mpsc::channel();
-        let mut session = SessionController::new(config);
+        let mut session = SessionController::new(config, ImageStore::for_tests());
         session.connection =
             Some(Connection::spawn(session.config.id, &command, temp.path(), None, tx).unwrap());
         session
@@ -1002,7 +1036,7 @@ fn harness_history_reloads_after_restart() {
     eprintln!("Initialized harness with {:?}", session.protocol);
     let token = format!("AGENTAPS_REPLAY_{}", std::process::id());
     let prompt = format!("Reply with exactly {token}. Do not use tools or modify any files.");
-    session.start_prompt(prompt.clone()).unwrap();
+    session.start_prompt(prompt.clone().into()).unwrap();
     wait_until(&mut session, &rx, &|session| {
         !session.active_work && !session.awaiting_response
     });
@@ -1069,4 +1103,147 @@ fn harness_history_reloads_after_restart() {
         "PASS: history replayed after adapter restart from a {} byte config without transcript text",
         data.len()
     );
+}
+
+#[test]
+#[cfg(unix)]
+fn prompts_send_saved_images_to_agents_that_accept_them() {
+    let temp = tempfile::tempdir().unwrap();
+    let mut agent = agent(ProtocolVersion::V1);
+    agent.images = ImageStore::new(temp.path());
+    agent.active_work = false;
+    let image = agent.images.save("image/png", b"pixels").unwrap();
+    let prompt = Prompt {
+        text: "What is this?".into(),
+        images: vec![image.clone()],
+    };
+    assert_eq!(
+        agent.start_prompt(prompt.clone()),
+        Err("This agent does not accept images.".into())
+    );
+
+    agent.accepts_images = true;
+    let command = vec![
+        "/bin/sh".into(),
+        "-c".into(),
+        "while IFS= read -r line; do printf '%s\\n' \"$line\"; done".into(),
+    ];
+    let (events_tx, events_rx) = mpsc::channel();
+    agent.connection =
+        Some(Connection::spawn(1, &command, Path::new("/"), None, events_tx).unwrap());
+    agent.start_prompt(prompt).unwrap();
+    let Event::Message { value, .. } = events_rx.recv_timeout(Duration::from_secs(2)).unwrap()
+    else {
+        panic!("agent disconnected before receiving the prompt");
+    };
+    assert_eq!(
+        value["params"]["prompt"],
+        json!([
+            {"type":"text","text":"What is this?"},
+            {"type":"image","mimeType":"image/png","data":"cGl4ZWxz"}
+        ])
+    );
+    let sent = agent.messages.last().unwrap();
+    assert_eq!(sent.text, "What is this?");
+    assert_eq!(sent.images, [image]);
+
+    agent.handle_prompt_response(&json!({"stopReason":"end_turn"}));
+    let image = agent.images.save("image/jpeg", b"photo").unwrap();
+    agent
+        .start_prompt(Prompt {
+            text: String::new(),
+            images: vec![image],
+        })
+        .unwrap();
+    let Event::Message { value, .. } = events_rx.recv_timeout(Duration::from_secs(2)).unwrap()
+    else {
+        panic!("agent disconnected before receiving the image");
+    };
+    assert_eq!(
+        value["params"]["prompt"],
+        json!([{"type":"image","mimeType":"image/jpeg","data":"cGhvdG8="}])
+    );
+}
+
+#[test]
+fn agent_images_are_saved_and_shown_with_their_message() {
+    let temp = tempfile::tempdir().unwrap();
+    for protocol in [ProtocolVersion::V1, ProtocolVersion::V2] {
+        let mut agent = agent(protocol);
+        agent.images = ImageStore::new(temp.path());
+        let content = json!([
+            {"type":"text","text":"Here is the chart"},
+            {"type":"image","mimeType":"image/png","data":"Y2hhcnQ="},
+            {"type":"image","mimeType":"image/png","data":"not base64!"}
+        ]);
+        let update = if protocol == ProtocolVersion::V2 {
+            json!({"sessionUpdate":"agent_message","messageId":"reply","content":content})
+        } else {
+            json!({"sessionUpdate":"agent_message_chunk","content":content[0]})
+        };
+        agent.handle_update(&json!({"method":"session/update","params":{
+            "sessionId":"session-1","update":update
+        }}));
+        if protocol == ProtocolVersion::V1 {
+            for block in &content.as_array().unwrap()[1..] {
+                agent.handle_update(&json!({"method":"session/update","params":{
+                    "sessionId":"session-1",
+                    "update":{"sessionUpdate":"agent_message_chunk","content":block}
+                }}));
+            }
+        }
+        let reply = agent.messages.last().unwrap();
+        assert_eq!(reply.role, Role::Agent);
+        assert_eq!(reply.images.len(), 1);
+        assert_eq!(
+            std::fs::read(agent.images.path(&reply.images[0])).unwrap(),
+            b"chart"
+        );
+        assert!(reply.text.starts_with("Here is the chart"));
+        assert!(reply.text.ends_with("[image]"));
+        assert_eq!(reply.transcript_text().matches("[image]").count(), 2);
+    }
+}
+
+#[test]
+fn image_support_follows_agent_capabilities() {
+    assert!(protocol::accepts_images(
+        ProtocolVersion::V1,
+        &json!({"agentCapabilities":{"promptCapabilities":{"image":true}}})
+    ));
+    assert!(!protocol::accepts_images(
+        ProtocolVersion::V1,
+        &json!({"agentCapabilities":{"promptCapabilities":{}}})
+    ));
+    assert!(protocol::accepts_images(
+        ProtocolVersion::V2,
+        &json!({"capabilities":{"session":{"prompt":{"image":{}}}}})
+    ));
+    assert!(!protocol::accepts_images(
+        ProtocolVersion::V2,
+        &json!({"capabilities":{"session":{"prompt":{"image":null}}}})
+    ));
+}
+
+#[test]
+fn queued_prompts_keep_images_and_load_from_older_configs() {
+    let old: AgentConfig =
+        serde_json::from_str(r#"{"id":1,"command":["agent"],"pending_prompts":["Next"]}"#).unwrap();
+    assert_eq!(old.pending_prompts, [Prompt::from("Next")]);
+
+    let mut config = old;
+    config.pending_prompts.push(Prompt {
+        text: "Look".into(),
+        images: vec![ChatImage {
+            mime_type: "image/png".into(),
+            sha256: "abc".into(),
+        }],
+    });
+    let saved = serde_json::to_value(&config).unwrap();
+    assert_eq!(
+        saved["pending_prompts"],
+        json!([{"text":"Next"},{"text":"Look","images":[{"mime_type":"image/png","sha256":"abc"}]}])
+    );
+    let restored: AgentConfig = serde_json::from_value(saved).unwrap();
+    assert_eq!(restored.pending_prompts, config.pending_prompts);
 }

@@ -1,6 +1,10 @@
 //! Session behavior independent of GPUI entities and rendering.
 use crate::acp::Connection;
-use crate::config::{AgentConfig, ChatEntry, ForkSource, Role, SlashCommand};
+use crate::config::{
+    AgentConfig, ChatEntry, ChatImage, ForkSource, Prompt, Role, SlashCommand,
+    with_image_placeholders,
+};
+use crate::images::ImageStore;
 use agent_client_protocol_schema::{ProtocolVersion, v2};
 use serde_json::{Value, json};
 use std::{
@@ -18,7 +22,7 @@ use prompt::fork_prompt;
 pub(crate) use prompt::prompt_for_agent;
 pub(crate) use prompt::{shell_command, shell_command_in_message};
 pub(crate) use protocol::initialize_params;
-use protocol::{SessionUpdate, decode_update};
+use protocol::{ImageData, SessionUpdate, accepts_images, decode_update};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum Status {
@@ -135,6 +139,8 @@ pub(crate) struct SessionController {
     pub(crate) context: Option<(u64, u64)>,
     pub(crate) status: Status,
     pub(crate) protocol: Option<ProtocolVersion>,
+    pub(crate) accepts_images: bool,
+    pub(crate) images: ImageStore,
     pub(crate) active_work: bool,
     pub(crate) awaiting_response: bool,
     pub(crate) cancel_requested: bool,
@@ -426,14 +432,19 @@ impl SessionController {
         }
     }
 
-    pub(crate) fn new(mut config: AgentConfig) -> Self {
+    pub(crate) fn new(mut config: AgentConfig, images: ImageStore) -> Self {
         if config.prompt_history.is_empty() {
             config.prompt_history = config
                 .messages
                 .iter()
                 .filter(|entry| entry.role == Role::User)
                 .map(|entry| entry.text.clone())
-                .chain(config.pending_prompts.iter().cloned())
+                .chain(
+                    config
+                        .pending_prompts
+                        .iter()
+                        .map(|prompt| prompt.text.clone()),
+                )
                 .collect();
         }
         if config.was_working && config.active_prompt.is_none() {
@@ -457,6 +468,7 @@ impl SessionController {
                 role: Role::System,
                 key: None,
                 text: "App closed while this turn was active.".into(),
+                images: Vec::new(),
             });
         }
         let model = config.model.clone();
@@ -477,6 +489,8 @@ impl SessionController {
             context,
             status: Status::Connecting,
             protocol: None,
+            accepts_images: false,
+            images,
             active_work: false,
             awaiting_response: false,
             cancel_requested: false,
@@ -543,7 +557,7 @@ impl SessionController {
         self.recovery_due = None;
         let interrupted_prompt = self.config.active_prompt.clone();
         let prompt = self.continuation_prompt();
-        match self.start_prompt(prompt.clone()) {
+        match self.start_prompt(prompt.clone().into()) {
             Ok(()) => {
                 self.config.active_prompt = interrupted_prompt;
                 self.config.prompt_history.push(prompt);
@@ -660,17 +674,34 @@ impl SessionController {
         true
     }
 
-    pub(crate) fn start_prompt(&mut self, prompt: String) -> Result<(), String> {
+    pub(crate) fn start_prompt(&mut self, prompt: Prompt) -> Result<(), String> {
         let session_id = self.session_id.clone().ok_or("Agent is still connecting")?;
+        if !prompt.images.is_empty() && !self.accepts_images {
+            return Err("This agent does not accept images.".into());
+        }
         let id = self.next_request_id;
-        let agent_prompt = prompt_for_agent(&prompt);
+        let agent_prompt = prompt_for_agent(&prompt.text);
         let agent_prompt = if self.config.fork_pending {
             fork_prompt(&self.messages, &agent_prompt)
         } else {
             agent_prompt
         };
+        let images = prompt
+            .images
+            .iter()
+            .map(|image| {
+                self.images
+                    .base64(image)
+                    .map(|data| json!({"type":"image","mimeType":image.mime_type,"data":data}))
+            })
+            .collect::<Result<Vec<_>, _>>()?;
+        let blocks: Vec<Value> = (!agent_prompt.is_empty() || images.is_empty())
+            .then(|| json!({"type":"text","text":agent_prompt}))
+            .into_iter()
+            .chain(images)
+            .collect();
         let request = json!({"jsonrpc":"2.0","id":id,"method":"session/prompt","params":{
-            "sessionId":session_id,"prompt":[{"type":"text","text":agent_prompt}]
+            "sessionId":session_id,"prompt":blocks
         }});
         self.send(request.clone())?;
         self.remember_auth_request(request);
@@ -678,10 +709,10 @@ impl SessionController {
         self.config.fork_pending = false;
         self.config.fork_source = None;
         self.config.was_working = false;
-        self.config.active_prompt = Some(prompt.clone());
+        self.config.active_prompt = Some(prompt.text.clone());
         self.recovery_due = None;
         if self.protocol == Some(ProtocolVersion::V1) {
-            self.log(Role::User, prompt);
+            self.push_message(Role::User, prompt.text, prompt.images);
         }
         self.active_work = true;
         self.awaiting_response = true;
@@ -718,13 +749,18 @@ impl SessionController {
     }
 
     pub(crate) fn log(&mut self, role: Role, text: impl Into<String>) {
+        self.push_message(role, text.into(), Vec::new());
+    }
+
+    fn push_message(&mut self, role: Role, text: String, images: Vec<ChatImage>) {
         if role != Role::System {
             self.config.session_has_activity = true;
         }
         self.messages.push(ChatEntry {
             role,
             key: None,
-            text: text.into(),
+            text,
+            images,
         });
     }
 
@@ -736,15 +772,28 @@ impl SessionController {
         content: Option<&Value>,
         append: bool,
     ) {
-        self.upsert_message_text(
-            role,
-            id,
-            content.map(content_text).unwrap_or_default(),
-            append,
-        );
+        let (text, images) = content.map(protocol::message_content).unwrap_or_default();
+        let (text, images) = self.save_images(text, images);
+        self.upsert_message_text(role, id, text, images, append);
     }
 
-    fn upsert_message_text(&mut self, role: Role, id: &str, text: String, append: bool) {
+    fn save_images(&self, text: String, images: Vec<ImageData>) -> (String, Vec<ChatImage>) {
+        let saved: Vec<ChatImage> = images
+            .iter()
+            .filter_map(|image| self.images.save_base64(&image.mime_type, &image.data).ok())
+            .collect();
+        let text = with_image_placeholders(&text, images.len() - saved.len());
+        (text, saved)
+    }
+
+    fn upsert_message_text(
+        &mut self,
+        role: Role,
+        id: &str,
+        text: String,
+        images: Vec<ChatImage>,
+        append: bool,
+    ) {
         self.config.session_has_activity = true;
         let key = format!("message:{id}");
         let entry = if let Some(index) = self
@@ -758,15 +807,16 @@ impl SessionController {
                 role,
                 key: Some(key),
                 text: String::new(),
+                images: Vec::new(),
             });
             self.messages.last_mut().unwrap()
         };
-        {
-            if append {
-                entry.text.push_str(&text);
-            } else {
-                entry.text = text;
-            }
+        if append {
+            entry.text.push_str(&text);
+            entry.images.extend(images);
+        } else {
+            entry.text = text;
+            entry.images = images;
         }
     }
 
@@ -811,6 +861,7 @@ impl SessionController {
                 role: Role::Tool,
                 key: Some(key),
                 text,
+                images: Vec::new(),
             });
         }
     }
@@ -1128,6 +1179,7 @@ impl SessionController {
                 };
                 if let Some(protocol) = protocol {
                     agent.protocol = Some(protocol);
+                    agent.accepts_images = accepts_images(protocol, &value["result"]);
                     if agent.config.fork_pending && agent.messages.is_empty() {
                         if let Some(source) = &agent.config.fork_source {
                             if let Some(mode) =
@@ -1218,7 +1270,12 @@ impl SessionController {
             .iter()
             .filter(|entry| entry.role == Role::User)
             .map(|entry| entry.text.clone())
-            .chain(self.config.pending_prompts.iter().cloned())
+            .chain(
+                self.config
+                    .pending_prompts
+                    .iter()
+                    .map(|prompt| prompt.text.clone()),
+            )
             .collect();
     }
 
@@ -1319,6 +1376,7 @@ impl SessionController {
                 role,
                 id,
                 text,
+                images,
                 append,
             } => {
                 if role == Role::User {
@@ -1326,14 +1384,16 @@ impl SessionController {
                 } else {
                     self.awaiting_response = false;
                 }
+                let (text, images) = self.save_images(text, images);
                 if let Some(id) = id {
-                    self.upsert_message_text(role, &id, text, append);
+                    self.upsert_message_text(role, &id, text, images, append);
                 } else if let Some(last) = self.messages.last_mut()
                     && last.role == role
                 {
                     last.text.push_str(&text);
+                    last.images.extend(images);
                 } else {
-                    self.log(role, text);
+                    self.push_message(role, text, images);
                 }
             }
             SessionUpdate::Tool(update) => {

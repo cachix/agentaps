@@ -4,6 +4,10 @@ Notable changes to Agentaps are recorded here.
 
 ## [Unreleased]
 
+### Added
+
+- Paste or drop images into the composer and see images in conversations.
+
 ### Fixed
 
 - Conversation history comes from harness session replay instead of a duplicate local transcript. Config saves contain only session references and app state, skip unchanged data, and retain prior session references in the archive after context resets or folder moves. An opt-in smoke test verifies history replay after restarting an authenticated harness.

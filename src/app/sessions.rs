@@ -27,23 +27,28 @@ impl Workspace {
                 "Folder changed to {}. The previous session is archived; this session starts with fresh context.",
                 self.projects[target_project_index].display_path()
             ),
+            images: Vec::new(),
         }];
         let mut config = source.reset_config(new_id, messages);
         config.title = source.config.title.clone();
 
         let mut archived = source.snapshot();
         archived.archived = true;
-        self.projects[session.project_index].agents[session.agent_index] = AgentView::new(archived);
+        self.projects[session.project_index].agents[session.agent_index] =
+            AgentView::new(archived, self.images.clone());
         let agent_index = self.projects[target_project_index].agents.len();
         self.projects[target_project_index]
             .agents
-            .push(AgentView::new(config));
+            .push(AgentView::new(config, self.images.clone()));
         self.next_agent_id += 1;
         if let Some(id) = self.sidebar_order.iter_mut().find(|id| **id == old_id) {
             *id = new_id;
         }
         if let Some(composer) = self.conversation.session_composers.remove(&old_id) {
             self.conversation.session_composers.insert(new_id, composer);
+        }
+        if let Some(images) = self.conversation.draft_images.remove(&old_id) {
+            self.conversation.draft_images.insert(new_id, images);
         }
         self.deferred_connections.retain(|id| *id != old_id);
         self.conversation
@@ -127,14 +132,16 @@ impl Workspace {
             role: Role::ContextReset,
             key: None,
             text: "Context reset. The previous session is archived; this session starts with fresh context.".into(),
+            images: Vec::new(),
         }];
         let config = agent.reset_config(new_id, messages);
         let mut archived = agent.snapshot();
         archived.archived = true;
-        self.projects[project_index].agents[agent_index] = AgentView::new(config);
+        self.projects[project_index].agents[agent_index] =
+            AgentView::new(config, self.images.clone());
         self.projects[project_index]
             .agents
-            .push(AgentView::new(archived));
+            .push(AgentView::new(archived, self.images.clone()));
         if let Some(id) = self.sidebar_order.iter_mut().find(|id| **id == old_id) {
             *id = new_id;
         } else {
@@ -142,6 +149,9 @@ impl Workspace {
         }
         if let Some(composer) = self.conversation.session_composers.remove(&old_id) {
             self.conversation.session_composers.insert(new_id, composer);
+        }
+        if let Some(images) = self.conversation.draft_images.remove(&old_id) {
+            self.conversation.draft_images.insert(new_id, images);
         }
         self.conversation
             .collapsed_tool_groups
@@ -185,13 +195,14 @@ impl Workspace {
             role: Role::System,
             key: None,
             text: "Forked here. The earlier conversation will be provided as context with your first message. Project files reflect their current state.".into(),
+            images: Vec::new(),
         });
         self.sidebar_order.push(config.id);
         self.next_agent_id += 1;
         let new_index = self.projects[project_index].agents.len();
         self.projects[project_index]
             .agents
-            .push(AgentView::new(config));
+            .push(AgentView::new(config, self.images.clone()));
         self.set_view(
             WorkspaceView::Conversation(SessionLocation {
                 project_index,
@@ -245,60 +256,62 @@ impl Workspace {
         else {
             return;
         };
+        let agent = &mut self.projects[project_index].agents[agent_index];
         let value = self.conversation.composer.read(cx).value().to_string();
-        let prompt = submitted_prompt(&value);
-        if prompt.trim().is_empty() || (prompt.starts_with('!') && shell_command(&prompt).is_none())
+        let prompt = Prompt {
+            text: submitted_prompt(&value),
+            images: self
+                .conversation
+                .draft_images
+                .get(&agent.config.id)
+                .cloned()
+                .unwrap_or_default(),
+        };
+        if prompt.images.is_empty()
+            && (prompt.text.trim().is_empty()
+                || (prompt.text.starts_with('!') && shell_command(&prompt.text).is_none()))
         {
             self.conversation
                 .composer
                 .update(cx, |input, cx| input.set_value("", window, cx));
             return;
         }
-        let agent = &mut self.projects[project_index].agents[agent_index];
         if agent.status == Status::Error {
             self.notice = Some(Notice::Error("Agent is not connected".into()));
             cx.notify();
             return;
         }
-        if agent.status == Status::Connecting
+        let queue = agent.status == Status::Connecting
             || agent.active_work
-            || !agent.config.pending_prompts.is_empty()
-        {
-            agent.config.prompt_history.push(prompt.clone());
-            agent.config.pending_prompts.push(prompt);
-            self.persistence.dirty = true;
-            self.conversation.prompt_recall = None;
-            self.conversation
-                .composer
-                .update(cx, |input, cx| input.set_value("", window, cx));
-            self.notice = None;
-            cx.notify();
-            return;
-        }
-        if agent.session_id.is_none() {
+            || !agent.config.pending_prompts.is_empty();
+        if !queue && agent.session_id.is_none() {
             self.notice = Some(Notice::Error("Agent is not connected".into()));
             cx.notify();
             return;
         }
-        match agent.start_prompt(prompt.clone()) {
-            Ok(()) => {
-                agent.config.prompt_history.push(prompt);
-                self.conversation.chat_list.scroll_to(gpui_kit::ListOffset {
-                    item_ix: self.conversation.chat_list.item_count(),
-                    offset_in_item: px(0.),
-                });
-                self.persistence.dirty = true;
-                self.conversation.prompt_recall = None;
-                self.conversation
-                    .composer
-                    .update(cx, |input, cx| input.set_value("", window, cx));
-                self.notice = None;
-            }
-            Err(error) => {
+        let text = prompt.text.clone();
+        if queue {
+            agent.config.pending_prompts.push(prompt);
+        } else {
+            if let Err(error) = agent.start_prompt(prompt) {
                 agent.status = Status::Error;
                 agent.log(Role::System, error);
+                cx.notify();
+                return;
             }
+            self.conversation.chat_list.scroll_to(gpui_kit::ListOffset {
+                item_ix: self.conversation.chat_list.item_count(),
+                offset_in_item: px(0.),
+            });
         }
+        agent.config.prompt_history.push(text);
+        self.conversation.draft_images.remove(&agent.config.id);
+        self.persistence.dirty = true;
+        self.conversation.prompt_recall = None;
+        self.conversation
+            .composer
+            .update(cx, |input, cx| input.set_value("", window, cx));
+        self.notice = None;
         cx.notify();
     }
 

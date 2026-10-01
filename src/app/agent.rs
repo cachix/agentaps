@@ -8,9 +8,9 @@ pub(super) struct AgentView {
 }
 
 impl AgentView {
-    pub(super) fn new(config: AgentConfig) -> Self {
+    pub(super) fn new(config: AgentConfig, images: ImageStore) -> Self {
         Self {
-            controller: SessionController::new(config),
+            controller: SessionController::new(config, images),
             elicitations: Vec::new(),
         }
     }
