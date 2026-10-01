@@ -2,6 +2,7 @@ use super::*;
 use crate::diff_view;
 use gpui_kit::ExternalPaths;
 use gpui_kit::component::attachment::{Attachment, AttachmentGroup, AttachmentMedia};
+use gpui_kit::component::progress::Progress;
 
 impl Workspace {
     pub(super) fn render_conversation(
@@ -822,7 +823,14 @@ impl Workspace {
         if let Some((used, size)) = agent.context
             && size > 0
         {
-            let percent = (used.saturating_mul(100) / size).min(100);
+            let percent = ((used as f64 / size as f64) * 100.).clamp(0., 100.) as f32;
+            let color = if percent >= 85. {
+                STATUS_ERROR
+            } else if percent >= 60. {
+                STATUS_WORKING
+            } else {
+                STATUS_DONE
+            };
             let usage = format!(
                 "{} of {} tokens used",
                 compact_tokens(used),
@@ -834,7 +842,22 @@ impl Workspace {
                 Button::new(format!("context-{}", agent.config.id))
                     .ghost()
                     .xsmall()
-                    .label(format!("Context {percent}%"))
+                    .tooltip(usage.clone())
+                    .child(
+                        div()
+                            .flex()
+                            .items_center()
+                            .gap_2()
+                            .child(format!("Context {}%", percent.floor() as u32))
+                            .child(
+                                Progress::new(format!("context-progress-{}", agent.config.id))
+                                    .value(percent)
+                                    .color(rgb(color))
+                                    .accessibility_label("Context usage")
+                                    .w(px(80.))
+                                    .h(px(6.)),
+                            ),
+                    )
                     .dropdown_menu_with_anchor(Anchor::BottomRight, move |menu, _, _| {
                         let view = view.clone();
                         menu.item(PopupMenuItem::label(usage.clone()))

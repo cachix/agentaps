@@ -15,6 +15,8 @@ Notable changes to Agentaps are recorded here.
 
 ### Changed
 
+- Context usage beneath the composer includes a progress bar that turns from green to amber at 60% and red at 85%, with token counts and Reset context still available.
+
 - Thought messages use a compact disclosure row like completed activity, stay collapsed by default, and expand to show selectable Markdown when clicked.
 
 - The README and website share one updated desktop screenshot showing the current conversation layout and agent controls.
