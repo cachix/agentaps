@@ -1,9 +1,12 @@
 use crate::acp::{Connection, Event};
-use crate::config::{AgentConfig, ChatEntry, Config, ProjectConfig, Role, SlashCommand};
+use crate::config::{
+    AgentConfig, ChatEntry, ChatImage, Config, ProjectConfig, Prompt, Role, SlashCommand,
+};
 use crate::diff_view::{File as DiffFile, Presentation as DiffPresentation, Row as DiffRow};
 use crate::discovery::{AgentChoice, installed_agents, score};
 use crate::file_search::{FileSearch, scan_project};
 use crate::folder_search::FolderSearch;
+use crate::images::ImageStore;
 use crate::theme::*;
 use crate::{config, theme};
 #[cfg(test)]
@@ -39,6 +42,7 @@ use std::{
 };
 
 mod agent;
+mod attachments;
 mod state;
 use state::*;
 mod assets;
@@ -468,6 +472,7 @@ struct Workspace {
     diff: DiffState,
     sync: SyncState,
     persistence: crate::persistence::Persistence,
+    images: ImageStore,
     notice: Option<Notice>,
     zoom_notice_generation: u64,
     _subscriptions: Vec<Subscription>,
@@ -885,6 +890,8 @@ impl Workspace {
                 Some(Notice::Error(format!("Could not load config: {error}"))),
             ),
         };
+        let images = ImageStore::open();
+        images.remove_unused(&config);
         let next_agent_id = config
             .projects
             .iter()
@@ -926,7 +933,11 @@ impl Workspace {
                 sync_counts: None,
                 path: project.path,
                 ssh_host: project.ssh_host,
-                agents: project.agents.into_iter().map(AgentView::new).collect(),
+                agents: project
+                    .agents
+                    .into_iter()
+                    .map(|agent| AgentView::new(agent, images.clone()))
+                    .collect(),
             })
             .collect();
         let agent_ids: Vec<u64> = projects
@@ -962,6 +973,7 @@ impl Workspace {
                 viewport_height: composer_viewport_height,
                 base_line_height: composer_base_line_height,
                 session_composers: HashMap::new(),
+                draft_images: HashMap::new(),
                 chat_list: ListState::new(0, ListAlignment::Bottom, px(300.)),
                 chat_list_agent: None,
                 chat_rows: Vec::new(),
@@ -1041,6 +1053,7 @@ impl Workspace {
                 last_upstream_fetch: Instant::now() - Duration::from_secs(300),
             },
             persistence: crate::persistence::Persistence::new(migrate_config),
+            images,
             notice,
             zoom_notice_generation: 0,
             _subscriptions,
@@ -1575,7 +1588,7 @@ impl Workspace {
         let agent_index = self.projects[project_index].agents.len();
         self.projects[project_index]
             .agents
-            .push(AgentView::new(config));
+            .push(AgentView::new(config, self.images.clone()));
         self.connect(project_index, agent_index);
         if !self.deferred_connections.is_empty() {
             self.deferred_connections_deadline = Some(Instant::now() + Duration::from_secs(2));

@@ -1,5 +1,7 @@
 use super::*;
 use crate::diff_view;
+use gpui_kit::ExternalPaths;
+use gpui_kit::component::attachment::{Attachment, AttachmentGroup, AttachmentMedia};
 
 impl Workspace {
     pub(super) fn render_conversation(
@@ -395,13 +397,21 @@ impl Workspace {
             chat = chat.child(div().px_4().flex().justify_center().child(menu));
         }
         let shell_mode = self.conversation.composer.read(cx).value().starts_with('!');
-        let has_text = !self
+        let agent_id = agent.config.id;
+        let draft_images = self
             .conversation
-            .composer
-            .read(cx)
-            .value()
-            .trim()
-            .is_empty();
+            .draft_images
+            .get(&agent_id)
+            .map(Vec::as_slice)
+            .unwrap_or_default();
+        let can_send = !draft_images.is_empty()
+            || !self
+                .conversation
+                .composer
+                .read(cx)
+                .value()
+                .trim()
+                .is_empty();
         let focused = self
             .conversation
             .composer
@@ -445,57 +455,89 @@ impl Workspace {
                 .items_center()
                 .justify_center()
                 .rounded_md()
-                .bg(rgb(if has_text { ACCENT_SURFACE } else { SURFACE }))
+                .bg(rgb(if can_send { ACCENT_SURFACE } else { SURFACE }))
                 .child(
                     Icon::new(IconName::ArrowUp)
                         .size(px(14.))
-                        .text_color(rgb(if has_text { TEXT } else { MUTED })),
+                        .text_color(rgb(if can_send { TEXT } else { MUTED })),
                 )
                 .tooltip(|window, cx| Tooltip::new("Send (Enter)").build(window, cx))
-                .when(has_text, |button| {
+                .when(can_send, |button| {
                     button
                         .cursor_pointer()
                         .hover(|style| style.bg(rgb(SELECTED)))
                         .on_click(cx.listener(|this, _, window, cx| this.send_prompt(window, cx)))
                 })
         };
+        let workspace = cx.entity().downgrade();
+        let attachments = (!draft_images.is_empty()).then(|| {
+            AttachmentGroup::new(("composer-images", agent_id)).children(
+                draft_images.iter().enumerate().map(|(index, image)| {
+                    Attachment::new()
+                        .id(("composer-image", index))
+                        .axis(gpui_kit::Axis::Vertical)
+                        .media(AttachmentMedia::new().src(self.images.path(image)))
+                        .on_remove(cx.listener(move |this, _, _, cx| {
+                            this.remove_draft_image(agent_id, index, cx);
+                        }))
+                }),
+            )
+        });
         // A plain border that turns to the accent colour on focus, in place
         // of the text area's own focus ring.
         let composer = div()
             .w_full()
             .min_w(px(0.))
             .flex()
-            .items_center()
+            .flex_col()
             .gap_1()
-            .pr_1p5()
-            .py_1p5()
             .rounded_lg()
             .border_1()
             .border_color(rgb(if focused { ACCENT } else { BORDER }))
             .bg(rgb(SIDEBAR))
+            .drag_over::<ExternalPaths>(|style, _, _, _| style.border_color(rgb(ACCENT)))
+            .on_drop(cx.listener(|this, paths: &ExternalPaths, _, cx| {
+                this.drop_images(paths, cx);
+            }))
+            .children(attachments.map(|attachments| div().px_2().pt_2().child(attachments)))
             .child(
                 div()
-                    .flex_1()
+                    .w_full()
                     .min_w(px(0.))
-                    .relative()
+                    .flex()
+                    .items_center()
+                    .gap_1()
+                    .pr_1p5()
+                    .py_1p5()
                     .child(
-                        Textarea::new(&self.conversation.composer)
-                            .appearance(false)
-                            .when(shell_mode, |textarea| textarea.pr(px(48.))),
+                        div()
+                            .flex_1()
+                            .min_w(px(0.))
+                            .relative()
+                            .child(
+                                Textarea::new(&self.conversation.composer)
+                                    .appearance(false)
+                                    .when(shell_mode, |textarea| textarea.pr(px(48.)))
+                                    .on_paste(move |item, _, cx| {
+                                        workspace
+                                            .update(cx, |this, cx| this.paste_images(item, cx))
+                                            .unwrap_or(false)
+                                    }),
+                            )
+                            .when(shell_mode, |element| {
+                                element.child(
+                                    div()
+                                        .absolute()
+                                        .right(px(12.))
+                                        .bottom(px(6.))
+                                        .text_xs()
+                                        .text_color(rgb(MUTED))
+                                        .child("shell"),
+                                )
+                            }),
                     )
-                    .when(shell_mode, |element| {
-                        element.child(
-                            div()
-                                .absolute()
-                                .right(px(12.))
-                                .bottom(px(6.))
-                                .text_xs()
-                                .text_color(rgb(MUTED))
-                                .child("shell"),
-                        )
-                    }),
-            )
-            .child(div().flex_shrink_0().child(action_button));
+                    .child(div().flex_shrink_0().child(action_button)),
+            );
         let status = agent.active_work.then(|| {
             div()
                 .flex()

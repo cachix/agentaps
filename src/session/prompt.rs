@@ -33,7 +33,8 @@ pub(crate) fn fork_prompt(messages: &[ChatEntry], prompt: &str) -> String {
                 Role::Agent => "assistant",
                 _ => return None,
             };
-            (!entry.text.is_empty()).then(|| json!({"role": role, "text": entry.text}))
+            let text = entry.transcript_text();
+            (!text.is_empty()).then(|| json!({"role": role, "text": text}))
         })
         .collect();
     format!(

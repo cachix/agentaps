@@ -53,9 +53,10 @@ fn chat_rows(
             }
             index = end;
         } else {
-            if !entry.text.is_empty() {
+            if !entry.text.is_empty() || !entry.images.is_empty() {
                 (entry.role as u8).hash(&mut hasher);
                 text_signature(&entry.text, &mut hasher);
+                entry.images.hash(&mut hasher);
                 rows.push(ChatRow {
                     kind: ChatRowKind::Message(index),
                     signature: hasher.finish(),
@@ -72,7 +73,8 @@ fn chat_rows(
     }
     for (index, prompt) in agent.config.pending_prompts.iter().enumerate() {
         let mut hasher = std::collections::hash_map::DefaultHasher::new();
-        text_signature(prompt, &mut hasher);
+        text_signature(&prompt.text, &mut hasher);
+        prompt.images.hash(&mut hasher);
         rows.push(ChatRow {
             kind: ChatRowKind::Queued(index),
             signature: hasher.finish(),
@@ -199,19 +201,25 @@ impl Workspace {
                         .rounded_md()
                         .bg(rgb(USER_BUBBLE))
                         .child(div().text_xs().text_color(rgb(ACCENT)).child(
-                            if shell_command(prompt).is_some() {
+                            if shell_command(&prompt.text).is_some() {
                                 format!("Queued {} · Shell command", index + 1)
                             } else {
                                 format!("Queued {}", index + 1)
                             },
                         ))
-                        .child(
-                            div()
-                                .text_sm()
-                                .text_color(rgb(TEXT))
-                                .whitespace_normal()
-                                .child(prompt.clone()),
-                        ),
+                        .children(self.render_images(
+                            format!("queued-{}-{index}", agent.config.id),
+                            &prompt.images,
+                        ))
+                        .when(!prompt.text.is_empty(), |bubble| {
+                            bubble.child(
+                                div()
+                                    .text_sm()
+                                    .text_color(rgb(TEXT))
+                                    .whitespace_normal()
+                                    .child(prompt.text.clone()),
+                            )
+                        }),
                 )
             }
             ChatRowKind::Permission(index) => self.render_permission(agent, index, cx),
@@ -230,6 +238,33 @@ impl Workspace {
                     .min_w(px(0.))
                     .child(content),
             )
+    }
+
+    fn render_images(&self, id: String, images: &[ChatImage]) -> Option<Div> {
+        (!images.is_empty()).then(|| {
+            div()
+                .py_1()
+                .flex()
+                .flex_wrap()
+                .gap_2()
+                .children(images.iter().enumerate().map(|(index, image)| {
+                    let path = self.images.path(image);
+                    div()
+                        .id((gpui_kit::SharedString::from(id.clone()), index))
+                        .max_w_full()
+                        .rounded_md()
+                        .overflow_hidden()
+                        .cursor_pointer()
+                        .child(
+                            gpui_kit::img(path.clone())
+                                .max_w_full()
+                                .max_h(px(MESSAGE_IMAGE_HEIGHT))
+                                .object_fit(gpui_kit::ObjectFit::Contain),
+                        )
+                        .tooltip(|window, cx| Tooltip::new("Open image").build(window, cx))
+                        .on_click(move |_, _, cx| cx.open_with_system(&path))
+                }))
+        })
     }
 
     fn chat_text_style(&self, cx: &Context<Self>) -> TextViewStyle {
@@ -263,6 +298,8 @@ impl Workspace {
             .selectable(true)
             .text_sm()
             .text_color(rgb(TEXT));
+        let images =
+            self.render_images(format!("images-{}-{index}", agent.config.id), &entry.images);
         match entry.role {
             Role::User | Role::Agent => {
                 let from_user = entry.role == Role::User;
@@ -287,7 +324,8 @@ impl Workspace {
                                         .child("Shell command"),
                                 )
                             })
-                            .child(content),
+                            .children(images)
+                            .when(!entry.text.is_empty(), |bubble| bubble.child(content)),
                     );
                 }
                 let copy_state = window.use_keyed_state(
@@ -318,7 +356,8 @@ impl Workspace {
                             .text_sm()
                             .text_color(rgb(TEXT))
                             .whitespace_normal()
-                            .child(content),
+                            .children(images)
+                            .when(!entry.text.is_empty(), |bubble| bubble.child(content)),
                     )
                     .child(
                         div()
@@ -699,25 +738,28 @@ mod tests {
     use super::*;
 
     fn agent() -> AgentView {
-        AgentView::new(AgentConfig {
-            id: 1,
-            command: vec!["agent".into()],
-            archived: false,
-            display_name: None,
-            title: None,
-            session_id: None,
-            model: None,
-            context: None,
-            messages: Vec::new(),
-            available_commands: Vec::new(),
-            pending_prompts: Vec::new(),
-            active_prompt: None,
-            prompt_history: Vec::new(),
-            was_working: false,
-            session_has_activity: false,
-            fork_pending: false,
-            fork_source: None,
-        })
+        AgentView::new(
+            AgentConfig {
+                id: 1,
+                command: vec!["agent".into()],
+                archived: false,
+                display_name: None,
+                title: None,
+                session_id: None,
+                model: None,
+                context: None,
+                messages: Vec::new(),
+                available_commands: Vec::new(),
+                pending_prompts: Vec::new(),
+                active_prompt: None,
+                prompt_history: Vec::new(),
+                was_working: false,
+                session_has_activity: false,
+                fork_pending: false,
+                fork_source: None,
+            },
+            ImageStore::for_tests(),
+        )
     }
 
     #[test]

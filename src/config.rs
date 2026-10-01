@@ -17,12 +17,77 @@ pub enum Role {
     ContextReset,
 }
 
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq, Hash)]
+pub struct ChatImage {
+    pub mime_type: String,
+    pub sha256: String,
+}
+
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct ChatEntry {
     pub role: Role,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub key: Option<String>,
     pub text: String,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub images: Vec<ChatImage>,
+}
+
+pub fn with_image_placeholders(text: &str, images: usize) -> String {
+    std::iter::once(text)
+        .filter(|text| !text.is_empty())
+        .chain(std::iter::repeat_n("[image]", images))
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
+impl ChatEntry {
+    pub fn transcript_text(&self) -> String {
+        with_image_placeholders(&self.text, self.images.len())
+    }
+}
+
+#[derive(Clone, Debug, Default, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(from = "SavedPrompt")]
+pub struct Prompt {
+    pub text: String,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub images: Vec<ChatImage>,
+}
+
+#[derive(Deserialize)]
+#[serde(untagged)]
+enum SavedPrompt {
+    Text(String),
+    Prompt {
+        text: String,
+        #[serde(default)]
+        images: Vec<ChatImage>,
+    },
+}
+
+impl From<SavedPrompt> for Prompt {
+    fn from(saved: SavedPrompt) -> Self {
+        match saved {
+            SavedPrompt::Text(text) => text.into(),
+            SavedPrompt::Prompt { text, images } => Self { text, images },
+        }
+    }
+}
+
+impl From<String> for Prompt {
+    fn from(text: String) -> Self {
+        Self {
+            text,
+            images: Vec::new(),
+        }
+    }
+}
+
+impl From<&str> for Prompt {
+    fn from(text: &str) -> Self {
+        text.to_owned().into()
+    }
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
@@ -61,7 +126,7 @@ pub struct AgentConfig {
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub available_commands: Vec<SlashCommand>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub pending_prompts: Vec<String>,
+    pub pending_prompts: Vec<Prompt>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub active_prompt: Option<String>,
     #[serde(skip)]
@@ -136,6 +201,10 @@ fn config_base() -> Result<PathBuf, String> {
 
 pub fn path() -> Result<PathBuf, String> {
     Ok(config_base()?.join("agentaps").join("config.json"))
+}
+
+pub fn images_path() -> Result<PathBuf, String> {
+    Ok(config_base()?.join("agentaps").join("images"))
 }
 
 pub fn load() -> Result<(Config, bool), String> {
@@ -306,7 +375,7 @@ mod tests {
         assert!(agent.messages.is_empty());
         assert!(agent.prompt_history.is_empty());
         assert_eq!(agent.session_id.as_deref(), Some("harness-session"));
-        assert_eq!(agent.pending_prompts, ["queued request"]);
+        assert_eq!(agent.pending_prompts, [Prompt::from("queued request")]);
         assert_eq!(agent.active_prompt.as_deref(), Some("current request"));
         assert!(agent.was_working);
         save_to(&path, &config).unwrap();
@@ -326,6 +395,7 @@ mod tests {
             role: Role::Agent,
             key: None,
             text: "new reply".into(),
+            images: Vec::new(),
         });
         config.projects[0].agents[0]
             .prompt_history

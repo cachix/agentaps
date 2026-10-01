@@ -8,6 +8,7 @@ mod file_search;
 mod folder_search;
 mod git_diff;
 mod git_sync;
+mod images;
 mod mobile;
 mod persistence;
 mod remote;
