@@ -51,6 +51,10 @@ fetch(releaseUrl, { headers: { Accept: 'application/vnd.github+json' } })
         version.textContent = `Agentaps ${release.tag_name.replace(/^v/, '')}`;
         version.href = release.html_url;
       }
+      const downloadLabel = document.querySelector('#download-label');
+      if (downloadLabel) {
+        downloadLabel.textContent = `Get Agentaps ${release.tag_name.replace(/^v/, '')}`;
+      }
     }
   })
   .catch(() => {});

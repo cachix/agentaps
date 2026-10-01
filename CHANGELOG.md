@@ -15,6 +15,12 @@ Notable changes to Agentaps are recorded here.
 
 ### Changed
 
+- The main website download button shows the latest Agentaps release version.
+
+- The website calls browser access Remote Control and retains the GitHub stars count and latest release version.
+
+- The website keeps the original dark blue palette in a refreshed layout with a centered hero, install and quickstart panels, a full desktop screenshot, and clearer agent and Remote Control sections.
+
 - Context usage beneath the composer includes a progress bar that turns from green to amber at 60% and red at 85%, with token counts and Reset context still available.
 
 - Thought messages use a compact disclosure row like completed activity, stay collapsed by default, and expand to show selectable Markdown when clicked.

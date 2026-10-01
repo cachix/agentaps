@@ -4,87 +4,67 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="theme-color" content="#10151c">
-    <meta name="description" content="Use your coding harness locally or over SSH using ACP, then securely connect from the web with Agentaps.">
-    <title>Agentaps | A universal UI for coding harnesses</title>
+    <meta name="description" content="One workspace for your coding agents. Run your harness locally or over SSH, review changes, and continue securely from your browser with Agentaps.">
+    <title>Agentaps | One workspace for your coding agents</title>
     <link rel="icon" href="/favicon.svg" type="image/svg+xml">
-    <link rel="stylesheet" href="/styles.css?v=20260928-release-0-3-0">
+    <link rel="stylesheet" href="/styles.css?v=20261001-remote-control">
     <script>
       if (/^#[^:]+:[0-9a-f]{64}$/i.test(location.hash)) {
         location.replace(`/connect/${location.hash}`);
       }
     </script>
-    <script src="/site.js?v=20260928-release-0-3-0" defer></script>
+    <script src="/site.js?v=20261001-download-version" defer></script>
   </head>
   <body>
-    <div class="page-shell">
-      <header class="site-header">
+    <header class="site-header">
+      <div class="container header-inner">
         <div class="brand-group">
-          <a class="brand" href="/" aria-label="Agentaps home">
-            <span class="brand-mark" aria-hidden="true"><span></span><span></span><span></span></span>
-            <span>agentaps<span class="brand-dot">.</span></span>
-          </a>
-          <a class="github-stars" href="https://github.com/domenkozar/agentaps" aria-label="Star Agentaps on GitHub">
-            <img src="https://img.shields.io/github/stars/domenkozar/agentaps?style=flat&amp;logo=github&amp;label=Stars&amp;labelColor=202a36&amp;color=304b60" alt="GitHub stars" height="28">
-          </a>
+          <a class="brand" href="/" aria-label="Agentaps home"><span class="brand-mark" aria-hidden="true"><span></span><span></span><span></span></span>agentaps</a>
+          <a class="github-stars" href="https://github.com/domenkozar/agentaps" aria-label="Star Agentaps on GitHub"><img src="https://img.shields.io/github/stars/domenkozar/agentaps?style=flat&amp;logo=github&amp;label=Stars&amp;labelColor=202a36&amp;color=304b60" alt="GitHub stars" height="28"></a>
         </div>
-        <nav aria-label="Main navigation">
-          <a href="#why-agentaps">Why Agentaps</a>
-          <a href="#downloads">Desktop</a>
-          <a class="nav-connect" href="/connect/">Web Connect <span aria-hidden="true">↗</span></a>
-        </nav>
-      </header>
+        <nav aria-label="Main navigation"><a href="#workspace">Workspace</a><a href="#agents">Agents</a><a href="https://github.com/domenkozar/agentaps#readme">Docs</a><a class="nav-connect" href="/connect/">Remote Control <span aria-hidden="true">↗</span></a></nav>
+      </div>
+    </header>
+    <main>
+      <section class="hero container" aria-labelledby="hero-title">
+        <p class="eyebrow"><span class="status-dot" aria-hidden="true"></span> OPEN SOURCE. BUILT IN RUST.</p>
+        <h1 id="hero-title">Your coding agents.<br><span>One workspace.</span></h1>
+        <p class="hero-description">A universal UI for coding harnesses. Work locally or over SSH, keep every conversation together, and pick up from your browser.</p>
+        <div class="hero-actions"><a class="button button-primary" href="#downloads"><span id="download-label">Get Agentaps 0.4.0</span> <span aria-hidden="true">↓</span></a><a class="source-link" href="https://github.com/domenkozar/agentaps">View on GitHub <span aria-hidden="true">↗</span></a></div>
+        <p class="hero-note">Linux · macOS · Windows</p>
+      </section>
 
-      <main>
-        <section class="hero" aria-labelledby="hero-title">
-          <div class="hero-copy">
-            <h1 id="hero-title">A universal UI<br><span>for coding</span><br><span>harnesses.</span></h1>
-            <p class="hero-description">Use your coding harness locally or over SSH using <a href="https://agentclientprotocol.com/get-started/introduction">ACP</a>, then securely connect from the web with Agentaps.</p>
-            <div class="hero-actions">
-              <a class="button button-primary" href="/connect/">Open Web Connect <span aria-hidden="true">↗</span></a>
-              <a class="button button-secondary" href="https://github.com/domenkozar/agentaps#run">Build from source <span aria-hidden="true">↗</span></a>
-            </div>
-            <div class="hero-platforms" id="downloads" role="group" aria-label="Desktop downloads">
-              <span class="platform-download" data-platform="linux"><a class="platform-link" href="https://github.com/domenkozar/agentaps/releases/download/v0.4.0/agentaps_0.4.0_amd64.deb">Linux DEB</a><a class="platform-link" href="https://github.com/domenkozar/agentaps/releases/download/v0.4.0/agentaps_0.4.0_x86_64.AppImage">Linux AppImage</a></span>
-              <span class="platform-download" data-platform="macos"><a class="platform-link" href="https://github.com/domenkozar/agentaps/releases/download/v0.4.0/Agentaps_0.4.0_aarch64.dmg">macOS (Apple Silicon)</a></span>
-              <span class="platform-download" data-platform="windows"><a class="platform-link" href="https://github.com/domenkozar/agentaps/releases/download/v0.4.0/agentaps_0.4.0_x64-setup.exe">Windows</a></span>
-            </div>
-            <p class="release-note">Latest release: <a id="release-version" href="https://github.com/domenkozar/agentaps/releases/tag/v0.4.0">Agentaps 0.4.0</a></p>
-            <p class="hero-note">Built with Rust · Apache-2.0 · No mobile app required</p>
+      <section class="getting-started container" id="downloads" aria-label="Get started">
+        <div class="setup-panel">
+          <div class="panel-heading"><h2>Install</h2><span class="mono">01 / DESKTOP</span></div>
+          <p>Choose your platform. Bring your own agent.</p>
+          <div class="hero-platforms" role="group" aria-label="Desktop downloads">
+            <span class="platform-download" data-platform="linux"><a class="platform-link" href="https://github.com/domenkozar/agentaps/releases/download/v0.4.0/agentaps_0.4.0_amd64.deb">Linux DEB</a><a class="platform-link" href="https://github.com/domenkozar/agentaps/releases/download/v0.4.0/agentaps_0.4.0_x86_64.AppImage">Linux AppImage</a></span>
+            <span class="platform-download" data-platform="macos"><a class="platform-link" href="https://github.com/domenkozar/agentaps/releases/download/v0.4.0/Agentaps_0.4.0_aarch64.dmg">macOS (Apple Silicon)</a></span>
+            <span class="platform-download" data-platform="windows"><a class="platform-link" href="https://github.com/domenkozar/agentaps/releases/download/v0.4.0/agentaps_0.4.0_x64-setup.exe">Windows</a></span>
           </div>
+          <p class="release-note">Latest release: <a id="release-version" href="https://github.com/domenkozar/agentaps/releases/tag/v0.4.0">Agentaps 0.4.0</a></p>
+          <div class="source-install"><span class="mono">Or build from source</span><code><span aria-hidden="true">$ </span>cargo install agentaps</code><a href="https://github.com/domenkozar/agentaps#build-from-source">Build instructions <span aria-hidden="true">↗</span></a></div>
+        </div>
+        <div class="setup-panel">
+          <div class="panel-heading"><h2>Quickstart</h2><span class="mono">02 / YOUR FIRST SESSION</span></div>
+          <ol class="quickstart"><li><span>01</span><div><strong>Choose your project</strong><p>Open Agentaps, select New, and pick a local folder or an SSH path.</p></div></li><li><span>02</span><div><strong>Connect your harness</strong><p>Choose an ACP-compatible agent with your existing setup and authentication.</p></div></li><li><span>03</span><div><strong>Start the conversation</strong><p>Send a prompt, follow tool activity, and review the changes alongside your chat.</p></div></li></ol>
+        </div>
+      </section>
 
-          <div class="product-visual">
-            <div class="visual-glow" aria-hidden="true"></div>
-            <img class="product-screenshot" src="/agentaps-desktop.png?v=20261001" width="1909" height="1709" alt="Agentaps desktop app showing project sessions and a Codex conversation" fetchpriority="high">
-            <div class="phone-window" aria-hidden="true">
-              <div class="phone-notch"></div>
-              <div class="phone-brand">agentaps<span>.</span></div>
-              <div class="phone-title">Your sessions</div>
-              <div class="phone-session"><span class="status-dot green"></span><div><strong>agentaps</strong><small>Codex · active</small></div><span>›</span></div>
-              <div class="phone-session"><span class="status-dot blue"></span><div><strong>api</strong><small>Claude · ready</small></div><span>›</span></div>
-              <div class="phone-bottom">Connected through Iroh <span class="status-dot green"></span></div>
-            </div>
-          </div>
-        </section>
+      <section class="workspace" id="workspace" aria-labelledby="workspace-title">
+        <div class="container">
+          <div class="section-heading"><p class="eyebrow">THE WORKSPACE</p><h2 id="workspace-title">A place for the whole conversation.</h2><p>Projects, agent activity, and changes in one view. Less switching. More doing.</p></div>
+          <figure class="product-visual"><div class="visual-toolbar"><span><span class="status-dot" aria-hidden="true"></span> AGENTAPS / DESKTOP</span><span>LOCAL + SSH + WEB</span></div><img class="product-screenshot" src="/agentaps-desktop.png?v=20261001" width="1909" height="1709" alt="Agentaps desktop app showing project sessions, a Codex conversation, and agent controls" loading="lazy"><figcaption>Your projects. Your agents. Your machine.</figcaption></figure>
+        </div>
+      </section>
 
-        <section class="features" id="why-agentaps" aria-labelledby="features-title">
-          <div class="section-intro">
-            <p class="eyebrow">BUILT FOR HOW YOU WORK</p>
-            <h2 id="features-title">One workspace, any machine.</h2>
-          </div>
-          <div class="feature-grid">
-            <article class="feature-card"><span class="feature-icon">⌘</span><h3>Keep your harness</h3><p>Connect agents that speak ACP, built in or through an adapter, and keep their projects and conversations in one workspace.</p></article>
-            <article class="feature-card"><span class="feature-icon">↗</span><h3>Work over SSH</h3><p>Start agents on a server through your existing SSH setup and follow the conversation locally.</p></article>
-            <article class="feature-card"><span class="feature-icon">◌</span><h3>Continue on your phone</h3><p>Web Connect pairs your browser with a QR code, then uses Iroh for an encrypted peer-to-peer connection to your desktop sessions. No app needed.</p></article>
-          </div>
-        </section>
+      <section class="agents container" id="agents" aria-labelledby="agents-title"><div class="section-heading"><p class="eyebrow">BRING YOUR OWN AGENT</p><h2 id="agents-title">Keep the harness you know.</h2><p>Agentaps speaks <a href="https://agentclientprotocol.com/get-started/introduction">Agent Client Protocol</a>. Connect your agent directly or through an ACP adapter.</p></div><div class="agent-list" aria-label="Supported agents"><span><span class="agent-symbol" aria-hidden="true">✳</span>Claude Code</span><span><span class="agent-symbol" aria-hidden="true">&gt;_</span>Codex</span><span><span class="agent-symbol" aria-hidden="true">✦</span>Gemini CLI</span><span><span class="agent-symbol" aria-hidden="true">/</span>OpenCode</span></div><a class="text-link" href="https://github.com/domenkozar/agentaps#get-started">Or connect another ACP-compatible harness <span aria-hidden="true">↗</span></a></section>
 
-        <section class="connect-panel" aria-labelledby="connect-title">
-          <div><p class="eyebrow">NO APP ON YOUR PHONE</p><h2 id="connect-title">Your desktop is a scan away.</h2><p>Open Agentaps on your computer, select the phone icon, and scan its QR code with Web Connect.</p></div>
-          <a class="button button-primary" href="/connect/">Open Web Connect <span aria-hidden="true">↗</span></a>
-        </section>
-      </main>
+      <section class="features container" aria-labelledby="features-title"><div class="section-heading"><p class="eyebrow">BUILT FOR HOW YOU WORK</p><h2 id="features-title">Local. Remote. Wherever you are.</h2></div><div class="feature-grid"><article><span class="feature-number">01 / ORGANIZE</span><h3>Every project, together</h3><p>Keep sessions in one sidebar. Archive conversations, fork a reply, and return to the work that matters.</p></article><article><span class="feature-number">02 / CONNECT</span><h3>Work over SSH</h3><p>Run agents on a server using your existing SSH setup. Follow the conversation from your desktop.</p></article><article><span class="feature-number">03 / REVIEW</span><h3>See what changed</h3><p>Inspect local changes in unified or split diffs beside the conversation, without leaving your workspace.</p></article><article><span class="feature-number">04 / CONTINUE</span><h3>Take it to your browser</h3><p>Read conversations, send prompts, and answer permission requests through an encrypted Iroh connection.</p></article></div></section>
 
-      <footer class="site-footer"><span>agentaps<span class="brand-dot">.</span></span><div><a href="https://github.com/domenkozar/agentaps">GitHub</a><a href="/connect/">Web Connect</a></div><span>Open source under Apache-2.0</span></footer>
-    </div>
+      <section class="connect-section" aria-labelledby="connect-title"><div class="container connect-inner"><div><p class="eyebrow">REMOTE CONTROL</p><h2 id="connect-title">Step away.<br>Stay connected.</h2><p>Open the phone icon in Agentaps and scan its QR code. Your agents keep running on your desktop. Your browser goes with you.</p><a class="button button-primary" href="/connect/">Open Remote Control <span aria-hidden="true">↗</span></a><p class="connect-note">Encrypted peer-to-peer connection · No mobile app required</p></div><ol class="connection-flow" aria-label="How Remote Control works"><li><span class="flow-icon" aria-hidden="true">&gt;_</span><div><span class="mono">01 / YOUR COMPUTER</span><strong>Agentaps + your harness</strong><p>Projects and agent processes stay here.</p></div></li><li><span class="flow-icon" aria-hidden="true">⇄</span><div><span class="mono">02 / ENCRYPTED CONNECTION</span><strong>Connected through Iroh</strong><p>Pair once with a QR code.</p></div></li><li><span class="flow-icon" aria-hidden="true">↗</span><div><span class="mono">03 / YOUR BROWSER</span><strong>The conversation continues</strong><p>Unlock with a passkey or passphrase.</p></div></li></ol></div></section>
+    </main>
+    <footer class="site-footer container"><a class="brand" href="/">agentaps</a><span>Built in Rust. Open source under Apache-2.0.</span><div><a href="https://github.com/domenkozar/agentaps">GitHub ↗</a><a href="https://github.com/domenkozar/agentaps#readme">Docs ↗</a><a href="/connect/">Remote Control ↗</a></div></footer>
   </body>
 </html>
