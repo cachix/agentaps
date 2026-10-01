@@ -10,6 +10,10 @@ Notable changes to Agentaps are recorded here.
 
 - The website links directly to the Agentaps 0.4.0 desktop installers and shows the latest release version.
 
+### Fixed
+
+- Web Connect pairs and connects in Safari, which previously could not reach the default Iroh relays.
+
 ## [0.4.0] - 2026-09-30
 
 ### Added
