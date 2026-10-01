@@ -980,6 +980,7 @@ impl Workspace {
                 collapsed_tool_groups: HashSet::new(),
                 expanded_tool_history: HashSet::new(),
                 expanded_tool_rows: HashSet::new(),
+                expanded_thought_rows: HashSet::new(),
                 prompt_recall: None,
                 slash_selection: 0,
                 slash_dismissed: false,

@@ -15,6 +15,8 @@ Notable changes to Agentaps are recorded here.
 
 ### Changed
 
+- Thought messages use a compact disclosure row like completed activity, stay collapsed by default, and expand to show selectable Markdown when clicked.
+
 - The README and website share one updated desktop screenshot showing the current conversation layout and agent controls.
 
 - The website links directly to the Agentaps 0.4.0 desktop installers and shows the latest release version.

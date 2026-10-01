@@ -19,6 +19,7 @@ fn chat_rows(
     collapsed_tool_groups: &HashSet<(u64, usize)>,
     expanded_tool_history: &HashSet<(u64, usize)>,
     expanded_tool_rows: &HashSet<(u64, usize)>,
+    expanded_thought_rows: &HashSet<(u64, usize)>,
 ) -> Vec<ChatRow> {
     let mut rows = Vec::new();
     let mut index = 0;
@@ -55,8 +56,17 @@ fn chat_rows(
         } else {
             if !entry.text.is_empty() || !entry.images.is_empty() {
                 (entry.role as u8).hash(&mut hasher);
-                text_signature(&entry.text, &mut hasher);
-                entry.images.hash(&mut hasher);
+                if entry.role == Role::Thought {
+                    let expanded = expanded_thought_rows.contains(&(agent.config.id, index));
+                    expanded.hash(&mut hasher);
+                    if expanded {
+                        text_signature(&entry.text, &mut hasher);
+                        entry.images.hash(&mut hasher);
+                    }
+                } else {
+                    text_signature(&entry.text, &mut hasher);
+                    entry.images.hash(&mut hasher);
+                }
                 rows.push(ChatRow {
                     kind: ChatRowKind::Message(index),
                     signature: hasher.finish(),
@@ -142,6 +152,7 @@ impl Workspace {
             &self.conversation.collapsed_tool_groups,
             &self.conversation.expanded_tool_history,
             &self.conversation.expanded_tool_rows,
+            &self.conversation.expanded_thought_rows,
         );
 
         if self.conversation.chat_list_agent != Some(agent.config.id) {
@@ -276,6 +287,57 @@ impl Workspace {
         }
     }
 
+    fn render_thought(&self, agent: &AgentView, index: usize, cx: &mut Context<Self>) -> Div {
+        let key = (agent.config.id, index);
+        let expanded = self.conversation.expanded_thought_rows.contains(&key);
+        let row_id: gpui_kit::ElementId = ("thought-row", agent.config.id).into();
+        let mut row = div().max_w(px(900.)).min_w(px(0.)).py_1().child(
+            div()
+                .id((row_id, index.to_string()))
+                .cursor_pointer()
+                .flex()
+                .items_center()
+                .gap_2()
+                .text_sm()
+                .text_color(rgb(MUTED))
+                .child(div().w(px(14.)).flex_shrink_0().text_center().child("•"))
+                .child("Thought")
+                .child(div().text_xs().child(if expanded { "⌄" } else { "›" }))
+                .on_click(cx.listener(move |this, _, _, cx| {
+                    if !this.conversation.expanded_thought_rows.insert(key) {
+                        this.conversation.expanded_thought_rows.remove(&key);
+                    }
+                    cx.notify();
+                })),
+        );
+        if expanded {
+            let text_id: gpui_kit::ElementId = ("thought-detail", agent.config.id).into();
+            let entry = &agent.messages[index];
+            row = row.child(
+                div()
+                    .ml(px(22.))
+                    .mt_1()
+                    .p_2()
+                    .rounded_md()
+                    .bg(rgb(SURFACE))
+                    .children(self.render_images(
+                        format!("thought-images-{}-{index}", agent.config.id),
+                        &entry.images,
+                    ))
+                    .when(!entry.text.is_empty(), |details| {
+                        details.child(
+                            TextView::markdown((text_id, index.to_string()), entry.text.clone())
+                                .style(self.chat_text_style(cx))
+                                .selectable(true)
+                                .text_sm()
+                                .text_color(rgb(TEXT)),
+                        )
+                    }),
+            );
+        }
+        row
+    }
+
     fn render_message(
         &self,
         agent: &AgentView,
@@ -286,6 +348,9 @@ impl Workspace {
         cx: &mut Context<Self>,
     ) -> Div {
         let entry = &agent.messages[index];
+        if entry.role == Role::Thought {
+            return self.render_thought(agent, index, cx);
+        }
         let shell = (entry.role == Role::User)
             .then(|| shell_command_in_message(&entry.text))
             .flatten();
@@ -441,7 +506,6 @@ impl Workspace {
                 .child(div().flex_1().h(px(1.)).bg(rgb(BORDER))),
             role => {
                 let (label, color) = match role {
-                    Role::Thought => ("THOUGHT", MUTED),
                     Role::Tool => ("TOOL", TOOL_MARKER),
                     Role::System => ("SYSTEM", STATUS_ERROR),
                     _ => unreachable!(),
@@ -772,28 +836,28 @@ mod tests {
         let collapsed = HashSet::new();
         let history = HashSet::new();
         let expanded = HashSet::new();
-        let before = chat_rows(&agent, &collapsed, &history, &expanded);
+        let before = chat_rows(&agent, &collapsed, &history, &expanded, &HashSet::new());
         assert_eq!(before.len(), 3);
         assert_eq!(before[1].kind, ChatRowKind::Tools(1, 3));
 
         agent.messages[0].text.push('!');
-        let after = chat_rows(&agent, &collapsed, &history, &expanded);
+        let after = chat_rows(&agent, &collapsed, &history, &expanded, &HashSet::new());
         assert_eq!(changed_row_range(&before, &after), Some((0..1, 1)));
         assert_eq!(changed_row_range(&after, &after), None);
 
         let collapsed = HashSet::from([(agent.config.id, 1)]);
-        let collapsed_rows = chat_rows(&agent, &collapsed, &history, &expanded);
+        let collapsed_rows = chat_rows(&agent, &collapsed, &history, &expanded, &HashSet::new());
         assert_eq!(changed_row_range(&after, &collapsed_rows), Some((1..2, 1)));
 
         let history = HashSet::from([(agent.config.id, 1)]);
-        let history_rows = chat_rows(&agent, &collapsed, &history, &expanded);
+        let history_rows = chat_rows(&agent, &collapsed, &history, &expanded, &HashSet::new());
         assert_eq!(
             changed_row_range(&collapsed_rows, &history_rows),
             Some((1..2, 1))
         );
 
         agent.config.pending_prompts.push("Next".into());
-        let queued_rows = chat_rows(&agent, &collapsed, &history, &expanded);
+        let queued_rows = chat_rows(&agent, &collapsed, &history, &expanded, &HashSet::new());
         assert_eq!(
             changed_row_range(&history_rows, &queued_rows),
             Some((3..3, 1))
@@ -801,21 +865,52 @@ mod tests {
     }
 
     #[test]
+    fn thought_disclosure_remeasures_only_when_visible_content_changes() {
+        let mut agent = agent();
+        agent.log(Role::Thought, "Consider the options");
+        agent.log(Role::Agent, "Answer");
+        let empty = HashSet::new();
+        let collapsed = chat_rows(&agent, &empty, &empty, &empty, &empty);
+        agent.messages[0].text.push_str(" before replying");
+        let streaming = chat_rows(&agent, &empty, &empty, &empty, &empty);
+        assert_eq!(changed_row_range(&collapsed, &streaming), None);
+
+        let expanded = HashSet::from([(agent.config.id, 0)]);
+        let visible = chat_rows(&agent, &empty, &empty, &empty, &expanded);
+        assert_eq!(changed_row_range(&streaming, &visible), Some((0..1, 1)));
+        agent.messages[0].text.push('.');
+        let updated = chat_rows(&agent, &empty, &empty, &empty, &expanded);
+        assert_eq!(changed_row_range(&visible, &updated), Some((0..1, 1)));
+        agent.messages[0].images.push(ChatImage {
+            mime_type: "image/png".into(),
+            sha256: "thought-image".into(),
+        });
+        let with_image = chat_rows(&agent, &empty, &empty, &empty, &expanded);
+        assert_eq!(changed_row_range(&updated, &with_image), Some((0..1, 1)));
+        let closed = chat_rows(&agent, &empty, &empty, &empty, &empty);
+        assert_eq!(changed_row_range(&with_image, &closed), Some((0..1, 1)));
+
+        agent.config.id += 1;
+        let other_session = chat_rows(&agent, &empty, &empty, &empty, &expanded);
+        assert_eq!(other_session[0].signature, collapsed[0].signature);
+    }
+
+    #[test]
     fn chat_rows_hide_automatic_reviews() {
         let mut agent = agent();
         agent.log(Role::Tool, "Guardian Review · pending");
         let empty = HashSet::new();
-        let rows = chat_rows(&agent, &empty, &empty, &empty);
+        let rows = chat_rows(&agent, &empty, &empty, &empty, &empty);
         assert_eq!(rows.len(), 1);
         assert_eq!(rows[0].kind, ChatRowKind::Empty);
 
         agent.log(Role::Tool, "cat README.md · completed");
-        let rows = chat_rows(&agent, &empty, &empty, &empty);
+        let rows = chat_rows(&agent, &empty, &empty, &empty, &empty);
         assert_eq!(rows.len(), 1);
         assert_eq!(rows[0].kind, ChatRowKind::Tools(0, 2));
 
         agent.messages[0].text = "Guardian Review · failed".into();
-        let updated = chat_rows(&agent, &empty, &empty, &empty);
+        let updated = chat_rows(&agent, &empty, &empty, &empty, &empty);
         assert_eq!(changed_row_range(&rows, &updated), None);
     }
 }

@@ -58,6 +58,7 @@ pub(super) struct ConversationState {
     pub(super) collapsed_tool_groups: HashSet<(u64, usize)>,
     pub(super) expanded_tool_history: HashSet<(u64, usize)>,
     pub(super) expanded_tool_rows: HashSet<(u64, usize)>,
+    pub(super) expanded_thought_rows: HashSet<(u64, usize)>,
     pub(super) prompt_recall: Option<PromptRecall>,
     pub(super) slash_selection: usize,
     pub(super) slash_dismissed: bool,

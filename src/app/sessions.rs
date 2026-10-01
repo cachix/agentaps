@@ -60,6 +60,9 @@ impl Workspace {
         self.conversation
             .expanded_tool_rows
             .retain(|(id, _)| *id != old_id);
+        self.conversation
+            .expanded_thought_rows
+            .retain(|(id, _)| *id != old_id);
         self.conversation.chat_list_agent = None;
         self.conversation.chat_rows.clear();
 
@@ -161,6 +164,9 @@ impl Workspace {
             .retain(|(id, _)| *id != old_id);
         self.conversation
             .expanded_tool_rows
+            .retain(|(id, _)| *id != old_id);
+        self.conversation
+            .expanded_thought_rows
             .retain(|(id, _)| *id != old_id);
         self.conversation.chat_list_agent = None;
         self.conversation.chat_rows.clear();
