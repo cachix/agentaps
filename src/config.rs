@@ -47,12 +47,28 @@ impl ChatEntry {
     }
 }
 
+/// A file attached to a prompt. `text` holds the contents of a UTF-8 file
+/// read when it was attached; other files are sent as a link to `uri`.
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+pub struct ChatFile {
+    pub name: String,
+    pub uri: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub text: Option<String>,
+}
+
+pub fn file_placeholder(name: &str) -> String {
+    format!("[file: {name}]")
+}
+
 #[derive(Clone, Debug, Default, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(from = "SavedPrompt")]
 pub struct Prompt {
     pub text: String,
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub images: Vec<ChatImage>,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub files: Vec<ChatFile>,
 }
 
 #[derive(Deserialize)]
@@ -63,6 +79,8 @@ enum SavedPrompt {
         text: String,
         #[serde(default)]
         images: Vec<ChatImage>,
+        #[serde(default)]
+        files: Vec<ChatFile>,
     },
 }
 
@@ -70,7 +88,15 @@ impl From<SavedPrompt> for Prompt {
     fn from(saved: SavedPrompt) -> Self {
         match saved {
             SavedPrompt::Text(text) => text.into(),
-            SavedPrompt::Prompt { text, images } => Self { text, images },
+            SavedPrompt::Prompt {
+                text,
+                images,
+                files,
+            } => Self {
+                text,
+                images,
+                files,
+            },
         }
     }
 }
@@ -79,7 +105,7 @@ impl From<String> for Prompt {
     fn from(text: String) -> Self {
         Self {
             text,
-            images: Vec::new(),
+            ..Self::default()
         }
     }
 }

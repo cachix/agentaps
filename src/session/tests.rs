@@ -1149,6 +1149,7 @@ fn prompts_send_saved_images_to_agents_that_accept_them() {
     let prompt = Prompt {
         text: "What is this?".into(),
         images: vec![image.clone()],
+        ..Prompt::default()
     };
     assert_eq!(
         agent.start_prompt(prompt.clone()),
@@ -1186,6 +1187,7 @@ fn prompts_send_saved_images_to_agents_that_accept_them() {
         .start_prompt(Prompt {
             text: String::new(),
             images: vec![image],
+            ..Prompt::default()
         })
         .unwrap();
     let Event::Message { value, .. } = events_rx.recv_timeout(Duration::from_secs(2)).unwrap()
@@ -1259,6 +1261,107 @@ fn image_support_follows_agent_capabilities() {
 }
 
 #[test]
+#[cfg(unix)]
+fn prompts_embed_text_files_and_link_the_rest() {
+    let mut agent = agent(ProtocolVersion::V1);
+    agent.active_work = false;
+    let notes = ChatFile {
+        name: "notes.md".into(),
+        uri: "file:///project/notes.md".into(),
+        text: Some("# Notes".into()),
+    };
+    let archive = ChatFile {
+        name: "build.zip".into(),
+        uri: "file:///project/build.zip".into(),
+        text: None,
+    };
+    let prompt = Prompt {
+        text: "Read these".into(),
+        files: vec![notes.clone(), archive.clone()],
+        ..Prompt::default()
+    };
+    let command = vec![
+        "/bin/sh".into(),
+        "-c".into(),
+        "while IFS= read -r line; do printf '%s\\n' \"$line\"; done".into(),
+    ];
+    let (events_tx, events_rx) = mpsc::channel();
+    agent.connection =
+        Some(Connection::spawn(1, &command, Path::new("/"), None, events_tx).unwrap());
+    let sent = || {
+        let Event::Message { value, .. } = events_rx.recv_timeout(Duration::from_secs(2)).unwrap()
+        else {
+            panic!("agent disconnected before receiving the prompt");
+        };
+        value["params"]["prompt"].clone()
+    };
+    let link = |file: &ChatFile| json!({"type":"resource_link","uri":file.uri,"name":file.name});
+
+    agent.start_prompt(prompt.clone()).unwrap();
+    assert_eq!(
+        sent(),
+        json!([{"type":"text","text":"Read these"}, link(&notes), link(&archive)])
+    );
+    assert_eq!(
+        agent.messages.last().unwrap().text,
+        "Read these\n[file: notes.md]\n[file: build.zip]"
+    );
+
+    agent.handle_prompt_response(&json!({"stopReason":"end_turn"}));
+    agent.accepts_embedded_context = true;
+    agent
+        .start_prompt(Prompt {
+            text: String::new(),
+            ..prompt
+        })
+        .unwrap();
+    assert_eq!(
+        sent(),
+        json!([
+            {"type":"resource","resource":{
+                "uri":"file:///project/notes.md","mimeType":"text/plain","text":"# Notes"
+            }},
+            link(&archive)
+        ])
+    );
+    assert_eq!(
+        agent.messages.last().unwrap().text,
+        "[file: notes.md]\n[file: build.zip]"
+    );
+}
+
+#[test]
+fn echoed_files_show_as_file_names() {
+    let notes = url::Url::from_file_path(std::env::temp_dir().join("my notes.md")).unwrap();
+    let (text, _) = protocol::message_content(&json!([
+        {"type":"text","text":"Read these"},
+        {"type":"resource","resource":{"uri":notes.as_str(),"text":"# Notes"}},
+        {"type":"resource_link","uri":"file:///project/build.zip","name":"build.zip"}
+    ]));
+    assert_eq!(text, "Read these\n[file: my notes.md]\n[file: build.zip]");
+}
+
+#[test]
+fn embedded_files_follow_agent_capabilities() {
+    assert!(protocol::accepts_embedded_context(
+        ProtocolVersion::V1,
+        &json!({"agentCapabilities":{"promptCapabilities":{"embeddedContext":true}}})
+    ));
+    assert!(!protocol::accepts_embedded_context(
+        ProtocolVersion::V1,
+        &json!({"agentCapabilities":{"promptCapabilities":{}}})
+    ));
+    assert!(protocol::accepts_embedded_context(
+        ProtocolVersion::V2,
+        &json!({"capabilities":{"session":{"prompt":{"embeddedContext":{}}}}})
+    ));
+    assert!(!protocol::accepts_embedded_context(
+        ProtocolVersion::V2,
+        &json!({"capabilities":{"session":{"prompt":{}}}})
+    ));
+}
+
+#[test]
 fn queued_prompts_keep_images_and_load_from_older_configs() {
     let old: AgentConfig =
         serde_json::from_str(r#"{"id":1,"command":["agent"],"pending_prompts":["Next"]}"#).unwrap();
@@ -1271,6 +1374,7 @@ fn queued_prompts_keep_images_and_load_from_older_configs() {
             mime_type: "image/png".into(),
             sha256: "abc".into(),
         }],
+        ..Prompt::default()
     });
     let saved = serde_json::to_value(&config).unwrap();
     assert_eq!(
@@ -1279,4 +1383,18 @@ fn queued_prompts_keep_images_and_load_from_older_configs() {
     );
     let restored: AgentConfig = serde_json::from_value(saved).unwrap();
     assert_eq!(restored.pending_prompts, config.pending_prompts);
+}
+
+#[test]
+fn echoed_file_context_renders_as_truncated_code_block() {
+    let body: String = (1..=10).map(|n| format!("line {n}\n")).collect();
+    let message = format!(
+        "Summarise [@notes.md](file:///tmp/notes.md)\n<context ref=\"file:///tmp/notes.md\">\n# Title\n```rust\n{body}</context>\nthanks"
+    );
+    let preview = file_context_preview(&message);
+    assert_eq!(
+        preview,
+        "Summarise [@notes.md](file:///tmp/notes.md)\n````\n# Title\n```rust\nline 1\nline 2\nline 3\nline 4\nline 5\nline 6\n… 4 more lines\n````\nthanks"
+    );
+    assert_eq!(file_context_preview("plain text"), "plain text");
 }

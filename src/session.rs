@@ -1,8 +1,8 @@
 //! Session behavior independent of GPUI entities and rendering.
 use crate::acp::Connection;
 use crate::config::{
-    AgentConfig, ChatEntry, ChatImage, ForkSource, Prompt, Role, SlashCommand,
-    with_image_placeholders,
+    AgentConfig, ChatEntry, ChatFile, ChatImage, ForkSource, Prompt, Role, SlashCommand,
+    file_placeholder, with_image_placeholders,
 };
 use crate::images::ImageStore;
 use agent_client_protocol_schema::{ProtocolVersion, v2};
@@ -20,9 +20,9 @@ pub(crate) use tests::agent as test_agent;
 mod protocol;
 use prompt::fork_prompt;
 pub(crate) use prompt::prompt_for_agent;
-pub(crate) use prompt::{shell_command, shell_command_in_message};
+pub(crate) use prompt::{file_context_preview, shell_command, shell_command_in_message};
 pub(crate) use protocol::initialize_params;
-use protocol::{ImageData, SessionUpdate, accepts_images, decode_update};
+use protocol::{ImageData, SessionUpdate, accepts_embedded_context, accepts_images, decode_update};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum Status {
@@ -140,6 +140,7 @@ pub(crate) struct SessionController {
     pub(crate) status: Status,
     pub(crate) protocol: Option<ProtocolVersion>,
     pub(crate) accepts_images: bool,
+    pub(crate) accepts_embedded_context: bool,
     pub(crate) images: ImageStore,
     pub(crate) active_work: bool,
     pub(crate) awaiting_response: bool,
@@ -492,6 +493,7 @@ impl SessionController {
             status: Status::Connecting,
             protocol: None,
             accepts_images: false,
+            accepts_embedded_context: false,
             images,
             active_work: false,
             awaiting_response: false,
@@ -698,11 +700,17 @@ impl SessionController {
                     .map(|data| json!({"type":"image","mimeType":image.mime_type,"data":data}))
             })
             .collect::<Result<Vec<_>, _>>()?;
-        let blocks: Vec<Value> = (!agent_prompt.is_empty() || images.is_empty())
-            .then(|| json!({"type":"text","text":agent_prompt}))
-            .into_iter()
-            .chain(images)
-            .collect();
+        let files = prompt
+            .files
+            .iter()
+            .map(|file| file_block(file, self.accepts_embedded_context));
+        let blocks: Vec<Value> = (!agent_prompt.is_empty()
+            || (images.is_empty() && prompt.files.is_empty()))
+        .then(|| json!({"type":"text","text":agent_prompt}))
+        .into_iter()
+        .chain(images)
+        .chain(files)
+        .collect();
         let request = json!({"jsonrpc":"2.0","id":id,"method":"session/prompt","params":{
             "sessionId":session_id,"prompt":blocks
         }});
@@ -715,7 +723,12 @@ impl SessionController {
         self.config.active_prompt = Some(prompt.text.clone());
         self.recovery_due = None;
         if self.protocol == Some(ProtocolVersion::V1) {
-            self.push_message(Role::User, prompt.text, prompt.images);
+            let text = std::iter::once(prompt.text)
+                .filter(|text| !text.is_empty())
+                .chain(prompt.files.iter().map(|file| file_placeholder(&file.name)))
+                .collect::<Vec<_>>()
+                .join("\n");
+            self.push_message(Role::User, text, prompt.images);
         }
         self.active_work = true;
         self.awaiting_response = true;
@@ -887,6 +900,17 @@ impl SessionController {
     }
 }
 
+/// Text files are embedded when the agent accepts embedded context. Every
+/// ACP agent accepts resource links, so other files are sent as links.
+fn file_block(file: &ChatFile, embed: bool) -> Value {
+    match &file.text {
+        Some(text) if embed => json!({"type":"resource","resource":{
+            "uri":file.uri,"mimeType":"text/plain","text":text
+        }}),
+        _ => json!({"type":"resource_link","uri":file.uri,"name":file.name}),
+    }
+}
+
 pub(crate) fn content_text(content: &Value) -> String {
     if let Some(items) = content.as_array() {
         return items
@@ -900,7 +924,11 @@ pub(crate) fn content_text(content: &Value) -> String {
         Some("resource_link") => content["uri"].as_str().unwrap_or("[resource]").to_owned(),
         Some("image") => "[image]".into(),
         Some("audio") => "[audio]".into(),
-        Some("resource") => "[resource]".into(),
+        Some("resource") => content["resource"]["uri"]
+            .as_str()
+            .and_then(|uri| url::Url::parse(uri).ok()?.to_file_path().ok())
+            .and_then(|path| Some(file_placeholder(&path.file_name()?.to_string_lossy())))
+            .unwrap_or_else(|| "[resource]".into()),
         Some(kind) => format!("[{kind}]"),
         None => String::new(),
     }
@@ -1183,6 +1211,8 @@ impl SessionController {
                 if let Some(protocol) = protocol {
                     agent.protocol = Some(protocol);
                     agent.accepts_images = accepts_images(protocol, &value["result"]);
+                    agent.accepts_embedded_context =
+                        accepts_embedded_context(protocol, &value["result"]);
                     if agent.config.fork_pending && agent.messages.is_empty() {
                         if let Some(source) = &agent.config.fork_source {
                             if let Some(mode) =
