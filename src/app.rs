@@ -1568,6 +1568,7 @@ impl Workspace {
             was_working: false,
             session_has_activity: false,
             fork_pending: false,
+            fork_source: None,
         };
         self.sidebar_order.push(config.id);
         self.next_agent_id += 1;

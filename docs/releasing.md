@@ -18,6 +18,18 @@ installer is unsigned. Test installation, launch, agent discovery, pairing, and 
 on each platform before publishing these builds. In particular, check that a
 Mac app launched from Finder can find the user's installed agent commands.
 
+To check conversation restoration against an authenticated local harness, run:
+
+```sh
+AGENTAPS_SMOKE_COMMAND=codex-acp cargo test --locked harness_history_reloads_after_restart -- --ignored --nocapture
+```
+
+Set `AGENTAPS_SMOKE_COMMAND` to another ACP adapter command to check that harness.
+The test sends one small prompt in a temporary project, saves session references
+without conversation text, restarts the adapter, and verifies that the harness
+replays the user message and reply exactly once. It uses the adapter's normal
+credentials and session storage. This opt-in test is skipped by the regular suite.
+
 ## Prepare a release
 
 1. Update the version in `Cargo.toml` and `Cargo.lock`. Move the relevant

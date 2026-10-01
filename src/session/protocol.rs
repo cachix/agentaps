@@ -123,11 +123,15 @@ pub(super) fn decode_update(
                 text: update.get("content").map(content_text).unwrap_or_default(),
                 append: kind.ends_with("_chunk"),
             }),
-        Some("agent_message_chunk") => {
+        Some(kind @ ("user_message_chunk" | "agent_message_chunk" | "agent_thought_chunk")) => {
             update["content"]["text"]
                 .as_str()
                 .map(|text| SessionUpdate::Message {
-                    role: Role::Agent,
+                    role: match kind {
+                        "user_message_chunk" => Role::User,
+                        "agent_thought_chunk" => Role::Thought,
+                        _ => Role::Agent,
+                    },
                     id: None,
                     text: text.into(),
                     append: true,

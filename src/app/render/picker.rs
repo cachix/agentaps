@@ -250,7 +250,7 @@ impl Workspace {
                         )
                         .child(div().text_sm().text_color(rgb(MUTED)).child(if is_folders {
                             if changing_folder {
-                                "Choose a local or SSH folder. The agent will reconnect there with fresh context; earlier messages stay visible."
+                                "Choose a local or SSH folder. The agent will reconnect there with fresh context; the previous session will be archived."
                             } else {
                                 "Choose a local folder, select a recent project, or enter a local or SSH path."
                             }

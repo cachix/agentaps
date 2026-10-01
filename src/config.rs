@@ -55,7 +55,8 @@ pub struct AgentConfig {
     pub model: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub context: Option<(u64, u64)>,
-    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    // Conversation text belongs to the harness. These fields are transient UI state.
+    #[serde(skip)]
     pub messages: Vec<ChatEntry>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub available_commands: Vec<SlashCommand>,
@@ -63,7 +64,7 @@ pub struct AgentConfig {
     pub pending_prompts: Vec<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub active_prompt: Option<String>,
-    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    #[serde(skip)]
     pub prompt_history: Vec<String>,
     #[serde(default)]
     pub was_working: bool,
@@ -71,6 +72,17 @@ pub struct AgentConfig {
     pub session_has_activity: bool,
     #[serde(default)]
     pub fork_pending: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub fork_source: Option<ForkSource>,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct ForkSource {
+    pub session_id: String,
+    /// Zero-based agent reply number in the source harness session.
+    pub reply_index: usize,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub reply_key: Option<String>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -164,14 +176,46 @@ fn load_from_locations(base: &Path, legacy_bases: &[PathBuf]) -> Result<(Config,
     else {
         return Ok((Config::default(), false));
     };
-    let config = serde_json::from_slice(&fs::read(&path).map_err(|error| error.to_string())?)
+    let value: Value = serde_json::from_slice(&fs::read(&path).map_err(|error| error.to_string())?)
         .map_err(|error| format!("{}: {error}", path.display()))?;
-    Ok((config, needs_migration))
+    let has_local_history = value["projects"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .any(|project| {
+            project["agents"]
+                .as_array()
+                .into_iter()
+                .flatten()
+                .any(|agent| {
+                    agent.get("messages").is_some() || agent.get("prompt_history").is_some()
+                })
+        });
+    let config =
+        serde_json::from_value(value).map_err(|error| format!("{}: {error}", path.display()))?;
+    Ok((config, needs_migration || has_local_history))
 }
 
 pub(crate) fn save_to(path: &Path, config: &Config) -> Result<(), String> {
     fs::create_dir_all(path.parent().unwrap()).map_err(|error| error.to_string())?;
     let data = serde_json::to_vec_pretty(config).map_err(|error| error.to_string())?;
+    if fs::read(path).ok().as_ref() == Some(&data) {
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            if fs::metadata(path)
+                .map_err(|error| error.to_string())?
+                .permissions()
+                .mode()
+                & 0o777
+                != 0o600
+            {
+                fs::set_permissions(path, fs::Permissions::from_mode(0o600))
+                    .map_err(|error| error.to_string())?;
+            }
+        }
+        return Ok(());
+    }
     let temporary = path.with_extension(format!("json.{}.tmp", std::process::id()));
     let mut options = fs::OpenOptions::new();
     options.write(true).create(true).truncate(true);
@@ -238,6 +282,57 @@ mod tests {
                 0o600
             );
         }
+    }
+
+    #[test]
+    fn legacy_transcripts_are_removed_while_session_references_and_queued_work_remain() {
+        let temp = tempfile::tempdir().unwrap();
+        let path = temp.path().join("agentaps/config.json");
+        fs::create_dir_all(path.parent().unwrap()).unwrap();
+        let legacy = serde_json::json!({
+            "projects": [{"path": "project", "agents": [{
+                "id": 7, "command": ["agent"], "session_id": "harness-session",
+                "session_has_activity": true,
+                "messages": [{"role": "agent", "text": "history ".repeat(1_000_000)}],
+                "prompt_history": ["earlier request"],
+                "pending_prompts": ["queued request"], "active_prompt": "current request",
+                "was_working": true
+            }]}]
+        });
+        fs::write(&path, serde_json::to_vec(&legacy).unwrap()).unwrap();
+        let (mut config, migrate) = load_from_base(temp.path()).unwrap();
+        assert!(migrate);
+        let agent = &config.projects[0].agents[0];
+        assert!(agent.messages.is_empty());
+        assert!(agent.prompt_history.is_empty());
+        assert_eq!(agent.session_id.as_deref(), Some("harness-session"));
+        assert_eq!(agent.pending_prompts, ["queued request"]);
+        assert_eq!(agent.active_prompt.as_deref(), Some("current request"));
+        assert!(agent.was_working);
+        save_to(&path, &config).unwrap();
+        assert!(fs::metadata(&path).unwrap().len() < 1024);
+        assert!(!load_from_base(temp.path()).unwrap().1);
+        let original = fs::read(&path).unwrap();
+        let old_time = UNIX_EPOCH + std::time::Duration::from_secs(1_000_000);
+        fs::OpenOptions::new()
+            .write(true)
+            .open(&path)
+            .unwrap()
+            .set_modified(old_time)
+            .unwrap();
+        let modified = fs::metadata(&path).unwrap().modified().unwrap();
+        // Streaming and prompt recall only change transient UI state.
+        config.projects[0].agents[0].messages.push(ChatEntry {
+            role: Role::Agent,
+            key: None,
+            text: "new reply".into(),
+        });
+        config.projects[0].agents[0]
+            .prompt_history
+            .push("another past request".into());
+        save_to(&path, &config).unwrap();
+        assert_eq!(fs::read(&path).unwrap(), original);
+        assert_eq!(fs::metadata(&path).unwrap().modified().unwrap(), modified);
     }
 
     #[cfg(windows)]

@@ -4,15 +4,16 @@ Notable changes to Agentaps are recorded here.
 
 ## [Unreleased]
 
+### Fixed
+
+- Conversation history comes from harness session replay instead of a duplicate local transcript. Config saves contain only session references and app state, skip unchanged data, and retain prior session references in the archive after context resets or folder moves. An opt-in smoke test verifies history replay after restarting an authenticated harness.
+- Web Connect pairs and connects in Safari, which previously could not reach the default Iroh relays.
+
 ### Changed
 
 - The README and website share one updated desktop screenshot showing the current conversation layout and agent controls.
 
 - The website links directly to the Agentaps 0.4.0 desktop installers and shows the latest release version.
-
-### Fixed
-
-- Web Connect pairs and connects in Safari, which previously could not reach the default Iroh relays.
 
 ## [0.4.0] - 2026-09-30
 

@@ -127,6 +127,7 @@ pub(crate) fn agent(protocol: ProtocolVersion) -> SessionController {
         was_working: false,
         session_has_activity: false,
         fork_pending: false,
+        fork_source: None,
     });
     agent.protocol = Some(protocol);
     agent.session_id = Some("session-1".into());
@@ -256,7 +257,9 @@ fn resetting_context_reuses_agent_settings_without_reusing_session_state() {
     assert!(!config.session_has_activity);
 
     let saved = serde_json::to_vec(&config).unwrap();
-    let mut reset = SessionController::new(serde_json::from_slice(&saved).unwrap());
+    let restored: AgentConfig = serde_json::from_slice(&saved).unwrap();
+    assert!(restored.messages.is_empty());
+    let mut reset = SessionController::new(config);
     assert_eq!(reset.status, Status::Connecting);
     assert_eq!(reset.session_id, None);
     assert_eq!(reset.messages.len(), 3);
@@ -515,7 +518,7 @@ fn reasoning_effort_is_detected_in_model_config_options() {
 }
 
 #[test]
-fn session_history_survives_config_round_trip() {
+fn session_references_and_pending_work_survive_without_local_history() {
     let mut agent = agent(ProtocolVersion::V2);
     agent.model = Some("Example Model".into());
     agent.context = Some((3_000, 64_000));
@@ -528,9 +531,16 @@ fn session_history_survives_config_round_trip() {
     assert_eq!(restored.config.session_id.as_deref(), Some("session-1"));
     assert_eq!(restored.model.as_deref(), Some("Example Model"));
     assert_eq!(restored.context, Some((3_000, 64_000)));
-    assert_eq!(restored.messages[0].text, "Please check the build");
-    assert_eq!(restored.messages[1].text, "cargo test · completed");
-    assert!(restored.messages[2].text.contains("active"));
+    let value: Value = serde_json::from_slice(&encoded).unwrap();
+    assert!(value.get("messages").is_none());
+    assert!(value.get("prompt_history").is_none());
+    assert!(
+        restored
+            .messages
+            .iter()
+            .all(|entry| entry.role == Role::System)
+    );
+    assert_eq!(restored.config.prompt_history, ["Follow up next"]);
     assert_eq!(restored.config.pending_prompts, vec!["Follow up next"]);
 }
 
@@ -720,7 +730,7 @@ fn restoration_respects_v1_capabilities() {
             ProtocolVersion::V1,
             &json!({"agentCapabilities":{"sessionCapabilities":{"resume":{}},"loadSession":true}})
         ),
-        Some(RestoreMode::Resume)
+        Some(RestoreMode::Load)
     );
     assert_eq!(
         restore_mode(
@@ -729,22 +739,44 @@ fn restoration_respects_v1_capabilities() {
         ),
         Some(RestoreMode::Load)
     );
+    assert_eq!(
+        restore_mode(
+            ProtocolVersion::V1,
+            &json!({"agentCapabilities":{"sessionCapabilities":{"resume":{}}}})
+        ),
+        Some(RestoreMode::Resume)
+    );
     assert_eq!(restore_mode(ProtocolVersion::V1, &json!({})), None);
 }
 
 #[test]
-fn v1_load_replay_does_not_duplicate_saved_history() {
+fn v1_load_replays_user_agent_and_tool_history() {
     let mut agent = agent(ProtocolVersion::V1);
     agent.restoring = Some(RestoreMode::Load);
-    agent.log(Role::Agent, "Saved reply");
+    SessionController::handle_update(
+        &mut agent,
+        &json!({"params":{"sessionId":"session-1","update":{
+            "sessionUpdate":"user_message_chunk","content":{"type":"text","text":"Saved request"}
+        }}}),
+    );
     SessionController::handle_update(
         &mut agent,
         &json!({"params":{"sessionId":"session-1","update":{
             "sessionUpdate":"agent_message_chunk","content":{"type":"text","text":"Saved reply"}
         }}}),
     );
-    assert_eq!(agent.messages.len(), 1);
-    assert_eq!(agent.messages[0].text, "Saved reply");
+    SessionController::handle_update(
+        &mut agent,
+        &json!({"params":{"sessionId":"session-1","update":{
+            "sessionUpdate":"tool_call","toolCallId":"tool-1","title":"Read file","status":"completed"
+        }}}),
+    );
+    agent.handle_message(Path::new("/"), &json!({"id":2,"result":{}}));
+    assert_eq!(agent.messages.len(), 3);
+    assert_eq!(agent.messages[0].text, "Saved request");
+    assert_eq!(agent.messages[1].text, "Saved reply");
+    assert_eq!(agent.messages[2].role, Role::Tool);
+    assert_eq!(agent.config.prompt_history, ["Saved request"]);
 }
 
 #[test]
@@ -755,4 +787,286 @@ fn empty_sessions_are_not_restored() {
     assert!(!agent.has_restorable_activity());
     agent.log(Role::User, "Continue this conversation");
     assert!(agent.has_restorable_activity());
+}
+
+#[cfg(unix)]
+fn echo_requests(agent: &mut SessionController) -> mpsc::Receiver<Event> {
+    let (tx, rx) = mpsc::channel();
+    agent.connection = Some(
+        Connection::spawn(
+            agent.config.id,
+            &[
+                "/bin/sh".into(),
+                "-c".into(),
+                "while IFS= read -r request; do printf '%s\\n' \"$request\"; done".into(),
+            ],
+            Path::new("/"),
+            None,
+            tx,
+        )
+        .unwrap(),
+    );
+    rx
+}
+
+#[cfg(unix)]
+fn next_request(rx: &mpsc::Receiver<Event>) -> Value {
+    match rx.recv_timeout(Duration::from_secs(2)).unwrap() {
+        Event::Message { value, .. } => value,
+        other => panic!("Unexpected agent event: {other:?}"),
+    }
+}
+
+#[cfg(unix)]
+#[test]
+fn v2_resume_requests_history_and_rebuilds_the_view_from_harness_replay() {
+    let mut session = agent(ProtocolVersion::V2);
+    session.active_work = false;
+    session.status = Status::Connecting;
+    session.log(Role::Agent, "Stale view");
+    session.config.prompt_history.push("Stale request".into());
+    let rx = echo_requests(&mut session);
+    SessionController::resume_session(
+        &mut session,
+        Path::new("/"),
+        RestoreMode::Resume,
+        "session-1".into(),
+    );
+    let request = next_request(&rx);
+    let typed: v2::ResumeSessionRequest =
+        serde_json::from_value(request["params"].clone()).unwrap();
+    assert!(matches!(typed.replay_from, Some(v2::ReplayFrom::Start(_))));
+    assert_eq!(request["method"], "session/resume");
+    assert!(session.messages.is_empty());
+    for update in [
+        json!({"sessionUpdate":"user_message","messageId":"user-1","content":[{"type":"text","text":"Earlier request"}]}),
+        json!({"sessionUpdate":"agent_message","messageId":"agent-1","content":[{"type":"text","text":"Earlier reply"}]}),
+        json!({"sessionUpdate":"agent_message_chunk","messageId":"agent-1","content":{"type":"text","text":" continued"}}),
+        json!({"sessionUpdate":"tool_call_update","toolCallId":"tool-1","title":"Read file","status":"completed"}),
+    ] {
+        session.handle_update(&json!({"params":{"sessionId":"session-1","update":update}}));
+    }
+    session.handle_message(Path::new("/"), &json!({"id":2,"result":{}}));
+    assert_eq!(session.messages.len(), 3);
+    assert_eq!(session.messages[1].text, "Earlier reply continued");
+    assert_eq!(session.messages[2].role, Role::Tool);
+    assert_eq!(session.config.prompt_history, ["Earlier request"]);
+    assert!(session.snapshot().messages.is_empty());
+    assert!(session.snapshot().prompt_history.is_empty());
+}
+
+#[cfg(unix)]
+#[test]
+fn unsubmitted_fork_reloads_its_source_after_restart_without_saving_a_transcript() {
+    let mut source = agent(ProtocolVersion::V2);
+    source.active_work = false;
+    source.log(Role::User, "First question");
+    source.upsert_message_text(Role::Agent, "agent-1", "First reply".into(), false);
+    source.log(Role::User, "Later question");
+    source.log(Role::Agent, "Later reply");
+    let fork = source.fork_config(2, 1).unwrap();
+    let bytes = serde_json::to_vec(&fork).unwrap();
+    assert!(!String::from_utf8_lossy(&bytes).contains("First reply"));
+    let mut fork = SessionController::new(serde_json::from_slice(&bytes).unwrap());
+    let rx = echo_requests(&mut fork);
+    fork.handle_message(
+        Path::new("/"),
+        &json!({"id":1,"result":{"protocolVersion":2,"info":{"name":"fixture","version":"1"},"capabilities":{"session":{}}}}),
+    );
+    let request = next_request(&rx);
+    assert_eq!(request["method"], "session/resume");
+    assert_eq!(request["params"]["sessionId"], "session-1");
+    assert_eq!(request["params"]["replayFrom"]["type"], "start");
+    for (id, role, text) in [
+        ("user-1", "user_message", "First question"),
+        ("agent-1", "agent_message", "First reply"),
+        ("user-2", "user_message", "Later question"),
+        ("agent-2", "agent_message", "Later reply"),
+    ] {
+        fork.handle_update(&json!({"params":{"sessionId":"session-1","update":{
+            "sessionUpdate":role,"messageId":id,"content":[{"type":"text","text":text}]
+        }}}));
+    }
+    fork.handle_message(Path::new("/"), &json!({"id":2,"result":{}}));
+    assert_eq!(next_request(&rx)["method"], "session/new");
+    assert_eq!(fork.messages.len(), 2);
+    fork.handle_message(
+        Path::new("/"),
+        &json!({"id":2,"result":{"sessionId":"fork-session"}}),
+    );
+    fork.start_prompt("Next task".into()).unwrap();
+    let request = next_request(&rx);
+    let text = request["params"]["prompt"][0]["text"].as_str().unwrap();
+    assert!(text.contains("First reply"));
+    assert!(!text.contains("Later reply"));
+    assert_eq!(request["params"]["sessionId"], "fork-session");
+    assert!(fork.config.fork_source.is_none());
+    assert!(!fork.config.fork_pending);
+}
+
+#[test]
+fn restore_failure_keeps_the_harness_reference_instead_of_replacing_it() {
+    let mut session = agent(ProtocolVersion::V1);
+    session.config.session_id = Some("session-1".into());
+    session.restoring = Some(RestoreMode::Load);
+    session.handle_message(
+        Path::new("/"),
+        &json!({"id":2,"error":{"message":"temporarily unavailable"}}),
+    );
+    assert_eq!(session.status, Status::Error);
+    assert_eq!(session.snapshot().session_id.as_deref(), Some("session-1"));
+}
+
+#[test]
+fn fork_replay_requires_the_original_reply_when_history_has_been_trimmed() {
+    let mut source = agent(ProtocolVersion::V2);
+    source.log(Role::User, "Earlier question");
+    source.upsert_message_text(
+        Role::Agent,
+        "original-reply",
+        "Original reply".into(),
+        false,
+    );
+    let mut fork = SessionController::new(source.fork_config(2, 1).unwrap());
+    fork.messages.clear();
+    fork.upsert_message_text(Role::Agent, "different-reply", "Other reply".into(), false);
+    assert!(!fork.restore_fork_history());
+}
+
+/// Run against an authenticated local adapter, for example:
+/// AGENTAPS_SMOKE_COMMAND=codex-acp cargo test harness_history_reloads_after_restart -- --ignored --nocapture
+#[test]
+#[ignore = "requires an authenticated ACP harness and AGENTAPS_SMOKE_COMMAND"]
+fn harness_history_reloads_after_restart() {
+    use crate::config::{self, Config, ProjectConfig};
+    use std::{fs, sync::mpsc, time::Instant};
+    let command = shell_words::split(
+        &std::env::var("AGENTAPS_SMOKE_COMMAND")
+            .expect("Set AGENTAPS_SMOKE_COMMAND to the adapter command"),
+    )
+    .unwrap();
+    let temp = tempfile::tempdir().unwrap();
+    let config_path = temp.path().join("agentaps/config.json");
+    let connect = |config: AgentConfig| {
+        let (tx, rx) = mpsc::channel();
+        let mut session = SessionController::new(config);
+        session.connection =
+            Some(Connection::spawn(session.config.id, &command, temp.path(), None, tx).unwrap());
+        session
+            .send(
+                json!({"jsonrpc":"2.0","id":1,"method":"initialize","params":initialize_params()}),
+            )
+            .unwrap();
+        (session, rx)
+    };
+    let wait_until = |session: &mut SessionController,
+                      rx: &mpsc::Receiver<crate::acp::Event>,
+                      ready: &dyn Fn(&SessionController) -> bool| {
+        let deadline = Instant::now() + Duration::from_secs(120);
+        while !ready(session) {
+            let remaining = deadline.saturating_duration_since(Instant::now());
+            assert!(
+                !remaining.is_zero(),
+                "Harness timed out: status {:?}",
+                session.status
+            );
+            match rx.recv_timeout(remaining).expect("Harness did not respond") {
+                crate::acp::Event::Message { value, .. } => {
+                    if value.get("method").is_some() && value.get("id").is_some() {
+                        panic!("Unexpected harness request: {:?}", value["method"]);
+                    }
+                    session.handle_message(temp.path(), &value);
+                }
+                crate::acp::Event::Disconnected { reason, .. } => {
+                    panic!("Harness disconnected: {reason}")
+                }
+            }
+            assert_ne!(
+                session.status,
+                Status::Error,
+                "Harness failed: {:?}",
+                session
+                    .messages
+                    .iter()
+                    .filter(|entry| entry.role == Role::System)
+                    .map(|entry| &entry.text)
+                    .collect::<Vec<_>>()
+            );
+        }
+    };
+    let config: AgentConfig = serde_json::from_value(json!({"id":1,"command":command})).unwrap();
+    let (mut session, rx) = connect(config);
+    wait_until(&mut session, &rx, &|session| {
+        session.status == Status::Idle && session.session_id.is_some()
+    });
+    eprintln!("Initialized harness with {:?}", session.protocol);
+    let token = format!("AGENTAPS_REPLAY_{}", std::process::id());
+    let prompt = format!("Reply with exactly {token}. Do not use tools or modify any files.");
+    session.start_prompt(prompt.clone()).unwrap();
+    wait_until(&mut session, &rx, &|session| {
+        !session.active_work && !session.awaiting_response
+    });
+    assert!(
+        session
+            .messages
+            .iter()
+            .any(|entry| entry.role == Role::Agent && entry.text.contains(&token)),
+        "Harness reply did not contain the smoke-test token"
+    );
+    let session_id = session.session_id.clone().unwrap();
+    let config = Config {
+        projects: vec![ProjectConfig {
+            path: temp.path().to_owned(),
+            ssh_host: None,
+            agents: vec![session.snapshot()],
+        }],
+        sidebar_order: vec![1],
+        ..Config::default()
+    };
+    config::save_to(&config_path, &config).unwrap();
+    let data = fs::read(&config_path).unwrap();
+    let saved_value: Value = serde_json::from_slice(&data).unwrap();
+    let saved_agent = &saved_value["projects"][0]["agents"][0];
+    assert!(saved_agent.get("messages").is_none());
+    assert!(saved_agent.get("prompt_history").is_none());
+    assert!(saved_agent.get("active_prompt").is_none());
+    assert!(
+        data.len() < 64 * 1024,
+        "Config is unexpectedly large: {} bytes",
+        data.len()
+    );
+    drop(session);
+    drop(rx);
+    let mut saved: Config = serde_json::from_slice(&data).unwrap();
+    let (mut session, rx) = connect(saved.projects[0].agents.remove(0));
+    assert!(session.messages.is_empty());
+    wait_until(&mut session, &rx, &|session| {
+        session.restoring.is_none()
+            && session.status == Status::Idle
+            && session.session_id.is_some()
+    });
+    assert_eq!(session.session_id.as_deref(), Some(session_id.as_str()));
+    assert_eq!(
+        session
+            .messages
+            .iter()
+            .filter(|entry| entry.role == Role::User && entry.text == prompt)
+            .count(),
+        1,
+        "User message was not replayed exactly once"
+    );
+    assert_eq!(
+        session
+            .messages
+            .iter()
+            .filter(|entry| entry.role == Role::Agent && entry.text.contains(&token))
+            .count(),
+        1,
+        "Agent reply was not replayed exactly once"
+    );
+    assert!(session.config.prompt_history.contains(&prompt));
+    eprintln!(
+        "PASS: history replayed after adapter restart from a {} byte config without transcript text",
+        data.len()
+    );
 }

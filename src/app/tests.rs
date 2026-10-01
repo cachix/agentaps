@@ -617,6 +617,7 @@ fn zoom_shortcuts_and_menu_actions_change_the_font_scale(cx: &mut gpui_kit::Test
     );
     cx.update(|_, cx| restored.update(cx, |this, _| this.persistence.wait().unwrap()));
     mobile::verify_session_switching_and_mobile_routing(&restored, temp.path(), cx);
+    verify_resets_and_folder_moves_preserve_harness_references(&restored, temp.path(), cx);
     // SAFETY: restore the process environment modified for this test.
     unsafe {
         if let Some(original) = original_config_home {
@@ -654,4 +655,89 @@ fn v1_tool_updates_replace_the_same_call_and_keep_approval_status() {
         tool.messages[0].text,
         "cat README.md · completed\noutput text"
     );
+}
+
+fn verify_resets_and_folder_moves_preserve_harness_references(
+    workspace: &Entity<Workspace>,
+    path: &Path,
+    cx: &mut gpui_kit::VisualTestContext,
+) {
+    cx.update(|window, cx| {
+        workspace.update(cx, |this, cx| {
+            let mut original = test_agent(ProtocolVersion::V2);
+            original.config.command.clear(); // No harness process is needed for this UI state check.
+            original.active_work = false;
+            original.log(Role::User, "Previous conversation");
+            this.projects = vec![ProjectView {
+                path: path.to_owned(),
+                ssh_host: None,
+                branch: "main".into(),
+                sync_counts: None,
+                agents: vec![AgentView {
+                    controller: original,
+                    elicitations: Vec::new(),
+                }],
+            }];
+            this.next_agent_id = 200;
+            this.sidebar_order = vec![1];
+            this.deferred_connections.clear();
+            this.reset_context(0, 0, cx);
+            assert_eq!(this.projects[0].agents.len(), 2);
+            let archived = &this.projects[0].agents[1];
+            assert!(archived.config.archived);
+            assert_eq!(archived.config.session_id.as_deref(), Some("session-1"));
+            assert!(archived.messages.is_empty());
+            assert!(
+                this.projects[0].agents[0]
+                    .messages
+                    .iter()
+                    .all(|entry| entry.role != Role::User)
+            );
+            this.projects[0].agents[0].controller.session_id = Some("reset-session".into());
+            this.projects[0].agents[0].config.session_has_activity = true;
+            this.projects.push(ProjectView {
+                path: path.join("other"),
+                ssh_host: None,
+                branch: "main".into(),
+                sync_counts: None,
+                agents: Vec::new(),
+            });
+            this.move_session_to_project(
+                SessionLocation {
+                    project_index: 0,
+                    agent_index: 0,
+                },
+                1,
+                window,
+                cx,
+            );
+            assert!(this.projects[0].agents[0].config.archived);
+            assert_eq!(
+                this.projects[0].agents[0].config.session_id.as_deref(),
+                Some("reset-session")
+            );
+            assert_eq!(this.projects[1].agents.len(), 1);
+            assert!(!this.projects[1].agents[0].config.archived);
+            this.persistence.wait().unwrap();
+            let (saved, _) = config::load().unwrap();
+            assert_eq!(
+                saved.projects[0].agents[0].session_id.as_deref(),
+                Some("reset-session")
+            );
+            assert_eq!(
+                saved.projects[0].agents[1].session_id.as_deref(),
+                Some("session-1")
+            );
+            assert!(
+                saved
+                    .projects
+                    .iter()
+                    .flat_map(|project| &project.agents)
+                    .all(|agent| agent.messages.is_empty())
+            );
+            this.projects.clear();
+            this.view = WorkspaceView::Empty;
+            this.persistence.dirty = false;
+        })
+    });
 }

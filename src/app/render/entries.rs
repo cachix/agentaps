@@ -716,6 +716,7 @@ mod tests {
             was_working: false,
             session_has_activity: false,
             fork_pending: false,
+            fork_source: None,
         })
     }
 

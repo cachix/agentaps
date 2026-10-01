@@ -20,21 +20,20 @@ impl Workspace {
         let source = &self.projects[session.project_index].agents[session.agent_index];
         let old_id = source.config.id;
         let new_id = self.next_agent_id;
-        let mut messages = source.messages.clone();
-        messages.push(ChatEntry {
+        let messages = vec![ChatEntry {
             role: Role::System,
             key: None,
             text: format!(
-                "Folder changed to {}. Earlier messages remain visible, but the agent starts with fresh context.",
+                "Folder changed to {}. The previous session is archived; this session starts with fresh context.",
                 self.projects[target_project_index].display_path()
             ),
-        });
+        }];
         let mut config = source.reset_config(new_id, messages);
         config.title = source.config.title.clone();
 
-        self.projects[session.project_index]
-            .agents
-            .remove(session.agent_index);
+        let mut archived = source.snapshot();
+        archived.archived = true;
+        self.projects[session.project_index].agents[session.agent_index] = AgentView::new(archived);
         let agent_index = self.projects[target_project_index].agents.len();
         self.projects[target_project_index]
             .agents
@@ -124,14 +123,18 @@ impl Workspace {
         let new_id = self.next_agent_id;
         self.next_agent_id += 1;
         let agent = &self.projects[project_index].agents[agent_index];
-        let mut messages = agent.messages.clone();
-        messages.push(ChatEntry {
+        let messages = vec![ChatEntry {
             role: Role::ContextReset,
             key: None,
-            text: "Context reset. Earlier messages are visible, but the agent no longer has them in context.".into(),
-        });
+            text: "Context reset. The previous session is archived; this session starts with fresh context.".into(),
+        }];
         let config = agent.reset_config(new_id, messages);
+        let mut archived = agent.snapshot();
+        archived.archived = true;
         self.projects[project_index].agents[agent_index] = AgentView::new(config);
+        self.projects[project_index]
+            .agents
+            .push(AgentView::new(archived));
         if let Some(id) = self.sidebar_order.iter_mut().find(|id| **id == old_id) {
             *id = new_id;
         } else {

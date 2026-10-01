@@ -1,6 +1,6 @@
 //! Session behavior independent of GPUI entities and rendering.
 use crate::acp::Connection;
-use crate::config::{AgentConfig, ChatEntry, Role, SlashCommand};
+use crate::config::{AgentConfig, ChatEntry, ForkSource, Role, SlashCommand};
 use agent_client_protocol_schema::{ProtocolVersion, v2};
 use serde_json::{Value, json};
 use std::{
@@ -52,10 +52,10 @@ pub(crate) fn restore_mode(protocol: ProtocolVersion, initialize: &Value) -> Opt
         ProtocolVersion::V2 => Some(RestoreMode::Resume),
         ProtocolVersion::V1 => {
             let capabilities = &initialize["agentCapabilities"];
-            if capabilities["sessionCapabilities"]["resume"].is_object() {
-                Some(RestoreMode::Resume)
-            } else if capabilities["loadSession"].as_bool() == Some(true) {
+            if capabilities["loadSession"].as_bool() == Some(true) {
                 Some(RestoreMode::Load)
+            } else if capabilities["sessionCapabilities"]["resume"].is_object() {
+                Some(RestoreMode::Resume)
             } else {
                 None
             }
@@ -367,10 +367,11 @@ impl SessionController {
             available_commands: Vec::new(),
             pending_prompts: Vec::new(),
             active_prompt: None,
-            prompt_history: self.config.prompt_history.clone(),
+            prompt_history: Vec::new(),
             was_working: false,
             session_has_activity: false,
             fork_pending: false,
+            fork_source: None,
         }
     }
 
@@ -403,6 +404,19 @@ impl SessionController {
             was_working: false,
             session_has_activity: false,
             fork_pending: true,
+            fork_source: self
+                .session_id
+                .clone()
+                .or_else(|| self.config.session_id.clone())
+                .map(|session_id| ForkSource {
+                    session_id,
+                    reply_key: self.messages[response_index].key.clone(),
+                    reply_index: self.messages[..=response_index]
+                        .iter()
+                        .filter(|entry| entry.role == Role::Agent)
+                        .count()
+                        - 1,
+                }),
         })
     }
 
@@ -433,21 +447,7 @@ impl SessionController {
             .display_name
             .clone()
             .unwrap_or_else(|| agent_name(&config.command));
-        let mut messages = config
-            .messages
-            .iter()
-            .filter(|entry| {
-                config.session_has_activity
-                    || entry.role != Role::System
-                    || !(entry
-                        .text
-                        .starts_with("Could not restore the previous session:")
-                        || entry
-                            .text
-                            .starts_with("This agent cannot restore sessions."))
-            })
-            .cloned()
-            .collect::<Vec<_>>();
+        let mut messages = std::mem::take(&mut config.messages);
         if config.was_working
             && !messages.last().is_some_and(|entry| {
                 entry.role == Role::System && entry.text == "App closed while this turn was active."
@@ -504,14 +504,15 @@ impl SessionController {
                 .or_else(|| self.config.session_id.clone()),
             model: self.model.clone(),
             context: self.context,
-            messages: self.messages.clone(),
+            messages: Vec::new(),
             available_commands: self.config.available_commands.clone(),
             pending_prompts: self.config.pending_prompts.clone(),
             active_prompt: self.config.active_prompt.clone(),
-            prompt_history: self.config.prompt_history.clone(),
+            prompt_history: Vec::new(),
             was_working: self.active_work || self.config.was_working,
             session_has_activity: self.config.session_has_activity || self.active_work,
             fork_pending: self.config.fork_pending,
+            fork_source: self.config.fork_source.clone(),
         }
     }
 
@@ -675,6 +676,7 @@ impl SessionController {
         self.remember_auth_request(request);
         self.next_request_id += 1;
         self.config.fork_pending = false;
+        self.config.fork_source = None;
         self.config.was_working = false;
         self.config.active_prompt = Some(prompt.clone());
         self.recovery_due = None;
@@ -894,6 +896,10 @@ pub(crate) enum UiRequest {
 impl SessionController {
     pub(crate) fn start_new_session(agent: &mut SessionController, path: &Path) {
         agent.restoring = None;
+        agent.active_work = false;
+        agent.awaiting_response = false;
+        agent.cancel_requested = false;
+        agent.status = Status::Connecting;
         agent.recovery_due = None;
         agent.config.was_working = false;
         agent.config.active_prompt = None;
@@ -924,9 +930,14 @@ impl SessionController {
             RestoreMode::Resume => "session/resume",
             RestoreMode::Load => "session/load",
         };
-        let request = json!({"jsonrpc":"2.0","id":2,"method":method,"params":{
+        let mut request = json!({"jsonrpc":"2.0","id":2,"method":method,"params":{
             "sessionId":session_id,"cwd":path,"mcpServers":[]
         }});
+        if agent.protocol == Some(ProtocolVersion::V2) {
+            request["params"]["replayFrom"] = json!({"type":"start"});
+        }
+        agent.messages.clear();
+        agent.config.prompt_history.clear();
         if let Err(error) = agent.send(request.clone()) {
             agent.status = Status::Error;
             agent.log(Role::System, error);
@@ -1048,11 +1059,11 @@ impl SessionController {
             if id == 2 && agent.restoring.take().is_some() {
                 agent.log(
                     Role::System,
-                    format!(
-                        "Could not restore the previous session: {message}. Starting a new session."
-                    ),
+                    format!("Could not restore the previous session: {message}"),
                 );
-                Self::start_new_session(agent, path);
+                agent.status = Status::Error;
+                agent.session_id = agent.config.session_id.clone();
+                agent.recovery_due = None;
                 return None;
             }
             if id >= 3 && agent.protocol == Some(ProtocolVersion::V2) {
@@ -1117,7 +1128,26 @@ impl SessionController {
                 };
                 if let Some(protocol) = protocol {
                     agent.protocol = Some(protocol);
-                    if let Some(previous_session) = agent
+                    if agent.config.fork_pending && agent.messages.is_empty() {
+                        if let Some(source) = &agent.config.fork_source {
+                            if let Some(mode) =
+                                restore_mode(protocol, &value["result"]).filter(|mode| {
+                                    protocol == ProtocolVersion::V2 || *mode == RestoreMode::Load
+                                })
+                            {
+                                Self::resume_session(agent, path, mode, source.session_id.clone());
+                            } else {
+                                agent.status = Status::Error;
+                                agent.log(Role::System, "This agent cannot reload the source conversation for this fork.");
+                            }
+                        } else {
+                            agent.status = Status::Error;
+                            agent.log(
+                                Role::System,
+                                "The source session for this fork is unavailable.",
+                            );
+                        }
+                    } else if let Some(previous_session) = agent
                         .config
                         .session_id
                         .clone()
@@ -1126,11 +1156,8 @@ impl SessionController {
                         if let Some(mode) = restore_mode(protocol, &value["result"]) {
                             Self::resume_session(agent, path, mode, previous_session);
                         } else {
-                            agent.log(
-                                Role::System,
-                                "This agent cannot restore sessions. Starting a new session with the saved activity visible.",
-                            );
-                            Self::start_new_session(agent, path);
+                            agent.status = Status::Error;
+                            agent.log(Role::System, "This agent cannot restore the saved session. Create a new session to continue.");
                         }
                     } else {
                         Self::start_new_session(agent, path);
@@ -1141,7 +1168,26 @@ impl SessionController {
             }
             2 => {
                 if agent.restoring.take().is_some() {
+                    if agent.config.fork_pending {
+                        if !agent.restore_fork_history() {
+                            agent.status = Status::Error;
+                            agent.log(
+                                Role::System,
+                                "The forked reply is no longer available in the source session.",
+                            );
+                            return None;
+                        }
+                        Self::start_new_session(agent, path);
+                        return None;
+                    }
+                    agent.rebuild_prompt_history();
                     update_session_settings(agent, &value["result"]);
+                    if agent.protocol == Some(ProtocolVersion::V1) && agent.messages.is_empty() {
+                        agent.log(
+                            Role::System,
+                            "This agent resumed the session without reloading earlier messages.",
+                        );
+                    }
                     if agent.status == Status::Connecting {
                         agent.status = Status::Idle;
                     }
@@ -1164,6 +1210,43 @@ impl SessionController {
             }
         }
         None
+    }
+
+    fn rebuild_prompt_history(&mut self) {
+        self.config.prompt_history = self
+            .messages
+            .iter()
+            .filter(|entry| entry.role == Role::User)
+            .map(|entry| entry.text.clone())
+            .chain(self.config.pending_prompts.iter().cloned())
+            .collect();
+    }
+
+    fn restore_fork_history(&mut self) -> bool {
+        let Some(source) = &self.config.fork_source else {
+            return false;
+        };
+        let index = if let Some(key) = &source.reply_key {
+            self.messages
+                .iter()
+                .position(|entry| entry.role == Role::Agent && entry.key.as_ref() == Some(key))
+        } else {
+            self.messages
+                .iter()
+                .enumerate()
+                .filter(|(_, entry)| entry.role == Role::Agent)
+                .nth(source.reply_index)
+                .map(|(index, _)| index)
+        };
+        let Some(index) = index else {
+            return false;
+        };
+        self.messages.truncate(index + 1);
+        for entry in &mut self.messages {
+            entry.key = None;
+        }
+        self.rebuild_prompt_history();
+        true
     }
 
     pub(crate) fn disconnected(&mut self, reason: String) {
@@ -1214,8 +1297,6 @@ impl SessionController {
                 }
             }
             SessionUpdate::Commands(commands) => self.config.available_commands = commands,
-            // A v1 load replays history that is already saved locally.
-            _ if self.restoring == Some(RestoreMode::Load) => {}
             SessionUpdate::Running => self.enter_running(),
             SessionUpdate::Idle(reason) => {
                 if self.oauth_retry.as_ref().is_some_and(|retry| {
