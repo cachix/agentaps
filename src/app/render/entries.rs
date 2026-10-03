@@ -210,6 +210,27 @@ impl Workspace {
             }
             ChatRowKind::Queued(index) => {
                 let prompt = &agent.config.pending_prompts[index];
+                let agent_id = agent.config.id;
+                let expected = prompt.clone();
+                let has_draft = self.composer_has_draft(agent_id, cx);
+                let label = if shell_command(&prompt.text).is_some() {
+                    format!("Queued {} · Shell command", index + 1)
+                } else {
+                    format!("Queued {}", index + 1)
+                };
+                let edit = Button::new(format!("edit-queued-{agent_id}-{index}"))
+                    .ghost()
+                    .xsmall()
+                    .label("Edit")
+                    .tooltip(if has_draft {
+                        "Send or clear your draft before editing a queued message"
+                    } else {
+                        "Move this queued message to the composer"
+                    })
+                    .disabled(has_draft)
+                    .on_click(cx.listener(move |this, _, window, cx| {
+                        this.edit_queued_prompt(agent_id, index, &expected, window, cx);
+                    }));
                 div().w_full().min_w(px(0.)).flex().justify_end().child(
                     div()
                         .max_w(relative(0.85))
@@ -218,13 +239,20 @@ impl Workspace {
                         .py_2()
                         .rounded_md()
                         .bg(palette.color(USER_BUBBLE))
-                        .child(div().text_xs().text_color(palette.color(ACCENT)).child(
-                            if shell_command(&prompt.text).is_some() {
-                                format!("Queued {} · Shell command", index + 1)
-                            } else {
-                                format!("Queued {}", index + 1)
-                            },
-                        ))
+                        .child(
+                            div()
+                                .flex()
+                                .items_center()
+                                .justify_between()
+                                .gap_2()
+                                .child(
+                                    div()
+                                        .text_xs()
+                                        .text_color(palette.color(ACCENT))
+                                        .child(label),
+                                )
+                                .child(edit),
+                        )
                         .children(self.render_images(
                             format!("queued-{}-{index}", agent.config.id),
                             &prompt.images,

@@ -6,6 +6,8 @@ Notable changes to Agentaps are recorded here.
 
 ### Added
 
+- Edit queued messages with their Edit button or by pressing Up in an empty composer. Editing removes the original from the queue and restores its text and attachments for resubmission.
+
 - Rename sessions inline by clicking the header title or choosing Rename session in the session menu. Hovering the title reveals an edit box. Custom names are searchable in the sidebar and survive restarts and agent title updates.
 
 - Choose and remember a desktop theme in settings, including light and dark presets ported from FactorSeal and a System option that follows GTK/Qt theme changes on Linux. Chat, activity, controls, and diffs share the selected palette while retaining zoom.

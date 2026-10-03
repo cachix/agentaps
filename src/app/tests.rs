@@ -929,6 +929,82 @@ fn verify_settings_apply_and_persist(
     cx.simulate_keystrokes("enter");
     assert_eq!(pending(cx).len(), 4);
     assert_eq!(pending(cx)[3], Prompt::from("second"));
+    cx.simulate_keystrokes("up");
+    assert_eq!(draft(cx), "second");
+    assert_eq!(pending(cx).len(), 3, "editing must dequeue the original");
+    type_draft("edited second", cx);
+    cx.simulate_keystrokes("enter");
+    assert_eq!(
+        pending(cx).len(),
+        4,
+        "resubmitting must not duplicate the prompt"
+    );
+    assert_eq!(pending(cx)[3], Prompt::from("edited second"));
+
+    // The button's handler restores attachments and refuses stale clicks or drafts.
+    cx.update(|window, cx| {
+        workspace.update(cx, |this, cx| {
+            let agent = &mut this.projects[0].agents[0];
+            let agent_id = agent.config.id;
+            let prompt = Prompt {
+                text: "with attachments\n🙂".into(),
+                images: vec![ChatImage {
+                    mime_type: "image/png".into(),
+                    sha256: "queued-image".into(),
+                }],
+                files: vec![ChatFile {
+                    name: "notes.txt".into(),
+                    uri: "file:///notes.txt".into(),
+                    text: Some("notes".into()),
+                }],
+            };
+            agent.config.pending_prompts[1] = prompt.clone();
+            agent.config.prompt_history[1] = prompt.text.clone();
+            this.edit_queued_prompt(agent_id, 0, &prompt, window, cx);
+            assert_eq!(this.projects[0].agents[0].config.pending_prompts.len(), 4);
+            this.conversation
+                .composer
+                .update(cx, |input, cx| input.set_value("draft", window, cx));
+            this.edit_queued_prompt(agent_id, 1, &prompt, window, cx);
+            assert_eq!(
+                this.conversation.composer.read(cx).value().as_ref(),
+                "draft"
+            );
+            this.conversation
+                .composer
+                .update(cx, |input, cx| input.set_value("", window, cx));
+            this.conversation
+                .draft_files
+                .insert(agent_id, prompt.files.clone());
+            this.edit_queued_prompt(agent_id, 1, &prompt, window, cx);
+            assert_eq!(this.projects[0].agents[0].config.pending_prompts.len(), 4);
+            this.conversation.draft_files.remove(&agent_id);
+            this.edit_queued_prompt(agent_id, 1, &prompt, window, cx);
+            assert_eq!(this.projects[0].agents[0].config.pending_prompts.len(), 3);
+            assert_eq!(
+                this.conversation.composer.read(cx).value().as_ref(),
+                prompt.text
+            );
+            assert_eq!(
+                this.conversation.composer.read(cx).cursor_position(),
+                Position::new(1, 1)
+            );
+            assert_eq!(this.conversation.draft_images[&agent_id], prompt.images);
+            assert_eq!(this.conversation.draft_files[&agent_id], prompt.files);
+            assert!(this.conversation.prompt_recall.is_none());
+            assert!(
+                !this.projects[0].agents[0]
+                    .config
+                    .prompt_history
+                    .contains(&prompt.text)
+            );
+            this.send_prompt(window, cx);
+            assert_eq!(
+                this.projects[0].agents[0].config.pending_prompts.last(),
+                Some(&prompt)
+            );
+        });
+    });
     cx.update(|_, cx| workspace.update(cx, |this, _| this.persistence.wait().unwrap()));
     let (saved, _) = config::load().unwrap();
     assert_eq!(saved.send_key, SendKey::Enter);

@@ -313,6 +313,70 @@ impl Workspace {
         }
     }
 
+    pub(super) fn composer_has_draft(&self, agent_id: u64, cx: &App) -> bool {
+        !self.conversation.composer.read(cx).value().is_empty()
+            || self
+                .conversation
+                .draft_images
+                .get(&agent_id)
+                .is_some_and(|images| !images.is_empty())
+            || self
+                .conversation
+                .draft_files
+                .get(&agent_id)
+                .is_some_and(|files| !files.is_empty())
+    }
+
+    pub(super) fn edit_queued_prompt(
+        &mut self,
+        agent_id: u64,
+        index: usize,
+        expected: &Prompt,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let Some(session) = self.view.displayed_session() else {
+            return;
+        };
+        if self.composer_has_draft(agent_id, cx) {
+            return;
+        }
+        let agent = &mut self.projects[session.project_index].agents[session.agent_index];
+        if agent.config.id != agent_id || agent.config.pending_prompts.get(index) != Some(expected)
+        {
+            return;
+        }
+        let prompt = agent.config.pending_prompts.remove(index);
+        if let Some(index) = agent
+            .config
+            .prompt_history
+            .iter()
+            .rposition(|text| *text == prompt.text)
+        {
+            agent.config.prompt_history.remove(index);
+        }
+        self.conversation
+            .draft_images
+            .insert(agent_id, prompt.images);
+        self.conversation.draft_files.insert(agent_id, prompt.files);
+        self.conversation.prompt_recall = None;
+        self.conversation.composer.update(cx, |input, cx| {
+            let line = prompt.text.matches('\n').count() as u32;
+            let column = prompt
+                .text
+                .rsplit('\n')
+                .next()
+                .unwrap_or("")
+                .chars()
+                .count() as u32;
+            input.set_value(prompt.text, window, cx);
+            input.set_cursor_position(Position::new(line, column), window, cx);
+            input.focus(window, cx);
+        });
+        self.persistence.dirty = true;
+        cx.notify();
+    }
+
     pub(super) fn send_prompt(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let Some(SessionLocation {
             project_index,

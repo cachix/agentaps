@@ -2198,6 +2198,16 @@ impl Workspace {
             return;
         }
         let agent = &self.projects[session.project_index].agents[session.agent_index];
+        if up
+            && !self.composer_has_draft(agent.config.id, cx)
+            && let Some(index) = agent.config.pending_prompts.len().checked_sub(1)
+        {
+            let agent_id = agent.config.id;
+            let prompt = agent.config.pending_prompts[index].clone();
+            self.edit_queued_prompt(agent_id, index, &prompt, window, cx);
+            cx.stop_propagation();
+            return;
+        }
         let Some(value) = PromptRecall::step(
             &mut self.conversation.prompt_recall,
             agent.config.id,
