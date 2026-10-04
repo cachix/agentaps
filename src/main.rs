@@ -12,6 +12,7 @@ mod git_diff;
 mod git_sync;
 mod images;
 mod mobile;
+mod panes;
 mod persistence;
 mod remote;
 mod session;

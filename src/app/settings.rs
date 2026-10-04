@@ -424,6 +424,10 @@ impl Workspace {
         }
         self.conversation.thoughts_expanded = expanded;
         self.conversation.toggled_thought_rows.clear();
+        for pane in self.inactive_panes.values_mut() {
+            pane.conversation.thoughts_expanded = expanded;
+            pane.conversation.toggled_thought_rows.clear();
+        }
         self.persist();
         cx.notify();
     }
@@ -434,6 +438,10 @@ impl Workspace {
         }
         self.conversation.tool_activity_expanded = expanded;
         self.conversation.toggled_tool_groups.clear();
+        for pane in self.inactive_panes.values_mut() {
+            pane.conversation.tool_activity_expanded = expanded;
+            pane.conversation.toggled_tool_groups.clear();
+        }
         self.persist();
         cx.notify();
     }
@@ -463,7 +471,14 @@ impl Workspace {
         }
         self.send_key = send_key;
         let submit_on_enter = send_key == SendKey::Enter;
-        for composer in self.conversation.composers() {
+        for composer in std::iter::once(&self.conversation.composer)
+            .chain(self.session_composers.values())
+            .chain(
+                self.inactive_panes
+                    .values()
+                    .map(|pane| &pane.conversation.composer),
+            )
+        {
             composer.update(cx, |input, cx| {
                 input.set_submit_on_enter(submit_on_enter, cx)
             });

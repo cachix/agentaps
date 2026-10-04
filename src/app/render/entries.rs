@@ -147,7 +147,7 @@ fn changed_row_range(old: &[ChatRow], new: &[ChatRow]) -> Option<(Range<usize>, 
 }
 
 impl Workspace {
-    pub(super) fn sync_chat_rows(&mut self, project_index: usize, agent_index: usize) {
+    pub(in crate::app) fn sync_chat_rows(&mut self, project_index: usize, agent_index: usize) {
         let agent = &self.projects[project_index].agents[agent_index];
         let rows = chat_rows(
             agent,
@@ -228,7 +228,7 @@ impl Workspace {
                         "Move this queued message to the composer"
                     })
                     .disabled(has_draft)
-                    .on_click(cx.listener(move |this, _, window, cx| {
+                    .on_click(self.pane_listener(cx, move |this, _, window, cx| {
                         this.edit_queued_prompt(agent_id, index, &expected, window, cx);
                     }));
                 div().w_full().min_w(px(0.)).flex().justify_end().child(
@@ -346,7 +346,7 @@ impl Workspace {
                 )
                 .child("Thought")
                 .child(div().text_xs().child(if expanded { "⌄" } else { "›" }))
-                .on_click(cx.listener(move |this, _, _, cx| {
+                .on_click(self.pane_listener(cx, move |this, _, _, cx| {
                     if !this.conversation.toggled_thought_rows.insert(key) {
                         this.conversation.toggled_thought_rows.remove(&key);
                     }
@@ -523,7 +523,7 @@ impl Workspace {
                                     .label("Fork from here")
                                     .tooltip("Start a separate session with the conversation up to this reply")
                                     .disabled(agent.active_work)
-                                    .on_click(cx.listener(move |this, _, window, cx| {
+                                    .on_click(self.pane_listener(cx, move |this, _, window, cx| {
                                         this.fork_conversation(
                                             project_index,
                                             agent_index,
@@ -611,7 +611,7 @@ impl Workspace {
                     .text_sm()
                     .text_color(palette.color(TEXT))
                     .child(label.clone())
-                    .on_click(cx.listener(move |this, _, _, cx| {
+                    .on_click(self.pane_listener(cx, move |this, _, _, cx| {
                         this.choose_permission(permission_index, option_id.clone(), cx)
                     })),
             );
@@ -803,7 +803,7 @@ impl Workspace {
                     .text_sm()
                     .text_color(palette.color(TEXT))
                     .child(label.clone())
-                    .on_click(cx.listener(move |this, _, _, cx| {
+                    .on_click(self.pane_listener(cx, move |this, _, _, cx| {
                         this.select_elicitation_option(
                             question_index,
                             field_index,
@@ -843,7 +843,7 @@ impl Workspace {
             .bg(palette.color(if primary { ACCENT_SURFACE } else { SURFACE }))
             .text_color(palette.color(TEXT))
             .child(label)
-            .on_click(cx.listener(move |this, _, _, cx| {
+            .on_click(self.pane_listener(cx, move |this, _, _, cx| {
                 this.answer_elicitation(question_index, action, cx)
             }))
     }

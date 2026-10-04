@@ -9,6 +9,7 @@ Notable changes to Agentaps are recorded here.
 - Clone a Git repository from New into a chosen local folder, with a chooser styled like Choose Folder, an editable folder name, progress, cancellation, and the existing agent picker after cloning. Failed or cancelled clones remove their incomplete folder, and existing folders are preserved.
 
 - Edit queued messages with their Edit button or by pressing Up in an empty composer. Editing removes the original from the queue and restores its text and attachments for resubmission.
+- Split desktop chats right or down from the session menu into resizable, independent panes. Restore layouts and visible sessions on restart, keep drafts and attachments with their sessions, and review changes in a shared diff panel that follows the active pane. Empty panes keep a compact menu, and the border indicates focus.
 
 - Rename sessions inline by clicking the header title or choosing Rename session in the session menu. Hovering the title reveals an edit box. Custom names are searchable in the sidebar and survive restarts and agent title updates.
 
@@ -24,6 +25,13 @@ Notable changes to Agentaps are recorded here.
 - Repository cloning on Windows supports canonicalized destination folders.
 
 - Windows desktop lint checks pass after adding repository cloning.
+
+- Keep repository cloning inputs, destination selection, and progress in their originating split pane without stealing keyboard focus on completion.
+
+- Hide the floating pane menu while choosing a new session.
+
+- Apply desktop send-key and conversation display settings across split panes, and edit queued messages in their originating pane.
+- Keep the shared diff populated when switching sessions in the same project, and reveal a session when its pane is showing the new-session picker.
 
 - The default Agentaps theme now follows the desktop light/dark scheme with matching light and dark palettes across the conversation, sidebar, controls, and diffs.
 
