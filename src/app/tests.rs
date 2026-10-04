@@ -648,6 +648,7 @@ fn zoom_shortcuts_and_menu_actions_change_the_font_scale(cx: &mut gpui_kit::Test
     verify_inline_session_renaming(&restored, cx);
     verify_settings_apply_and_persist(&restored, temp.path(), cx);
     verify_notifications_for_background_sessions(&restored, temp.path(), cx);
+    verify_repository_cloning(&restored, temp.path(), cx);
     // SAFETY: restore the process environment modified for this test.
     unsafe {
         if let Some(original) = original_config_home {
@@ -1259,6 +1260,122 @@ fn verify_notifications_for_background_sessions(
             assert!(!this.projects[0].agents[1].cancel_requested);
             this.close_settings(window, cx);
             this.projects[0].agents[1].active_work = false;
+        })
+    });
+}
+
+fn verify_repository_cloning(
+    workspace: &Entity<Workspace>,
+    path: &Path,
+    cx: &mut gpui_kit::VisualTestContext,
+) {
+    let source = path.join("clone-source");
+    assert!(
+        std::process::Command::new("git")
+            .args(["init", "--quiet"])
+            .arg(&source)
+            .status()
+            .unwrap()
+            .success()
+    );
+    cx.update(|window, cx| {
+        workspace.update(cx, |this, cx| {
+            this.open_clone(window, cx);
+            this.start_clone(cx);
+            assert!(this.picker.clone.error.is_some());
+            this.picker.input.update(cx, |input, cx| {
+                input.set_value(source.to_string_lossy().to_string(), window, cx);
+                cx.emit(InputEvent::Change);
+            });
+        })
+    });
+    cx.run_until_parked();
+    cx.update(|window, cx| {
+        workspace.update(cx, |this, cx| {
+            assert_eq!(
+                this.picker.clone.name.read(cx).value().as_ref(),
+                "clone-source"
+            );
+            this.picker
+                .clone
+                .name
+                .update(cx, |input, cx| input.set_value("my-project", window, cx));
+            this.picker.input.update(cx, |input, cx| {
+                input.set_value("https://example.com/other.git", window, cx);
+                cx.emit(InputEvent::Change);
+            });
+        })
+    });
+    cx.run_until_parked();
+    cx.update(|window, cx| {
+        workspace.update(cx, |this, cx| {
+            assert_eq!(
+                this.picker.clone.name.read(cx).value().as_ref(),
+                "my-project",
+                "editing the URL preserves the custom destination name"
+            );
+            this.picker.input.update(cx, |input, cx| {
+                input.set_value(source.to_string_lossy().to_string(), window, cx);
+                cx.emit(InputEvent::Change);
+            });
+            this.choose_clone_parent(window, cx);
+        })
+    });
+    cx.run_until_parked();
+    assert!(cx.did_prompt_for_paths());
+    cx.simulate_path_prompt_response(|options| {
+        assert!(options.directories && !options.files && !options.multiple);
+        Some(vec![path.to_owned()])
+    });
+    cx.run_until_parked();
+    cx.update(|_, cx| {
+        workspace.update(cx, |this, cx| {
+            assert_eq!(this.picker.clone.parent.as_deref(), Some(path));
+            this.start_clone(cx);
+            assert!(this.picker.clone.task.is_some());
+            // Repeated Enter cannot start a second clone.
+            this.start_clone(cx);
+        })
+    });
+    let start = Instant::now();
+    loop {
+        let running = cx.update(|window, cx| {
+            workspace.update(cx, |this, cx| {
+                this.poll_clone(window, cx);
+                this.picker.clone.task.is_some()
+            })
+        });
+        if !running {
+            break;
+        }
+        assert!(start.elapsed() < Duration::from_secs(10));
+        std::thread::sleep(Duration::from_millis(10));
+    }
+    cx.update(|window, cx| {
+        workspace.update(cx, |this, cx| {
+            assert_eq!(this.picker.clone.error, None);
+            let WorkspaceView::NewSession {
+                step: PickerStep::Agents { project_index },
+                ..
+            } = this.view
+            else {
+                panic!("successful cloning must open the agent picker");
+            };
+            assert_eq!(
+                this.projects[project_index].path,
+                path.join("my-project").canonicalize().unwrap()
+            );
+            assert!(this.projects[project_index].agents.is_empty());
+            assert!(path.join("my-project/.git").is_dir());
+            this.open_clone(window, cx);
+            this.back_from_picker(window, cx);
+            assert!(matches!(
+                this.view,
+                WorkspaceView::NewSession {
+                    step: PickerStep::Folders,
+                    ..
+                }
+            ));
         })
     });
 }

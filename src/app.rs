@@ -44,6 +44,7 @@ use std::{
 
 mod agent;
 mod attachments;
+mod clone;
 mod state;
 use state::*;
 mod assets;
@@ -189,6 +190,7 @@ fn session_search_score(
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum PickerStep {
     Folders,
+    CloneRepository,
     ChangeFolder { session: SessionLocation },
     Agents { project_index: usize },
 }
@@ -673,6 +675,15 @@ impl Workspace {
     }
 
     fn set_view(&mut self, view: WorkspaceView, window: &mut Window, cx: &mut Context<Self>) {
+        if !matches!(
+            view,
+            WorkspaceView::NewSession {
+                step: PickerStep::CloneRepository,
+                ..
+            }
+        ) {
+            self.picker.clone.task = None;
+        }
         self.finish_rename_session(true, cx);
         if let Some(session) = view.displayed_session() {
             let agent_id = self.projects[session.project_index].agents[session.agent_index]
@@ -907,6 +918,15 @@ impl Workspace {
                         if matches!(
                             this.view,
                             WorkspaceView::NewSession {
+                                step: PickerStep::CloneRepository,
+                                ..
+                            }
+                        ) {
+                            this.update_clone_name(window, cx);
+                        }
+                        if matches!(
+                            this.view,
+                            WorkspaceView::NewSession {
                                 step: PickerStep::Folders | PickerStep::ChangeFolder { .. },
                                 ..
                             }
@@ -1072,6 +1092,7 @@ impl Workspace {
             deferred_connections: Vec::new(),
             deferred_connections_deadline: None,
             picker: PickerState {
+                clone: clone::ClonePicker::new(window, cx),
                 folder_search,
                 folder_dialog_open: false,
                 available_agents: agent_choices(&config.saved_agents, &config.agent_executables),
@@ -1140,6 +1161,28 @@ impl Workspace {
                 crate::theming::set_input_background(Theme::global(cx).input_background(), cx);
                 crate::appearance::system_changed(cx);
             }));
+        let clone_name = this.picker.clone.name.clone();
+        this._subscriptions.push(cx.subscribe_in(
+            &clone_name,
+            window,
+            |this, _, event: &InputEvent, _, cx| {
+                if matches!(
+                    this.view,
+                    WorkspaceView::NewSession {
+                        step: PickerStep::CloneRepository,
+                        ..
+                    }
+                ) {
+                    if matches!(event, InputEvent::PressEnter { .. }) {
+                        this.start_clone(cx);
+                    }
+                    if matches!(event, InputEvent::Change) {
+                        this.picker.clone.error = None;
+                        cx.notify();
+                    }
+                }
+            },
+        ));
         let composer = this.conversation.composer.clone();
         this.subscribe_composer(&composer, window, cx);
         let workspace = cx.entity().downgrade();
@@ -1244,6 +1287,7 @@ impl Workspace {
             loop {
                 background_executor.timer(tick_interval).await;
                 let Ok(connecting_session) = this.update_in(cx, |this, window, cx| {
+                    this.poll_clone(window, cx);
                     this.poll_events(window, cx);
                     this.poll_sync_counts(cx);
                     if this.picker.folder_search.tick() {
@@ -1363,7 +1407,7 @@ impl Workspace {
     fn back_from_picker(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         match self.view {
             WorkspaceView::NewSession {
-                step: PickerStep::Agents { .. },
+                step: PickerStep::Agents { .. } | PickerStep::CloneRepository,
                 ..
             } => self.open_picker(PickerStep::Folders, window, cx),
             WorkspaceView::NewSession {
@@ -1773,6 +1817,10 @@ impl Workspace {
     fn confirm_picker(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         match self.view {
             WorkspaceView::NewSession {
+                step: PickerStep::CloneRepository,
+                ..
+            } => self.start_clone(cx),
+            WorkspaceView::NewSession {
                 step: PickerStep::Folders | PickerStep::ChangeFolder { .. },
                 ..
             } => {
@@ -1946,7 +1994,15 @@ impl Workspace {
         let WorkspaceView::NewSession { step, .. } = self.view else {
             return;
         };
+        if matches!(step, PickerStep::CloneRepository) {
+            if event.keystroke.key == "escape" {
+                self.back_from_picker(window, cx);
+                cx.stop_propagation();
+            }
+            return;
+        }
         let count = match step {
+            PickerStep::CloneRepository => 0,
             PickerStep::Folders | PickerStep::ChangeFolder { .. } => {
                 self.picker.folder_search.results().len()
             }

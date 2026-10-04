@@ -6,6 +6,8 @@ Notable changes to Agentaps are recorded here.
 
 ### Added
 
+- Clone a Git repository from New into a chosen local folder, with a chooser styled like Choose Folder, an editable folder name, progress, cancellation, and the existing agent picker after cloning. Failed or cancelled clones remove their incomplete folder, and existing folders are preserved.
+
 - Edit queued messages with their Edit button or by pressing Up in an empty composer. Editing removes the original from the queue and restores its text and attachments for resubmission.
 
 - Rename sessions inline by clicking the header title or choosing Rename session in the session menu. Hovering the title reveals an edit box. Custom names are searchable in the sidebar and survive restarts and agent title updates.

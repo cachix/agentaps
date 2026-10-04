@@ -63,6 +63,9 @@ tempfile = "3"
 members = ["crates/control-protocol"]
 exclude = ["web", "crates/gpui-kit-reqwest-compat"]
 
+[target.'cfg(unix)'.dependencies]
+libc = "0.2"
+
 [target.'cfg(target_os = "linux")'.dependencies]
 ashpd = { version = "=0.13.13", default-features = false, features = ["async-io", "settings"] }
 detect-desktop-environment = "=1.3.0"

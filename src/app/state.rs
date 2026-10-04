@@ -38,6 +38,7 @@ pub(super) struct SyncState {
 }
 
 pub(super) struct PickerState {
+    pub(super) clone: super::clone::ClonePicker,
     pub(super) folder_search: FolderSearch,
     pub(super) folder_dialog_open: bool,
     pub(super) available_agents: Vec<AgentChoice>,
@@ -282,6 +283,9 @@ impl PickerState {
             input.set_value("", window, cx);
             input.set_placeholder(
                 match step {
+                    PickerStep::CloneRepository => {
+                        "Repository URL or git@host:owner/repository.git"
+                    }
                     PickerStep::Agents { .. } => "Search installed agents or enter an ACP command…",
                     PickerStep::Folders | PickerStep::ChangeFolder { .. } => {
                         "Search recent folders or enter a local or SSH path…"

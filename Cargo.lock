@@ -185,6 +185,7 @@ dependencies = [
  "gpui-kit",
  "hex",
  "iroh",
+ "libc",
  "native-theme-gpui",
  "native-theme-gtk",
  "native-theme-qt",

@@ -6,6 +6,9 @@ impl Workspace {
         let WorkspaceView::NewSession { step, return_to } = self.view else {
             return chat;
         };
+        if matches!(step, PickerStep::CloneRepository) {
+            return self.render_clone_picker(chat, cx);
+        }
         let is_folders = matches!(step, PickerStep::Folders | PickerStep::ChangeFolder { .. });
         let changing_folder = matches!(step, PickerStep::ChangeFolder { .. });
         let query = self.picker.input.read(cx).value().to_string();
@@ -186,7 +189,7 @@ impl Workspace {
         let project_path = match step {
             PickerStep::Agents { project_index } => self.projects.get(project_index),
             PickerStep::ChangeFolder { session } => self.projects.get(session.project_index),
-            PickerStep::Folders => None,
+            PickerStep::Folders | PickerStep::CloneRepository => None,
         }
         .map(ProjectView::display_path)
         .unwrap_or_default();
@@ -319,6 +322,30 @@ impl Workspace {
                                     .on_click(cx.listener(|this, _, window, cx| {
                                         this.choose_folder(window, cx)
                                     })),
+                            )
+                        })
+                        .when(matches!(step, PickerStep::Folders), |element| {
+                            element.child(
+                                div()
+                                    .id("clone-repository")
+                                    .cursor_pointer()
+                                    .rounded_lg()
+                                    .border_1()
+                                    .border_color(palette.color(BORDER))
+                                    .bg(palette.color(SURFACE))
+                                    .px_4()
+                                    .py_3()
+                                    .flex()
+                                    .items_center()
+                                    .gap_3()
+                                    .hover(|style| style.bg(palette.color(HOVER)))
+                                    .child(
+                                        Icon::new(IconName::Folder)
+                                            .size(px(18.))
+                                            .text_color(palette.color(ACCENT)),
+                                    )
+                                    .child("Clone repository…")
+                                    .on_click(cx.listener(|this, _, window, cx| this.open_clone(window, cx))),
                             )
                         })
                         .child(

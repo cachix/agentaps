@@ -7,6 +7,7 @@ mod diff_watch;
 mod discovery;
 mod file_search;
 mod folder_search;
+mod git_clone;
 mod git_diff;
 mod git_sync;
 mod images;
