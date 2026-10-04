@@ -261,6 +261,7 @@ fn run_command(
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[cfg(unix)]
     use std::time::Instant;
 
     #[test]
