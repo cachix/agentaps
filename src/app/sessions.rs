@@ -16,20 +16,31 @@ impl Workspace {
             input.set_value(title, window, cx);
             input
         });
+        let pane_id = self.pane_id;
         let subscription =
-            cx.subscribe_in(&input, window, |this, _, event, window, cx| match event {
-                InputEvent::PressEnter {
-                    secondary: false,
-                    shift: false,
-                } => {
-                    this.finish_rename_session(true, cx);
-                    this.conversation
-                        .composer
-                        .update(cx, |input, cx| input.focus(window, cx));
-                }
-                InputEvent::Blur => this.finish_rename_session(true, cx),
-                _ => {}
-            });
+            cx.subscribe_in(
+                &input,
+                window,
+                move |this, _, event, window, cx| match event {
+                    InputEvent::PressEnter {
+                        secondary: false,
+                        shift: false,
+                    } => {
+                        if this.activate_pane(pane_id, cx) {
+                            this.finish_rename_session(true, cx);
+                            this.conversation
+                                .composer
+                                .update(cx, |input, cx| input.focus(window, cx));
+                        }
+                    }
+                    InputEvent::Blur => {
+                        this.with_pane(pane_id, cx, |this, cx| {
+                            this.finish_rename_session(true, cx)
+                        });
+                    }
+                    _ => {}
+                },
+            );
         self.conversation.renaming = Some(SessionRename {
             agent_id,
             input: input.clone(),
@@ -96,14 +107,14 @@ impl Workspace {
         if let Some(id) = self.sidebar_order.iter_mut().find(|id| **id == old_id) {
             *id = new_id;
         }
-        if let Some(composer) = self.conversation.session_composers.remove(&old_id) {
-            self.conversation.session_composers.insert(new_id, composer);
+        if let Some(composer) = self.session_composers.remove(&old_id) {
+            self.session_composers.insert(new_id, composer);
         }
-        if let Some(images) = self.conversation.draft_images.remove(&old_id) {
-            self.conversation.draft_images.insert(new_id, images);
+        if let Some(images) = self.draft_images.remove(&old_id) {
+            self.draft_images.insert(new_id, images);
         }
-        if let Some(files) = self.conversation.draft_files.remove(&old_id) {
-            self.conversation.draft_files.insert(new_id, files);
+        if let Some(files) = self.draft_files.remove(&old_id) {
+            self.draft_files.insert(new_id, files);
         }
         self.deferred_connections.retain(|id| *id != old_id);
         self.conversation
@@ -205,14 +216,14 @@ impl Workspace {
         } else {
             self.sidebar_order.push(new_id);
         }
-        if let Some(composer) = self.conversation.session_composers.remove(&old_id) {
-            self.conversation.session_composers.insert(new_id, composer);
+        if let Some(composer) = self.session_composers.remove(&old_id) {
+            self.session_composers.insert(new_id, composer);
         }
-        if let Some(images) = self.conversation.draft_images.remove(&old_id) {
-            self.conversation.draft_images.insert(new_id, images);
+        if let Some(images) = self.draft_images.remove(&old_id) {
+            self.draft_images.insert(new_id, images);
         }
-        if let Some(files) = self.conversation.draft_files.remove(&old_id) {
-            self.conversation.draft_files.insert(new_id, files);
+        if let Some(files) = self.draft_files.remove(&old_id) {
+            self.draft_files.insert(new_id, files);
         }
         self.conversation
             .toggled_tool_groups
@@ -228,6 +239,7 @@ impl Workspace {
             .retain(|(id, _)| *id != old_id);
         self.conversation.chat_list_agent = None;
         self.conversation.chat_rows.clear();
+        self.pane_layout.root = self.saved_pane_layout().root;
         self.connect(project_index, agent_index);
         self.notice = None;
         self.persist();
@@ -316,12 +328,10 @@ impl Workspace {
     pub(super) fn composer_has_draft(&self, agent_id: u64, cx: &App) -> bool {
         !self.conversation.composer.read(cx).value().is_empty()
             || self
-                .conversation
                 .draft_images
                 .get(&agent_id)
                 .is_some_and(|images| !images.is_empty())
             || self
-                .conversation
                 .draft_files
                 .get(&agent_id)
                 .is_some_and(|files| !files.is_empty())
@@ -355,10 +365,8 @@ impl Workspace {
         {
             agent.config.prompt_history.remove(index);
         }
-        self.conversation
-            .draft_images
-            .insert(agent_id, prompt.images);
-        self.conversation.draft_files.insert(agent_id, prompt.files);
+        self.draft_images.insert(agent_id, prompt.images);
+        self.draft_files.insert(agent_id, prompt.files);
         self.conversation.prompt_recall = None;
         self.conversation.composer.update(cx, |input, cx| {
             let line = prompt.text.matches('\n').count() as u32;
@@ -390,13 +398,11 @@ impl Workspace {
         let prompt = Prompt {
             text: submitted_prompt(&value),
             images: self
-                .conversation
                 .draft_images
                 .get(&agent.config.id)
                 .cloned()
                 .unwrap_or_default(),
             files: self
-                .conversation
                 .draft_files
                 .get(&agent.config.id)
                 .cloned()
@@ -441,8 +447,8 @@ impl Workspace {
             });
         }
         agent.config.prompt_history.push(text);
-        self.conversation.draft_images.remove(&agent.config.id);
-        self.conversation.draft_files.remove(&agent.config.id);
+        self.draft_images.remove(&agent.config.id);
+        self.draft_files.remove(&agent.config.id);
         self.persistence.dirty = true;
         self.conversation.prompt_recall = None;
         self.conversation

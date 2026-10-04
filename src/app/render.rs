@@ -7,6 +7,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 mod conversation;
 mod diff;
 mod entries;
+mod panes;
 mod picker;
 mod sidebar;
 mod tool_group;
@@ -467,6 +468,7 @@ impl Render for Workspace {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let palette = theme::palette(cx);
         let root = div()
+            .track_focus(&self.workspace_focus)
             .size_full()
             .flex()
             .bg(palette.color(BG))
@@ -482,6 +484,7 @@ impl Render for Workspace {
                 this.handle_slash_action(SlashAction::Down, window, cx)
             }))
             .capture_action(cx.listener(|this, action: &Enter, window, cx| {
+                this.activate_keyboard_pane(window, cx);
                 if enter_sends_prompt(this.send_key, action) && this.composer_focused(window, cx) {
                     cx.stop_propagation();
                     this.send_prompt(window, cx);
@@ -541,70 +544,7 @@ impl Render for Workspace {
             .flex()
             .flex_col()
             .bg(palette.color(BG));
-        if matches!(self.view, WorkspaceView::NewSession { .. }) {
-            chat = self.render_picker(chat, cx);
-        } else if let Some(SessionLocation {
-            project_index,
-            agent_index,
-        }) = self.view.displayed_session()
-        {
-            self.sync_chat_rows(project_index, agent_index);
-            if self.diff.visible {
-                let conversation = self.render_conversation(
-                    div().flex_1().min_w(px(0.)).h_full().flex().flex_col(),
-                    project_index,
-                    agent_index,
-                    window,
-                    cx,
-                );
-                let diff = self.render_diff(
-                    div()
-                        .flex_1()
-                        .min_w(px(0.))
-                        .h_full()
-                        .flex()
-                        .flex_col()
-                        .border_l_1()
-                        .border_color(palette.color(BORDER)),
-                    cx,
-                );
-                chat = chat.child(
-                    div()
-                        .flex_1()
-                        .min_h(px(0.))
-                        .min_w(px(0.))
-                        .flex()
-                        .child(conversation)
-                        .child(diff),
-                );
-            } else {
-                chat = self.render_conversation(chat, project_index, agent_index, window, cx);
-            }
-        } else {
-            let archived = matches!(self.view, WorkspaceView::Archive { .. });
-            chat =
-                chat.child(
-                    div()
-                        .flex_1()
-                        .flex()
-                        .flex_col()
-                        .items_center()
-                        .justify_center()
-                        .gap_3()
-                        .child(div().text_2xl().text_color(palette.color(TEXT)).child(
-                            if archived {
-                                "Archived sessions"
-                            } else {
-                                "Ready when you are."
-                            },
-                        ))
-                        .child(div().text_color(palette.color(MUTED)).child(if archived {
-                            "Select a session to restore it."
-                        } else {
-                            "Press Ctrl+P to find a folder and start an agent."
-                        })),
-                );
-        }
+        chat = chat.child(self.render_panes(window, cx));
         if let Some(notice) = &self.notice {
             chat = chat.child(self.render_notice(notice, "workspace-notice", cx));
         }

@@ -25,6 +25,53 @@ impl ClonePicker {
 }
 
 impl Workspace {
+    pub(super) fn subscribe_clone_name(
+        &mut self,
+        input: &Entity<InputState>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        self._subscriptions.push(cx.subscribe_in(
+            input,
+            window,
+            |this, input, event: &InputEvent, _, cx| {
+                let id = if this.picker.clone.name.entity_id() == input.entity_id() {
+                    Some(this.pane_id)
+                } else {
+                    this.inactive_panes.iter().find_map(|(&id, state)| {
+                        (state.picker.clone.name.entity_id() == input.entity_id()).then_some(id)
+                    })
+                };
+                let Some(id) = id else {
+                    return;
+                };
+                if !matches!(
+                    event,
+                    InputEvent::Focus | InputEvent::Change | InputEvent::PressEnter { .. }
+                ) {
+                    return;
+                }
+                this.activate_pane(id, cx);
+                if matches!(
+                    this.view,
+                    WorkspaceView::NewSession {
+                        step: PickerStep::CloneRepository,
+                        ..
+                    }
+                ) {
+                    match event {
+                        InputEvent::PressEnter { .. } => this.start_clone(cx),
+                        InputEvent::Change => {
+                            this.picker.clone.error = None;
+                            cx.notify();
+                        }
+                        _ => {}
+                    }
+                }
+            },
+        ));
+    }
+
     pub(super) fn open_clone(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         self.picker.clone.error = None;
         self.open_picker(PickerStep::CloneRepository, window, cx);
@@ -55,34 +102,38 @@ impl Workspace {
             multiple: false,
             prompt: Some("Clone Here".into()),
         });
+        let pane_id = self.pane_id;
         cx.spawn_in(window, async move |this, cx| {
             let result = selection.await;
             let _ = this.update_in(cx, |this, _, cx| {
-                this.picker.folder_dialog_open = false;
-                if !matches!(
-                    this.view,
-                    WorkspaceView::NewSession {
-                        step: PickerStep::CloneRepository,
-                        ..
+                this.with_pane(pane_id, cx, |this, cx| {
+                    this.picker.folder_dialog_open = false;
+                    if !matches!(
+                        this.view,
+                        WorkspaceView::NewSession {
+                            step: PickerStep::CloneRepository,
+                            ..
+                        }
+                    ) {
+                        return;
                     }
-                ) {
-                    return;
-                }
-                match result {
-                    Ok(Ok(Some(paths))) => {
-                        this.picker.clone.parent = paths.into_iter().next();
-                        this.picker.clone.error = None;
+                    match result {
+                        Ok(Ok(Some(paths))) => {
+                            this.picker.clone.parent = paths.into_iter().next();
+                            this.picker.clone.error = None;
+                        }
+                        Ok(Ok(None)) => {}
+                        Ok(Err(error)) => {
+                            this.picker.clone.error =
+                                Some(format!("Could not choose a destination: {error}"));
+                        }
+                        Err(error) => {
+                            this.picker.clone.error =
+                                Some(format!("Folder chooser closed: {error}"));
+                        }
                     }
-                    Ok(Ok(None)) => {}
-                    Ok(Err(error)) => {
-                        this.picker.clone.error =
-                            Some(format!("Could not choose a destination: {error}"));
-                    }
-                    Err(error) => {
-                        this.picker.clone.error = Some(format!("Folder chooser closed: {error}"));
-                    }
-                }
-                cx.notify();
+                    cx.notify();
+                });
             });
         })
         .detach();
@@ -131,7 +182,16 @@ impl Workspace {
                     self.picker.clone.task = None;
                     match result {
                         Ok(path) => {
+                            let background = self.pane_id != self.pane_layout.focused;
+                            let focus = window.focused(cx);
                             self.select_folder(path, window, cx);
+                            if background {
+                                if let Some(focus) = focus {
+                                    window.focus(&focus, cx);
+                                } else {
+                                    window.blur(cx);
+                                }
+                            }
                         }
                         Err(error) => {
                             self.picker.clone.error = Some(error);
@@ -183,7 +243,7 @@ impl Workspace {
                                         .child("NEW SESSION"),
                                 )
                                 .child(Button::new("clone-back").ghost().label("Back").on_click(
-                                    cx.listener(|this, _, window, cx| {
+                                    self.pane_listener(cx, |this, _, window, cx| {
                                         this.back_from_picker(window, cx)
                                     }),
                                 )),
@@ -209,7 +269,7 @@ impl Workspace {
                                 .outline()
                                 .label("Choose parent folder…")
                                 .disabled(running || self.picker.folder_dialog_open)
-                                .on_click(cx.listener(|this, _, window, cx| {
+                                .on_click(self.pane_listener(cx, |this, _, window, cx| {
                                     this.choose_clone_parent(window, cx)
                                 })),
                         )
@@ -257,18 +317,18 @@ impl Workspace {
                                                     .is_empty()
                                                 || clone.name.read(cx).value().trim().is_empty(),
                                         )
-                                        .on_click(
-                                            cx.listener(|this, _, _, cx| this.start_clone(cx)),
-                                        ),
+                                        .on_click(self.pane_listener(cx, |this, _, _, cx| {
+                                            this.start_clone(cx)
+                                        })),
                                 )
                                 .when(running, |element| {
                                     element.child(
                                         Button::new("cancel-clone")
                                             .ghost()
                                             .label("Cancel")
-                                            .on_click(
-                                                cx.listener(|this, _, _, cx| this.cancel_clone(cx)),
-                                            ),
+                                            .on_click(self.pane_listener(cx, |this, _, _, cx| {
+                                                this.cancel_clone(cx)
+                                            })),
                                     )
                                 }),
                         ),
