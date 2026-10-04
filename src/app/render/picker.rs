@@ -92,7 +92,7 @@ impl Workspace {
                         .p_5()
                         .text_sm()
                         .text_color(palette.color(MUTED))
-                        .child("No matching installed agents. Enter an ACP command below."),
+                        .child("No matching installed agents. Enter an ACP command in the search field."),
                 );
             }
             for (index, agent) in matches.into_iter().enumerate() {
@@ -187,12 +187,94 @@ impl Workspace {
             }
         }
         let project_path = match step {
-            PickerStep::Agents { project_index } => self.projects.get(project_index),
+            PickerStep::Agents { project_index } | PickerStep::ProjectAgents { project_index } => {
+                self.projects.get(project_index)
+            }
             PickerStep::ChangeFolder { session } => self.projects.get(session.project_index),
             PickerStep::Folders | PickerStep::CloneRepository => None,
         }
         .map(ProjectView::display_path)
         .unwrap_or_default();
+        if matches!(step, PickerStep::ProjectAgents { .. }) {
+            return chat.child(
+                div()
+                    .id("project-agent-dialog-overlay")
+                    .occlude()
+                    .absolute()
+                    .inset_0()
+                    .flex()
+                    .items_center()
+                    .justify_center()
+                    .p_4()
+                    .bg(gpui_kit::rgba(0x00000066))
+                    .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
+                    .on_click(cx.listener(|this, _, window, cx| this.back_from_picker(window, cx)))
+                    .child(
+                        div()
+                            .id("project-agent-dialog")
+                            .w_full()
+                            .max_w(px(520.))
+                            .max_h(relative(0.85))
+                            .flex()
+                            .flex_col()
+                            .gap_3()
+                            .p_4()
+                            .rounded_lg()
+                            .border_1()
+                            .border_color(palette.color(BORDER))
+                            .bg(palette.color(BG))
+                            .shadow_lg()
+                            .on_click(|_, _, cx| cx.stop_propagation())
+                            .child(
+                                div()
+                                    .flex()
+                                    .items_center()
+                                    .justify_between()
+                                    .child(
+                                        div()
+                                            .text_lg()
+                                            .text_color(palette.color(TEXT))
+                                            .child("Choose an agent"),
+                                    )
+                                    .child(
+                                        Button::new("close-project-agent-dialog")
+                                            .ghost()
+                                            .compact()
+                                            .icon(IconName::Close)
+                                            .tooltip("Close")
+                                            .on_click(cx.listener(|this, _, window, cx| {
+                                                this.back_from_picker(window, cx)
+                                            })),
+                                    ),
+                            )
+                            .child(
+                                div()
+                                    .min_w(px(0.))
+                                    .truncate()
+                                    .text_sm()
+                                    .text_color(palette.color(MUTED))
+                                    .child(project_path),
+                            )
+                            .child(Input::new(&self.picker.input).cleanable(true))
+                            .child(
+                                div()
+                                    .id("project-agent-dialog-results")
+                                    .min_h(px(0.))
+                                    .overflow_y_scroll()
+                                    .child(results),
+                            )
+                            .when_some(self.notice.as_ref(), |dialog, notice| {
+                                dialog.child(self.render_notice(notice, "project-agent-notice", cx))
+                            })
+                            .child(
+                                div()
+                                    .text_xs()
+                                    .text_color(palette.color(MUTED))
+                                    .child("↑ ↓ Navigate  ·  Enter Select  ·  Esc Close"),
+                            ),
+                    ),
+            );
+        }
         chat = chat.child(
             div()
                 .id("picker-page")

@@ -8,7 +8,7 @@ pub(super) struct Attention {
 }
 
 impl Workspace {
-    fn agent_location(&self, agent_id: u64) -> Option<SessionLocation> {
+    pub(super) fn agent_location(&self, agent_id: u64) -> Option<SessionLocation> {
         self.projects
             .iter()
             .enumerate()

@@ -95,7 +95,16 @@ impl Workspace {
                             .flex()
                             .flex_col()
                             .relative();
-                        let chat = if matches!(this.view, WorkspaceView::NewSession { .. }) {
+                        let project_agent_dialog = matches!(
+                            this.view,
+                            WorkspaceView::NewSession {
+                                step: PickerStep::ProjectAgents { .. },
+                                ..
+                            }
+                        );
+                        let chat = if matches!(this.view, WorkspaceView::NewSession { .. })
+                            && !project_agent_dialog
+                        {
                             this.render_picker(chat, cx)
                         } else if let Some(session) = this.view.displayed_session() {
                             this.sync_chat_rows(session.project_index, session.agent_index);
