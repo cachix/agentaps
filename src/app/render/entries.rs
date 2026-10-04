@@ -337,7 +337,13 @@ impl Workspace {
                 .gap_2()
                 .text_sm()
                 .text_color(palette.color(MUTED))
-                .child(div().w(px(14.)).flex_shrink_0().text_center().child("•"))
+                .child(
+                    Icon::empty()
+                        .path("icons/brain.svg")
+                        .size(px(14.))
+                        .text_color(palette.color(STATUS_WORKING))
+                        .flex_shrink_0(),
+                )
                 .child("Thought")
                 .child(div().text_xs().child(if expanded { "⌄" } else { "›" }))
                 .on_click(cx.listener(move |this, _, _, cx| {

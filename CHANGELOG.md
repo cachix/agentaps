@@ -26,6 +26,8 @@ Notable changes to Agentaps are recorded here.
 
 ### Changed
 
+- Session Thought rows show an outline brain icon beside the label, using the selected theme's working activity color.
+
 - The main website download button shows the latest Agentaps release version.
 
 - The website calls browser access Remote Control and retains the GitHub stars count and latest release version.

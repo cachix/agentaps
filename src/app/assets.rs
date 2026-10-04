@@ -6,7 +6,8 @@ use std::borrow::Cow;
 
 pub(super) struct AppAssets;
 
-const APP_ASSETS: [(&str, &[u8]); 5] = [
+const APP_ASSETS: [(&str, &[u8]); 6] = [
+    ("icons/brain.svg", include_bytes!("../../assets/brain.svg")),
     (
         "icons/mobile.svg",
         include_bytes!("../../assets/mobile.svg"),
