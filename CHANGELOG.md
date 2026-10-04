@@ -21,6 +21,8 @@ Notable changes to Agentaps are recorded here.
 
 ### Fixed
 
+- Repository cloning on Windows supports canonicalized destination folders.
+
 - Windows desktop lint checks pass after adding repository cloning.
 
 - The default Agentaps theme now follows the desktop light/dark scheme with matching light and dark palettes across the conversation, sidebar, controls, and diffs.

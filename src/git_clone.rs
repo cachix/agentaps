@@ -160,11 +160,39 @@ fn run_clone(
     command
         .args(["clone", "--progress", "--"])
         .arg(url.trim())
-        .arg(destination)
+        .arg(git_destination(destination))
         .env("GIT_TERMINAL_PROMPT", "0")
         .env("GCM_INTERACTIVE", "never")
         .env("SSH_ASKPASS_REQUIRE", "never");
     run_command(command, cancel, tx)
+}
+
+// Git for Windows cannot append its internal paths to verbatim paths produced
+// by canonicalize. Keep the canonical path for filesystem operations and return
+// values, but pass a conventional drive or UNC path to Git.
+fn git_destination(destination: &Path) -> PathBuf {
+    #[cfg(windows)]
+    {
+        use std::path::Prefix;
+
+        if let Some(Component::Prefix(prefix)) = destination.components().next() {
+            let mut path = match prefix.kind() {
+                Prefix::VerbatimDisk(drive) => PathBuf::from(format!("{}:", drive as char)),
+                Prefix::VerbatimUNC(server, share) => {
+                    let mut path = PathBuf::from(r"\\");
+                    path.push(server);
+                    path.push(share);
+                    path
+                }
+                _ => return destination.to_owned(),
+            };
+            // Include the root separator without replacing the UNC prefix.
+            path.as_mut_os_string()
+                .push(destination.strip_prefix(prefix.as_os_str()).unwrap());
+            return path;
+        }
+    }
+    destination.to_owned()
 }
 
 fn run_command(
@@ -264,6 +292,22 @@ mod tests {
     #[cfg(unix)]
     use std::time::Instant;
 
+    #[cfg(windows)]
+    #[test]
+    fn git_destinations_support_verbatim_drive_and_unc_paths() {
+        for (input, expected) in [
+            (
+                r"\\?\C:\Users\Test User\project",
+                r"C:\Users\Test User\project",
+            ),
+            (r"\\?\UNC\server\share\project", r"\\server\share\project"),
+            (r"C:\Users\Test User\project", r"C:\Users\Test User\project"),
+            (r"\\server\share\project", r"\\server\share\project"),
+        ] {
+            assert_eq!(git_destination(Path::new(input)), PathBuf::from(expected));
+        }
+    }
+
     #[test]
     fn names_support_urls_ssh_addresses_and_local_sources() {
         for source in [
@@ -328,7 +372,11 @@ mod tests {
                 .success()
         );
         let url = source.to_string_lossy().into_owned();
-        let task = Task::start(url.clone(), temp.path().into(), "copy".into());
+        let task = Task::start(
+            url.clone(),
+            temp.path().canonicalize().unwrap(),
+            "copy".into(),
+        );
         let result = loop {
             if let Update::Finished(result) =
                 task.updates.recv_timeout(Duration::from_secs(10)).unwrap()
