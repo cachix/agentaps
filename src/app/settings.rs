@@ -694,7 +694,17 @@ impl Workspace {
                         settings_select(&page.theme_source),
                         palette,
                     )
-                })),
+                }))
+                .chain(std::iter::once(setting_row(
+                    "Restore default settings",
+                    Button::new("settings-reset")
+                        .icon(IconName::Undo2)
+                        .label("Factory reset")
+                        .on_click(
+                            cx.listener(|this, _, window, cx| this.reset_settings(window, cx)),
+                        ),
+                    palette,
+                ))),
                 palette,
             ),
             SettingsSection::Accessibility => settings_group(
@@ -737,17 +747,6 @@ impl Workspace {
                     .border_r_1()
                     .border_color(palette.color(BORDER))
                     .child(
-                        div().pb_2().flex().child(
-                            Button::new("close-settings")
-                                .ghost()
-                                .icon(IconName::ArrowLeft)
-                                .label("Back")
-                                .on_click(cx.listener(|this, _, window, cx| {
-                                    this.close_settings(window, cx)
-                                })),
-                        ),
-                    )
-                    .child(
                         div()
                             .px_2()
                             .py_1()
@@ -768,12 +767,13 @@ impl Workspace {
                     }))
                     .child(div().flex_1())
                     .child(
-                        Button::new("settings-reset")
+                        Button::new("close-settings")
                             .ghost()
-                            .icon(IconName::Undo2)
-                            .label("Reset to defaults")
+                            .w_full()
+                            .icon(IconName::ArrowLeft)
+                            .tooltip("Back")
                             .on_click(
-                                cx.listener(|this, _, window, cx| this.reset_settings(window, cx)),
+                                cx.listener(|this, _, window, cx| this.close_settings(window, cx)),
                             ),
                     ),
             )

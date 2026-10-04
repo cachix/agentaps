@@ -26,6 +26,8 @@ Notable changes to Agentaps are recorded here.
 
 ### Changed
 
+- Factory reset is available in Advanced settings, and the Back icon sits at the bottom of the settings sidebar.
+
 - Session Thought rows show an outline brain icon beside the label, using the selected theme's working activity color.
 
 - The main website download button shows the latest Agentaps release version.
