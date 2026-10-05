@@ -652,6 +652,7 @@ fn zoom_shortcuts_and_menu_actions_change_the_font_scale(cx: &mut gpui_kit::Test
     verify_notifications_for_background_sessions(&restored, temp.path(), cx);
     verify_repository_cloning(&restored, temp.path(), cx);
     verify_split_panes(&restored, temp.path(), cx);
+    verify_project_archiving(&restored, cx);
     // SAFETY: restore the process environment modified for this test.
     unsafe {
         if let Some(original) = original_config_home {
@@ -1743,6 +1744,74 @@ fn verify_split_panes(
             assert_eq!(this.view.displayed_session().unwrap().agent_index, 1);
             this.close_pane(window, cx);
             assert_eq!(this.view, WorkspaceView::Empty);
+        });
+    });
+}
+
+fn verify_project_archiving(workspace: &Entity<Workspace>, cx: &mut gpui_kit::VisualTestContext) {
+    cx.update(|window, cx| {
+        workspace.update(cx, |this, cx| {
+            let agent = |id, archived| {
+                let mut controller = test_agent(ProtocolVersion::V2);
+                controller.config.id = id;
+                controller.config.command.clear();
+                controller.config.archived = archived;
+                AgentView {
+                    controller,
+                    elicitations: Vec::new(),
+                }
+            };
+            this.projects = vec![
+                ProjectView {
+                    path: PathBuf::from("/projects/archive"),
+                    ssh_host: None,
+                    branch: "main".into(),
+                    sync_counts: None,
+                    agents: vec![agent(801, false), agent(802, false), agent(803, true)],
+                },
+                ProjectView {
+                    path: PathBuf::from("/projects/keep"),
+                    ssh_host: None,
+                    branch: "main".into(),
+                    sync_counts: None,
+                    agents: vec![agent(804, false)],
+                },
+            ];
+            this.sidebar_order = vec![801, 802, 803, 804];
+            let first = SessionLocation {
+                project_index: 0,
+                agent_index: 0,
+            };
+            let other = SessionLocation {
+                project_index: 1,
+                agent_index: 0,
+            };
+            this.set_view(WorkspaceView::Conversation(first), window, cx);
+            this.archive_project(0, window, cx);
+            assert!(
+                this.projects[0]
+                    .agents
+                    .iter()
+                    .all(|agent| agent.config.archived)
+            );
+            assert!(!this.projects[1].agents[0].config.archived);
+            assert_eq!(this.view, WorkspaceView::Conversation(other));
+            assert_eq!(this.sidebar_results(""), vec![other]);
+            let saved: Config =
+                serde_json::from_slice(&serde_json::to_vec(&this.config()).unwrap()).unwrap();
+            assert!(saved.projects[0].agents.iter().all(|agent| agent.archived));
+            assert_eq!(saved.projects[0].agents.len(), 3);
+
+            this.archive_project(0, window, cx);
+            assert_eq!(this.view, WorkspaceView::Conversation(other));
+            this.set_view(this.view.toggle_archive(), window, cx);
+            assert_eq!(this.sidebar_results("").len(), 3);
+            this.archive_project(1, window, cx);
+            assert_eq!(this.view, WorkspaceView::Archive { return_to: None });
+            assert_eq!(this.sidebar_results("").len(), 4);
+            this.set_view(this.view.toggle_archive(), window, cx);
+            assert_eq!(this.view, WorkspaceView::Empty);
+            assert!(this.sidebar_results("").is_empty());
         });
     });
 }

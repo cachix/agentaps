@@ -494,6 +494,21 @@ impl Workspace {
                         })
                         .child(name),
                 )
+                .when(!archive_view && has_sessions, |header| {
+                    header.child(
+                        sidebar_action(palette, false)
+                            .id(("project-archive", project_index))
+                            .invisible()
+                            .group_hover(row_group.clone(), |style| style.visible())
+                            .child(Icon::new(IconName::Inbox).size(px(14.)))
+                            .tooltip(|window, cx| Tooltip::new("Archive project").build(window, cx))
+                            .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
+                            .on_click(cx.listener(move |this, _, window, cx| {
+                                cx.stop_propagation();
+                                this.archive_project(project_index, window, cx);
+                            })),
+                    )
+                })
                 .child(
                     div()
                         .flex_1()

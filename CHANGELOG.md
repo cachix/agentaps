@@ -6,6 +6,8 @@ Notable changes to Agentaps are recorded here.
 
 ### Added
 
+- Archive all sessions in a project with an Archive project button immediately after its sidebar name, separated from New session at the right edge to reduce accidental clicks. Sessions remain available in the archive for restoration.
+
 - Clone a Git repository from New into a chosen local folder, with a chooser styled like Choose Folder, an editable folder name, progress, cancellation, and the existing agent picker after cloning. Failed or cancelled clones remove their incomplete folder, and existing folders are preserved.
 
 - Edit queued messages with their Edit button or by pressing Up in an empty composer. Editing removes the original from the queue and restores its text and attachments for resubmission.

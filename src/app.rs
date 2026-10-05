@@ -1842,6 +1842,28 @@ impl Workspace {
         }
     }
 
+    fn archive_project(
+        &mut self,
+        project_index: usize,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        // Archive the displayed session last so its replacement is outside this project.
+        let current = self
+            .view
+            .return_to()
+            .filter(|session| session.project_index == project_index);
+        for agent_index in 0..self.projects[project_index].agents.len() {
+            if current.is_some_and(|session| session.agent_index == agent_index) {
+                continue;
+            }
+            self.set_archived(project_index, agent_index, true, window, cx);
+        }
+        if let Some(session) = current {
+            self.set_archived(project_index, session.agent_index, true, window, cx);
+        }
+    }
+
     fn set_archived(
         &mut self,
         project_index: usize,
