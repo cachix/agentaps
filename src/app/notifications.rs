@@ -62,14 +62,13 @@ impl Workspace {
         }
         let project = &self.projects[location.project_index];
         let agent = &project.agents[location.agent_index];
+        let project_name = project.path.file_name().map_or_else(
+            || project.path.display().to_string(),
+            |name| name.to_string_lossy().into_owned(),
+        );
         let title = agent.config.session_title().map_or_else(
-            || {
-                project.path.file_name().map_or_else(
-                    || project.path.display().to_string(),
-                    |name| name.to_string_lossy().into_owned(),
-                )
-            },
-            str::to_owned,
+            || project_name.clone(),
+            |session_title| format!("{project_name}: {session_title}"),
         );
         cx.show_system_notification(SystemNotification {
             tag: agent_id.to_string().into(),

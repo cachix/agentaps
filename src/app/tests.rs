@@ -1384,7 +1384,13 @@ fn verify_notifications_for_background_sessions(
     );
     finish(402, cx);
     let notification = cx.shown_system_notifications().last().cloned().unwrap();
-    assert_eq!(notification.title.as_ref(), "Session 402");
+    assert_eq!(
+        notification.title.as_ref(),
+        format!(
+            "{}: Session 402",
+            path.file_name().unwrap().to_string_lossy()
+        )
+    );
     assert_eq!(notification.body.as_ref(), "Finished");
 
     cx.simulate_system_notification_response(gpui_kit::SystemNotificationResponse {

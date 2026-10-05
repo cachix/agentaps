@@ -13,6 +13,7 @@ Notable changes to Agentaps are recorded here.
 ### Changed
 
 - The folder picker opens with Cmd+Shift+N / Ctrl+Shift+N, alongside Cmd+N / Ctrl+N for a new session, instead of Cmd+P / Ctrl+P.
+- Desktop notifications include the project name alongside the session title so background sessions are easier to identify.
 
 ## [0.5.0] - 2026-10-05
 
