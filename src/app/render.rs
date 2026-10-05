@@ -581,6 +581,15 @@ impl Render for Workspace {
                     workspace.child(sidebar).child(divider)
                 })
                 .child(chat)
+                .when(self.sidebar_hidden, |workspace| {
+                    workspace.child(
+                        div()
+                            .absolute()
+                            .bottom(rems(0.5))
+                            .left(rems(0.5))
+                            .child(self.render_show_sidebar(cx)),
+                    )
+                })
                 .when(project_agent_dialog, |workspace| {
                     self.render_picker(workspace, cx)
                 }),

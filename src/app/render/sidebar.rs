@@ -77,6 +77,21 @@ fn sync_action(counts: Option<(usize, usize)>) -> Option<crate::git_sync::SyncAc
 }
 
 impl Workspace {
+    pub(super) fn render_show_sidebar(&self, cx: &mut Context<Self>) -> gpui_kit::Stateful<Div> {
+        sidebar_action(theme::palette(cx), false)
+            .id("show-sidebar")
+            .size(rems(1.75))
+            .child(Icon::new(IconName::PanelLeftOpen).size(px(14.)))
+            .tooltip(|window, cx| {
+                Tooltip::new("Show sidebar")
+                    .action(&ToggleSidebar, None)
+                    .build(window, cx)
+            })
+            .on_click(
+                cx.listener(|this, _, window, cx| this.toggle_sidebar(&ToggleSidebar, window, cx)),
+            )
+    }
+
     fn render_sync_button(
         project_index: usize,
         action: Option<crate::git_sync::SyncAction>,
