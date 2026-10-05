@@ -77,6 +77,21 @@ fn sync_action(counts: Option<(usize, usize)>) -> Option<crate::git_sync::SyncAc
 }
 
 impl Workspace {
+    pub(super) fn render_show_sidebar(&self, cx: &mut Context<Self>) -> gpui_kit::Stateful<Div> {
+        sidebar_action(theme::palette(cx), false)
+            .id("show-sidebar")
+            .size(rems(1.75))
+            .child(Icon::new(IconName::PanelLeftOpen).size(px(14.)))
+            .tooltip(|window, cx| {
+                Tooltip::new("Show sidebar")
+                    .action(&ToggleSidebar, None)
+                    .build(window, cx)
+            })
+            .on_click(
+                cx.listener(|this, _, window, cx| this.toggle_sidebar(&ToggleSidebar, window, cx)),
+            )
+    }
+
     fn render_sync_button(
         project_index: usize,
         action: Option<crate::git_sync::SyncAction>,
@@ -673,10 +688,28 @@ impl Workspace {
                     .gap_1()
                     .child(
                         sidebar_action(palette, false)
+                            .id("hide-sidebar")
+                            .size(rems(1.75))
+                            .child(Icon::new(IconName::PanelLeftClose).size(px(14.)))
+                            .tooltip(|window, cx| {
+                                Tooltip::new("Hide sidebar")
+                                    .action(&ToggleSidebar, None)
+                                    .build(window, cx)
+                            })
+                            .on_click(cx.listener(|this, _, window, cx| {
+                                this.toggle_sidebar(&ToggleSidebar, window, cx)
+                            })),
+                    )
+                    .child(
+                        sidebar_action(palette, false)
                             .id("open-settings")
                             .size(rems(1.75))
                             .child(Icon::new(IconName::Settings).size(px(14.)))
-                            .tooltip(|window, cx| Tooltip::new("Settings").build(window, cx))
+                            .tooltip(|window, cx| {
+                                Tooltip::new("Settings")
+                                    .action(&OpenSettings, None)
+                                    .build(window, cx)
+                            })
                             .on_click(
                                 cx.listener(|this, _, window, cx| this.open_settings(window, cx)),
                             ),
@@ -727,7 +760,11 @@ impl Workspace {
                                 palette.color(if new_session_view { TEXT } else { MUTED }),
                             ))
                             .child("New")
-                            .tooltip(|window, cx| Tooltip::new("Open folder").build(window, cx))
+                            .tooltip(|window, cx| {
+                                Tooltip::new("New session in folder")
+                                    .action(&QuickOpen, None)
+                                    .build(window, cx)
+                            })
                             .on_click(cx.listener(|this, _, window, cx| {
                                 this.open_picker(PickerStep::Folders, window, cx)
                             })),

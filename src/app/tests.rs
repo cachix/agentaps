@@ -428,6 +428,7 @@ fn zoom_shortcuts_and_menu_actions_change_the_font_scale(cx: &mut gpui_kit::Test
             KeyBinding::new("cmd--", ZoomOut, None),
             KeyBinding::new("cmd-0", ZoomReset, None),
         ]);
+        cx.bind_keys(key_bindings());
     });
     let (workspace, cx) = cx.add_window_view(Workspace::new);
     // The zoom must land on the theme: in the real app the gpui-component
@@ -648,6 +649,7 @@ fn zoom_shortcuts_and_menu_actions_change_the_font_scale(cx: &mut gpui_kit::Test
     verify_project_session_sidebar(&restored, cx);
     verify_project_agent_dialog(&restored, cx);
     verify_inline_session_renaming(&restored, cx);
+    verify_workspace_shortcuts(&restored, cx);
     verify_settings_apply_and_persist(&restored, temp.path(), cx);
     verify_notifications_for_background_sessions(&restored, temp.path(), cx);
     verify_repository_cloning(&restored, temp.path(), cx);
@@ -774,6 +776,155 @@ fn verify_resets_and_folder_moves_preserve_harness_references(
             this.view = WorkspaceView::Empty;
             this.persistence.dirty = false;
         })
+    });
+}
+
+fn verify_workspace_shortcuts(workspace: &Entity<Workspace>, cx: &mut gpui_kit::VisualTestContext) {
+    let primary = if cfg!(target_os = "macos") {
+        "cmd"
+    } else {
+        "ctrl"
+    };
+    let displayed = |cx: &mut gpui_kit::VisualTestContext| {
+        cx.update(|_, cx| {
+            let this = workspace.read(cx);
+            this.view.displayed_session().map(|session| {
+                this.projects[session.project_index].agents[session.agent_index]
+                    .config
+                    .id
+            })
+        })
+    };
+    cx.update(|window, cx| {
+        workspace.update(cx, |this, cx| {
+            let agents = [401, 402, 403, 404].map(|id| {
+                let mut agent = test_agent(ProtocolVersion::V2);
+                agent.config.id = id;
+                agent.config.command.clear();
+                agent.config.archived = id == 404;
+                AgentView {
+                    controller: agent,
+                    elicitations: Vec::new(),
+                }
+            });
+            this.projects = vec![ProjectView {
+                path: PathBuf::from("."),
+                ssh_host: None,
+                branch: String::new(),
+                sync_counts: None,
+                agents: agents.into(),
+            }];
+            this.sidebar_order = vec![403, 401, 404, 402];
+            this.sidebar_hidden = false;
+            this.set_view(
+                WorkspaceView::Conversation(SessionLocation {
+                    project_index: 0,
+                    agent_index: 0,
+                }),
+                window,
+                cx,
+            );
+            this.conversation
+                .composer
+                .update(cx, |input, cx| input.focus(window, cx));
+        });
+    });
+
+    // Session cycling follows sidebar order, skips archived sessions, and wraps.
+    cx.dispatch_action(NextSession);
+    assert_eq!(displayed(cx), Some(402));
+    cx.simulate_keystrokes("ctrl-tab");
+    assert_eq!(
+        displayed(cx),
+        Some(403),
+        "Ctrl+Tab should wrap to the first session"
+    );
+    cx.dispatch_action(PreviousSession);
+    assert_eq!(displayed(cx), Some(402));
+
+    // Numbered shortcuts pick sidebar positions and ignore positions past the end.
+    cx.simulate_keystrokes(&format!("{primary}-1"));
+    assert_eq!(displayed(cx), Some(403));
+    cx.simulate_keystrokes(&format!("{primary}-2"));
+    assert_eq!(displayed(cx), Some(401));
+    cx.simulate_keystrokes(&format!("{primary}-9"));
+    assert_eq!(displayed(cx), Some(401));
+    cx.simulate_keystrokes(&format!("{primary}-3"));
+    assert_eq!(displayed(cx), Some(402));
+    cx.simulate_keystrokes(&format!("{primary}-5"));
+    assert_eq!(
+        displayed(cx),
+        Some(402),
+        "missing positions should be ignored"
+    );
+
+    // The sidebar shortcut works from the focused composer and persists.
+    cx.simulate_keystrokes(&format!("{primary}-b"));
+    assert!(cx.update(|_, cx| workspace.read(cx).sidebar_hidden));
+    cx.update(|_, cx| workspace.update(cx, |this, _| this.persistence.wait().unwrap()));
+    assert!(config::load().unwrap().0.sidebar_hidden);
+    cx.dispatch_action(SearchSessions);
+    cx.update(|window, cx| {
+        let this = workspace.read(cx);
+        assert!(!this.sidebar_hidden, "searching should reveal the sidebar");
+        assert!(
+            this.sidebar_search
+                .read(cx)
+                .focus_handle(cx)
+                .is_focused(window)
+        );
+    });
+
+    // New Session repeats the displayed session's agent in the same project.
+    cx.simulate_keystrokes(&format!("{primary}-n"));
+    cx.update(|_, cx| {
+        let this = workspace.read(cx);
+        assert_eq!(this.projects[0].agents.len(), 5);
+        assert_eq!(
+            this.view.displayed_session(),
+            Some(SessionLocation {
+                project_index: 0,
+                agent_index: 4,
+            })
+        );
+    });
+    cx.update(|window, cx| {
+        workspace.update(cx, |this, cx| {
+            this.set_view(WorkspaceView::Empty, window, cx)
+        })
+    });
+    cx.simulate_keystrokes(&format!("{primary}-shift-n"));
+    assert!(cx.update(|_, cx| matches!(
+        workspace.read(cx).view,
+        WorkspaceView::NewSession {
+            step: PickerStep::Folders,
+            ..
+        }
+    )));
+    cx.update(|window, cx| {
+        workspace.update(cx, |this, cx| {
+            this.set_view(WorkspaceView::Empty, window, cx)
+        })
+    });
+    cx.dispatch_action(NewSession);
+    assert!(cx.update(|_, cx| matches!(
+        workspace.read(cx).view,
+        WorkspaceView::NewSession {
+            step: PickerStep::Folders,
+            ..
+        }
+    )));
+
+    cx.dispatch_action(OpenSettings);
+    assert!(cx.update(|_, cx| workspace.read(cx).settings.is_some()));
+    cx.dispatch_action(NextSession);
+    cx.update(|_, cx| {
+        let this = workspace.read(cx);
+        assert!(
+            this.settings.is_none(),
+            "switching sessions should leave settings"
+        );
+        assert!(this.view.displayed_session().is_some());
     });
 }
 

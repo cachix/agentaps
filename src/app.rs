@@ -137,7 +137,28 @@ fn move_sidebar_id<T: Copy + PartialEq>(order: &mut Vec<T>, dragged: T, target: 
     true
 }
 
-actions!(workspace, [QuickOpen, ZoomIn, ZoomOut, ZoomReset, Quit]);
+actions!(
+    workspace,
+    [
+        QuickOpen,
+        NewSession,
+        OpenSettings,
+        ToggleSidebar,
+        ToggleDiff,
+        SearchSessions,
+        NextSession,
+        PreviousSession,
+        ZoomIn,
+        ZoomOut,
+        ZoomReset,
+        Minimize,
+        ZoomWindow,
+        Hide,
+        HideOthers,
+        ShowAll,
+        Quit,
+    ]
+);
 
 // Font sizes of the gpui-component dark theme that theme::apply installs.
 // Zoom scales the UI by editing these on the global Theme, because the
@@ -509,6 +530,7 @@ struct Workspace {
     collapsed_projects: HashSet<usize>,
     project_order: Vec<usize>,
     sidebar_fraction: f32,
+    sidebar_hidden: bool,
     font_scale: f32,
     theme_choice: crate::appearance::Choice,
     send_key: SendKey,
@@ -1101,6 +1123,7 @@ impl Workspace {
             collapsed_projects: HashSet::new(),
             project_order: Vec::new(),
             sidebar_fraction,
+            sidebar_hidden: config.sidebar_hidden,
             font_scale,
             theme_choice,
             send_key: config.send_key,
@@ -1357,6 +1380,7 @@ impl Workspace {
             sidebar_order: self.sidebar_order.clone(),
             nested_sidebar: self.nested_sidebar,
             sidebar_fraction: self.sidebar_fraction,
+            sidebar_hidden: self.sidebar_hidden,
             font_scale: self.font_scale,
             theme: self.theme_choice,
             send_key: self.send_key,
@@ -1538,6 +1562,11 @@ impl Workspace {
 
     fn sidebar_results(&self, query: &str) -> Vec<SessionLocation> {
         let archive_view = matches!(self.view, WorkspaceView::Archive { .. });
+        self.ordered_sessions(query, archive_view)
+    }
+
+    /// Sessions matching `query` in the order the sidebar lists them.
+    fn ordered_sessions(&self, query: &str, archive_view: bool) -> Vec<SessionLocation> {
         let mut matches = self
             .projects
             .iter()
@@ -1974,6 +2003,140 @@ impl Workspace {
 
     fn quick_open(&mut self, _: &QuickOpen, window: &mut Window, cx: &mut Context<Self>) {
         self.open_picker(PickerStep::Folders, window, cx);
+    }
+
+    /// Starts another session with the displayed session's agent and
+    /// project, or opens the folder picker when no session is displayed.
+    fn new_session(&mut self, _: &NewSession, window: &mut Window, cx: &mut Context<Self>) {
+        if self.settings.is_some() {
+            self.close_settings(window, cx);
+        }
+        let Some(SessionLocation {
+            project_index,
+            agent_index,
+        }) = self.view.return_to()
+        else {
+            self.open_picker(PickerStep::Folders, window, cx);
+            return;
+        };
+        let agent = &self.projects[project_index].agents[agent_index];
+        let command = agent.config.command.clone();
+        let name = agent.config.display_name.clone();
+        self.start_agent_for_project(project_index, command, name, window, cx);
+    }
+
+    fn open_settings_action(
+        &mut self,
+        _: &OpenSettings,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        if self.settings.is_none() {
+            self.open_settings(window, cx);
+        }
+    }
+
+    fn toggle_sidebar(&mut self, _: &ToggleSidebar, window: &mut Window, cx: &mut Context<Self>) {
+        self.sidebar_hidden = !self.sidebar_hidden;
+        if self.sidebar_hidden
+            && self
+                .sidebar_search
+                .read(cx)
+                .focus_handle(cx)
+                .is_focused(window)
+        {
+            self.conversation
+                .composer
+                .update(cx, |input, cx| input.focus(window, cx));
+        }
+        self.persist();
+        cx.notify();
+    }
+
+    fn toggle_diff(&mut self, _: &ToggleDiff, _: &mut Window, cx: &mut Context<Self>) {
+        if self.settings.is_some() {
+            return;
+        }
+        let Some(session) = self.view.displayed_session() else {
+            return;
+        };
+        if self.diff.visible {
+            self.close_diff();
+            cx.notify();
+        } else {
+            self.open_diff(session.project_index, cx);
+        }
+    }
+
+    fn search_sessions(&mut self, _: &SearchSessions, window: &mut Window, cx: &mut Context<Self>) {
+        if self.settings.is_some() {
+            self.close_settings(window, cx);
+        }
+        self.sidebar_hidden = false;
+        self.sidebar_search
+            .update(cx, |input, cx| input.focus(window, cx));
+        cx.notify();
+    }
+
+    fn next_session(&mut self, _: &NextSession, window: &mut Window, cx: &mut Context<Self>) {
+        self.cycle_session(true, window, cx);
+    }
+
+    fn previous_session(
+        &mut self,
+        _: &PreviousSession,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        self.cycle_session(false, window, cx);
+    }
+
+    fn activate_session_slot(
+        &mut self,
+        action: &ActivateSession,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        if let Some(&location) = self.ordered_sessions("", false).get(action.0) {
+            self.show_session(location, window, cx);
+        }
+    }
+
+    fn show_session(
+        &mut self,
+        location: SessionLocation,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        if self.settings.is_some() {
+            self.close_settings(window, cx);
+        }
+        self.set_view(WorkspaceView::Conversation(location), window, cx);
+        self.conversation
+            .composer
+            .update(cx, |input, cx| input.focus(window, cx));
+        cx.notify();
+    }
+
+    /// Moves to the adjacent active session in sidebar order, wrapping at
+    /// either end.
+    fn cycle_session(&mut self, forward: bool, window: &mut Window, cx: &mut Context<Self>) {
+        let sessions = self.ordered_sessions("", false);
+        if sessions.is_empty() {
+            return;
+        }
+        let count = sessions.len();
+        let current = self
+            .view
+            .return_to()
+            .and_then(|location| sessions.iter().position(|other| *other == location));
+        let next = match (current, forward) {
+            (Some(index), true) => (index + 1) % count,
+            (Some(index), false) => (index + count - 1) % count,
+            (None, true) => 0,
+            (None, false) => count - 1,
+        };
+        self.show_session(sessions[next], window, cx);
     }
 
     fn zoom_in(&mut self, _: &ZoomIn, window: &mut Window, cx: &mut Context<Self>) {
@@ -2419,6 +2582,69 @@ impl Drop for Workspace {
     }
 }
 
+/// Shows the session at this zero-based position in the sidebar.
+#[derive(gpui_kit::Action, Clone, PartialEq, Eq, serde::Deserialize)]
+#[action(namespace = workspace, no_json)]
+struct ActivateSession(usize);
+
+const SESSION_SLOTS: usize = 9;
+
+fn key_bindings() -> Vec<KeyBinding> {
+    let primary = if cfg!(target_os = "macos") {
+        "cmd"
+    } else {
+        "ctrl"
+    };
+    let session_slots = (0..SESSION_SLOTS).map(|slot| {
+        KeyBinding::new(
+            &format!("{primary}-{}", slot + 1),
+            ActivateSession(slot),
+            None,
+        )
+    });
+    let mut bindings = if cfg!(target_os = "macos") {
+        vec![
+            KeyBinding::new("cmd-n", NewSession, None),
+            KeyBinding::new("cmd-shift-n", QuickOpen, None),
+            KeyBinding::new("cmd-,", OpenSettings, None),
+            KeyBinding::new("cmd-b", ToggleSidebar, None),
+            KeyBinding::new("cmd-shift-d", ToggleDiff, None),
+            KeyBinding::new("cmd-k", SearchSessions, None),
+            KeyBinding::new("cmd-}", NextSession, None),
+            KeyBinding::new("cmd-{", PreviousSession, None),
+            KeyBinding::new("ctrl-tab", NextSession, None),
+            KeyBinding::new("ctrl-shift-tab", PreviousSession, None),
+            KeyBinding::new("cmd-=", ZoomIn, None),
+            KeyBinding::new("cmd-+", ZoomIn, None),
+            KeyBinding::new("cmd--", ZoomOut, None),
+            KeyBinding::new("cmd-0", ZoomReset, None),
+            KeyBinding::new("cmd-m", Minimize, None),
+            KeyBinding::new("cmd-h", Hide, None),
+            KeyBinding::new("cmd-alt-h", HideOthers, None),
+            KeyBinding::new("cmd-q", Quit, None),
+        ]
+    } else {
+        vec![
+            KeyBinding::new("ctrl-n", NewSession, None),
+            KeyBinding::new("ctrl-shift-n", QuickOpen, None),
+            KeyBinding::new("ctrl-,", OpenSettings, None),
+            KeyBinding::new("ctrl-b", ToggleSidebar, None),
+            KeyBinding::new("ctrl-shift-d", ToggleDiff, None),
+            KeyBinding::new("ctrl-k", SearchSessions, None),
+            KeyBinding::new("ctrl-tab", NextSession, None),
+            KeyBinding::new("ctrl-shift-tab", PreviousSession, None),
+            KeyBinding::new("ctrl-pagedown", NextSession, None),
+            KeyBinding::new("ctrl-pageup", PreviousSession, None),
+            KeyBinding::new("ctrl-=", ZoomIn, None),
+            KeyBinding::new("ctrl-+", ZoomIn, None),
+            KeyBinding::new("ctrl--", ZoomOut, None),
+            KeyBinding::new("ctrl-0", ZoomReset, None),
+        ]
+    };
+    bindings.extend(session_slots);
+    bindings
+}
+
 pub(crate) fn run() {
     gpui_kit::application()
         .with_assets(AppAssets)
@@ -2433,36 +2659,57 @@ pub(crate) fn run() {
                 },
                 Some("Input"),
             )]);
+            cx.bind_keys(key_bindings());
             #[cfg(target_os = "macos")]
             {
-                cx.bind_keys([
-                    KeyBinding::new("cmd-p", QuickOpen, None),
-                    KeyBinding::new("cmd-=", ZoomIn, None),
-                    KeyBinding::new("cmd-+", ZoomIn, None),
-                    KeyBinding::new("cmd--", ZoomOut, None),
-                    KeyBinding::new("cmd-0", ZoomReset, None),
-                    KeyBinding::new("cmd-q", Quit, None),
-                ]);
+                use gpui_kit::component::input::{Copy, Cut, Paste, Redo, SelectAll, Undo};
+                use gpui_kit::{Menu, MenuItem, OsAction};
                 cx.on_action(|_: &Quit, cx| cx.quit());
+                cx.on_action(|_: &Hide, cx| cx.hide());
+                cx.on_action(|_: &HideOthers, cx| cx.hide_other_apps());
+                cx.on_action(|_: &ShowAll, cx| cx.unhide_other_apps());
                 cx.set_menus(vec![
-                    gpui_kit::Menu::new("Agentaps")
-                        .items([gpui_kit::MenuItem::action("Quit Agentaps", Quit)]),
-                    gpui_kit::Menu::new("View").items([
-                        gpui_kit::MenuItem::action("Zoom In", ZoomIn),
-                        gpui_kit::MenuItem::action("Zoom Out", ZoomOut),
-                        gpui_kit::MenuItem::separator(),
-                        gpui_kit::MenuItem::action("Reset Zoom", ZoomReset),
+                    Menu::new("Agentaps").items([
+                        MenuItem::action("Settings…", OpenSettings),
+                        MenuItem::separator(),
+                        MenuItem::action("Hide Agentaps", Hide),
+                        MenuItem::action("Hide Others", HideOthers),
+                        MenuItem::action("Show All", ShowAll),
+                        MenuItem::separator(),
+                        MenuItem::action("Quit Agentaps", Quit),
+                    ]),
+                    Menu::new("File").items([
+                        MenuItem::action("New Session", NewSession),
+                        MenuItem::action("New Session in Folder…", QuickOpen),
+                    ]),
+                    Menu::new("Edit").items([
+                        MenuItem::os_action("Undo", Undo, OsAction::Undo),
+                        MenuItem::os_action("Redo", Redo, OsAction::Redo),
+                        MenuItem::separator(),
+                        MenuItem::os_action("Cut", Cut, OsAction::Cut),
+                        MenuItem::os_action("Copy", Copy, OsAction::Copy),
+                        MenuItem::os_action("Paste", Paste, OsAction::Paste),
+                        MenuItem::os_action("Select All", SelectAll, OsAction::SelectAll),
+                    ]),
+                    Menu::new("View").items([
+                        MenuItem::action("Toggle Sidebar", ToggleSidebar),
+                        MenuItem::action("Toggle Diff", ToggleDiff),
+                        MenuItem::action("Search Sessions", SearchSessions),
+                        MenuItem::separator(),
+                        MenuItem::action("Zoom In", ZoomIn),
+                        MenuItem::action("Zoom Out", ZoomOut),
+                        MenuItem::separator(),
+                        MenuItem::action("Reset Zoom", ZoomReset),
+                    ]),
+                    Menu::new("Window").items([
+                        MenuItem::action("Minimize", Minimize),
+                        MenuItem::action("Zoom", ZoomWindow),
+                        MenuItem::separator(),
+                        MenuItem::action("Next Session", NextSession),
+                        MenuItem::action("Previous Session", PreviousSession),
                     ]),
                 ]);
             }
-            #[cfg(not(target_os = "macos"))]
-            cx.bind_keys([
-                KeyBinding::new("ctrl-p", QuickOpen, None),
-                KeyBinding::new("ctrl-=", ZoomIn, None),
-                KeyBinding::new("ctrl-+", ZoomIn, None),
-                KeyBinding::new("ctrl--", ZoomOut, None),
-                KeyBinding::new("ctrl-0", ZoomReset, None),
-            ]);
             if let Ok((config, _)) = config::load() {
                 crate::theming::set_source(config.theme_source, cx);
             }
@@ -2481,27 +2728,76 @@ pub(crate) fn run() {
                 },
             )
             .expect("Could not open GPUI window");
-            // App-level handlers so View menu items and shortcuts reach the
+            // App-level handlers so menu items and shortcuts reach the
             // workspace regardless of which element holds focus.
             let (window_handle, workspace) = window_handle;
-            fn on_zoom<A: gpui_kit::Action>(
+            fn on_workspace_action<A: gpui_kit::Action>(
                 window_handle: gpui_kit::AnyWindowHandle,
                 workspace: Entity<Workspace>,
-                zoom: fn(&mut Workspace, &A, &mut Window, &mut Context<Workspace>),
+                handler: fn(&mut Workspace, &A, &mut Window, &mut Context<Workspace>),
                 cx: &mut App,
             ) {
                 cx.on_action(move |action: &A, cx| {
                     let workspace = workspace.clone();
                     window_handle
                         .update(cx, |_, window, cx| {
-                            workspace.update(cx, |this, cx| zoom(this, action, window, cx))
+                            workspace.update(cx, |this, cx| handler(this, action, window, cx))
                         })
                         .ok();
                 });
             }
-            on_zoom(window_handle, workspace.clone(), Workspace::zoom_in, cx);
-            on_zoom(window_handle, workspace.clone(), Workspace::zoom_out, cx);
-            on_zoom(window_handle, workspace, Workspace::zoom_reset, cx);
+            on_workspace_action(window_handle, workspace.clone(), Workspace::quick_open, cx);
+            on_workspace_action(window_handle, workspace.clone(), Workspace::new_session, cx);
+            on_workspace_action(
+                window_handle,
+                workspace.clone(),
+                Workspace::open_settings_action,
+                cx,
+            );
+            on_workspace_action(
+                window_handle,
+                workspace.clone(),
+                Workspace::toggle_sidebar,
+                cx,
+            );
+            on_workspace_action(window_handle, workspace.clone(), Workspace::toggle_diff, cx);
+            on_workspace_action(
+                window_handle,
+                workspace.clone(),
+                Workspace::search_sessions,
+                cx,
+            );
+            on_workspace_action(
+                window_handle,
+                workspace.clone(),
+                Workspace::next_session,
+                cx,
+            );
+            on_workspace_action(
+                window_handle,
+                workspace.clone(),
+                Workspace::previous_session,
+                cx,
+            );
+            on_workspace_action(
+                window_handle,
+                workspace.clone(),
+                Workspace::activate_session_slot,
+                cx,
+            );
+            on_workspace_action(window_handle, workspace.clone(), Workspace::zoom_in, cx);
+            on_workspace_action(window_handle, workspace.clone(), Workspace::zoom_out, cx);
+            on_workspace_action(window_handle, workspace, Workspace::zoom_reset, cx);
+            cx.on_action(move |_: &Minimize, cx| {
+                window_handle
+                    .update(cx, |_, window, _| window.minimize_window())
+                    .ok();
+            });
+            cx.on_action(move |_: &ZoomWindow, cx| {
+                window_handle
+                    .update(cx, |_, window, _| window.zoom_window())
+                    .ok();
+            });
             cx.activate(true);
         });
 }

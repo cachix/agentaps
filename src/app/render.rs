@@ -362,7 +362,11 @@ impl Workspace {
     ) -> gpui_kit::Stateful<Div> {
         let palette = theme::palette(cx);
         let viewport = window.viewport_size();
-        let sidebar_width = (f32::from(viewport.width) * self.sidebar_fraction).max(180.);
+        let sidebar_width = if self.sidebar_hidden {
+            0.
+        } else {
+            (f32::from(viewport.width) * self.sidebar_fraction).max(180.)
+        };
         let available = (f32::from(viewport.width) - sidebar_width - 70.)
             .min(f32::from(viewport.height) - 230.)
             .clamp(80., 640.);
@@ -481,6 +485,14 @@ impl Render for Workspace {
             .flex()
             .bg(palette.color(BG))
             .on_action(cx.listener(Self::quick_open))
+            .on_action(cx.listener(Self::new_session))
+            .on_action(cx.listener(Self::open_settings_action))
+            .on_action(cx.listener(Self::toggle_sidebar))
+            .on_action(cx.listener(Self::toggle_diff))
+            .on_action(cx.listener(Self::search_sessions))
+            .on_action(cx.listener(Self::next_session))
+            .on_action(cx.listener(Self::previous_session))
+            .on_action(cx.listener(Self::activate_session_slot))
             .on_action(cx.listener(Self::zoom_in))
             .on_action(cx.listener(Self::zoom_out))
             .on_action(cx.listener(Self::zoom_reset))
@@ -530,7 +542,7 @@ impl Render for Workspace {
             .provider_prompt
             .as_ref()
             .map(|error| self.render_mobile_provider(error, cx));
-        let sidebar = self.render_sidebar(window, cx);
+        let sidebar = (!self.sidebar_hidden).then(|| self.render_sidebar(window, cx));
         let divider = div()
             .id("sidebar-divider")
             .w(px(6.))
@@ -565,9 +577,19 @@ impl Render for Workspace {
                 .size_full()
                 .relative()
                 .flex()
-                .child(sidebar)
-                .child(divider)
+                .when_some(sidebar, |workspace, sidebar| {
+                    workspace.child(sidebar).child(divider)
+                })
                 .child(chat)
+                .when(self.sidebar_hidden, |workspace| {
+                    workspace.child(
+                        div()
+                            .absolute()
+                            .bottom(rems(0.5))
+                            .left(rems(0.5))
+                            .child(self.render_show_sidebar(cx)),
+                    )
+                })
                 .when(project_agent_dialog, |workspace| {
                     self.render_picker(workspace, cx)
                 }),
