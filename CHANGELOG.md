@@ -4,6 +4,8 @@ Notable changes to Agentaps are recorded here.
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-10-05
+
 ### Added
 
 - Archive all sessions in a project with an Archive project button immediately after its sidebar name, separated from New session at the right edge to reduce accidental clicks. Sessions remain available in the archive for restoration.
@@ -303,7 +305,8 @@ Notable changes to Agentaps are recorded here.
 - Added chat controls for queued messages, stopping turns, resetting agent context, and completing agent slash commands.
 - Added ACP form questions with answer, decline, and cancel actions.
 
-[Unreleased]: https://github.com/domenkozar/agentaps/compare/v0.4.0...HEAD
+[Unreleased]: https://github.com/domenkozar/agentaps/compare/v0.5.0...HEAD
+[0.5.0]: https://github.com/domenkozar/agentaps/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/domenkozar/agentaps/compare/v0.3.1...v0.4.0
 [0.3.1]: https://github.com/domenkozar/agentaps/compare/v0.3.0...v0.3.1
 [0.3.0]: https://github.com/domenkozar/agentaps/compare/v0.2.1...v0.3.0
