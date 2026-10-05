@@ -213,6 +213,8 @@ pub struct Config {
     pub nested_sidebar: bool,
     #[serde(default = "default_sidebar_fraction")]
     pub sidebar_fraction: f32,
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub sidebar_hidden: bool,
     #[serde(default = "default_font_scale")]
     pub font_scale: f32,
     #[serde(default, deserialize_with = "known_or_default")]
@@ -342,6 +344,7 @@ impl Default for Config {
             sidebar_order: Vec::new(),
             nested_sidebar: default_nested_sidebar(),
             sidebar_fraction: default_sidebar_fraction(),
+            sidebar_hidden: false,
             font_scale: default_font_scale(),
             send_key: SendKey::default(),
             reduced_motion: false,
@@ -656,6 +659,7 @@ mod tests {
             sidebar_order: vec![3, 1, 2],
             nested_sidebar: false,
             sidebar_fraction: 0.32,
+            sidebar_hidden: true,
             font_scale: 1.25,
             theme: crate::appearance::Choice::SolarizedLight,
             send_key: SendKey::ShiftEnter,
@@ -680,6 +684,7 @@ mod tests {
         assert_eq!(restored.sidebar_order, vec![3, 1, 2]);
         assert!(!restored.nested_sidebar);
         assert_eq!(restored.sidebar_fraction, 0.32);
+        assert!(restored.sidebar_hidden);
         assert_eq!(restored.font_scale, 1.25);
         assert_eq!(restored.theme, crate::appearance::Choice::SolarizedLight);
         assert_eq!(restored.send_key, SendKey::ShiftEnter);

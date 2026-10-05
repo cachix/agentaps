@@ -309,13 +309,12 @@ impl Workspace {
                                     )
                             }),
                     )
-                    .on_click(self.pane_listener(cx, move |this, _, _, cx| {
-                        if this.diff.visible {
-                            this.close_diff();
-                            cx.notify();
-                        } else {
-                            this.open_diff(project_index, cx);
-                        }
+                    .tooltip(|window, cx| {
+                        let tooltip = Tooltip::new("Toggle diff").action(&ToggleDiff, None);
+                        tooltip.build(window, cx)
+                    })
+                    .on_click(self.pane_listener(cx, |this, _, window, cx| {
+                        this.toggle_diff(&ToggleDiff, window, cx);
                     })),
             )
             .child(session_menu);

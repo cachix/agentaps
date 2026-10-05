@@ -4,6 +4,15 @@ Notable changes to Agentaps are recorded here.
 
 ## [Unreleased]
 
+### Added
+
+- Keyboard shortcuts for common actions: New Session (Cmd+N / Ctrl+N) starts another session with the current agent and project, New Session in Folder (Cmd+Shift+N / Ctrl+Shift+N) matches the sidebar New button, Settings (Cmd+, / Ctrl+,), Toggle Sidebar (Cmd+B / Ctrl+B), Toggle Diff (Cmd+Shift+D / Ctrl+Shift+D), Search Sessions (Cmd+K / Ctrl+K), and Next or Previous Session (Ctrl+Tab and Ctrl+Shift+Tab, plus Cmd+Shift+] and Cmd+Shift+[ on macOS). Cmd+1 to Cmd+9 (Ctrl+1 to Ctrl+9 elsewhere) jump to the first nine sessions in the sidebar. On macOS, the menu bar gains File, Edit, and Window menus alongside these items, plus Hide (Cmd+H) and Minimize (Cmd+M). Tooltips on the related buttons show their shortcuts.
+- The sidebar can be hidden with a button in its bottom bar, Toggle Sidebar in the View menu, or Cmd+B / Ctrl+B, giving the conversation the full window width. The choice is remembered across restarts.
+
+### Changed
+
+- The folder picker opens with Cmd+Shift+N / Ctrl+Shift+N, alongside Cmd+N / Ctrl+N for a new session, instead of Cmd+P / Ctrl+P.
+
 ## [0.5.0] - 2026-10-05
 
 ### Added

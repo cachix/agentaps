@@ -26,6 +26,8 @@ If Codex or Claude is installed without its ACP adapter, Agentaps can offer to s
 
 In the composer, **Enter** sends a prompt and **Ctrl+Enter** inserts a newline. Type `/` for agent commands, `@` to find a project file, or start with `!` to ask the agent to run a shell command. Prompts sent while an agent is busy are queued. **Up/Down** recalls earlier prompts when the composer is empty. Paste an image or drop an image file on the composer to send it with your prompt when the agent accepts images. To attach other files, use **+** under the composer or drop them on it. Text files go to the agent with their contents when it supports embedded context; other files are sent as links.
 
+Keyboard shortcuts use Cmd on macOS and Ctrl elsewhere: **N** starts a new session with the current agent, **Shift+N** picks a folder for a new session, **,** opens settings, **B** toggles the sidebar, **Shift+D** toggles the diff, and **K** searches sessions. **Ctrl+Tab** and **Ctrl+Shift+Tab** move between sessions. **1** to **9** jump to the first nine sessions in the sidebar. **=**, **-**, and **0** zoom in, out, and reset.
+
 ## Web Connect
 
 1. In the desktop sidebar, select the phone icon. Agentaps shows a pairing QR code.
