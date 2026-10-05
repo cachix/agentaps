@@ -116,7 +116,7 @@ enum SyncUpdate {
     Finished,
 }
 
-fn move_sidebar_id(order: &mut Vec<u64>, dragged: u64, target: u64) -> bool {
+fn move_sidebar_id<T: Copy + PartialEq>(order: &mut Vec<T>, dragged: T, target: T) -> bool {
     let Some(from) = order.iter().position(|id| *id == dragged) else {
         return false;
     };
@@ -194,6 +194,7 @@ enum PickerStep {
     CloneRepository,
     ChangeFolder { session: SessionLocation },
     Agents { project_index: usize },
+    ProjectAgents { project_index: usize },
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -213,6 +214,10 @@ impl WorkspaceView {
     fn highlighted_session(self) -> Option<SessionLocation> {
         match self {
             Self::Conversation(session) => Some(session),
+            Self::NewSession {
+                step: PickerStep::ProjectAgents { .. },
+                return_to,
+            } => return_to,
             _ => None,
         }
     }
@@ -228,7 +233,11 @@ impl WorkspaceView {
     fn displayed_session(self) -> Option<SessionLocation> {
         match self {
             Self::Conversation(session) => Some(session),
-            Self::Archive { return_to } => return_to,
+            Self::Archive { return_to }
+            | Self::NewSession {
+                step: PickerStep::ProjectAgents { .. },
+                return_to,
+            } => return_to,
             Self::Empty | Self::NewSession { .. } => None,
         }
     }
@@ -368,12 +377,34 @@ impl ProjectView {
 
 #[derive(Clone)]
 struct AgentDrag {
+    project_index: usize,
     id: u64,
     label: String,
     order_index: usize,
 }
 
 impl Render for AgentDrag {
+    fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        let palette = theme::palette(cx);
+        div()
+            .px_3()
+            .py_2()
+            .rounded_md()
+            .bg(palette.color(SELECTED))
+            .text_sm()
+            .text_color(palette.color(TEXT))
+            .child(self.label.clone())
+    }
+}
+
+#[derive(Clone)]
+struct ProjectDrag {
+    project_index: usize,
+    order_index: usize,
+    label: String,
+}
+
+impl Render for ProjectDrag {
     fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let palette = theme::palette(cx);
         div()
@@ -474,6 +505,9 @@ struct Workspace {
     projects: Vec<ProjectView>,
     view: WorkspaceView,
     sidebar_order: Vec<u64>,
+    nested_sidebar: bool,
+    collapsed_projects: HashSet<usize>,
+    project_order: Vec<usize>,
     sidebar_fraction: f32,
     font_scale: f32,
     theme_choice: crate::appearance::Choice,
@@ -727,6 +761,9 @@ impl Workspace {
             self.picker.clone.task = None;
         }
         self.finish_rename_session(true, cx);
+        if let WorkspaceView::Conversation(session) = view {
+            self.collapsed_projects.remove(&session.project_index);
+        }
         if let Some(session) = view.displayed_session() {
             let agent_id = self.projects[session.project_index].agents[session.agent_index]
                 .config
@@ -1060,6 +1097,9 @@ impl Workspace {
             projects,
             view: WorkspaceView::Empty,
             sidebar_order,
+            nested_sidebar: config.nested_sidebar,
+            collapsed_projects: HashSet::new(),
+            project_order: Vec::new(),
             sidebar_fraction,
             font_scale,
             theme_choice,
@@ -1303,15 +1343,19 @@ impl Workspace {
     fn config(&self) -> Config {
         Config {
             projects: self
-                .projects
-                .iter()
-                .map(|project| ProjectConfig {
-                    path: project.path.clone(),
-                    ssh_host: project.ssh_host.clone(),
-                    agents: project.agents.iter().map(AgentView::snapshot).collect(),
+                .sidebar_projects()
+                .into_iter()
+                .map(|index| {
+                    let project = &self.projects[index];
+                    ProjectConfig {
+                        path: project.path.clone(),
+                        ssh_host: project.ssh_host.clone(),
+                        agents: project.agents.iter().map(AgentView::snapshot).collect(),
+                    }
                 })
                 .collect(),
             sidebar_order: self.sidebar_order.clone(),
+            nested_sidebar: self.nested_sidebar,
             sidebar_fraction: self.sidebar_fraction,
             font_scale: self.font_scale,
             theme: self.theme_choice,
@@ -1369,6 +1413,27 @@ impl Workspace {
 
     fn back_from_picker(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         match self.view {
+            WorkspaceView::NewSession {
+                step: PickerStep::ProjectAgents { .. },
+                return_to,
+            } => {
+                self.set_view(
+                    return_to
+                        .map(WorkspaceView::Conversation)
+                        .unwrap_or(WorkspaceView::Empty),
+                    window,
+                    cx,
+                );
+                if return_to.is_some() {
+                    self.conversation
+                        .composer
+                        .update(cx, |input, cx| input.focus(window, cx));
+                } else {
+                    self.sidebar_search
+                        .update(cx, |input, cx| input.focus(window, cx));
+                }
+                cx.notify();
+            }
             WorkspaceView::NewSession {
                 step: PickerStep::Agents { .. } | PickerStep::CloneRepository,
                 ..
@@ -1440,6 +1505,37 @@ impl Workspace {
         .detach();
     }
 
+    fn sidebar_projects(&self) -> Vec<usize> {
+        let mut order = self
+            .project_order
+            .iter()
+            .copied()
+            .filter(|index| *index < self.projects.len())
+            .collect::<Vec<_>>();
+        for index in 0..self.projects.len() {
+            if !order.contains(&index) {
+                order.push(index);
+            }
+        }
+        order
+    }
+
+    fn move_project(&mut self, dragged: usize, target: usize, cx: &mut Context<Self>) {
+        let mut order = self.sidebar_projects();
+        if move_sidebar_id(&mut order, dragged, target) {
+            self.project_order = order;
+            self.persist();
+            cx.notify();
+        }
+    }
+
+    fn toggle_project(&mut self, project_index: usize, cx: &mut Context<Self>) {
+        if !self.collapsed_projects.insert(project_index) {
+            self.collapsed_projects.remove(&project_index);
+        }
+        cx.notify();
+    }
+
     fn sidebar_results(&self, query: &str) -> Vec<SessionLocation> {
         let archive_view = matches!(self.view, WorkspaceView::Archive { .. });
         let mut matches = self
@@ -1478,12 +1574,23 @@ impl Workspace {
                     })
             })
             .collect::<Vec<_>>();
+        let mut project_ranks = vec![0; self.projects.len()];
+        for (rank, index) in self.sidebar_projects().into_iter().enumerate() {
+            project_ranks[index] = rank;
+        }
         matches.sort_by(|a, b| {
-            if query.is_empty() {
-                a.1.cmp(&b.1)
+            (if self.nested_sidebar {
+                project_ranks[a.2.project_index].cmp(&project_ranks[b.2.project_index])
             } else {
-                b.0.cmp(&a.0).then_with(|| a.1.cmp(&b.1))
-            }
+                std::cmp::Ordering::Equal
+            })
+            .then_with(|| {
+                if query.is_empty() {
+                    a.1.cmp(&b.1)
+                } else {
+                    b.0.cmp(&a.0).then_with(|| a.1.cmp(&b.1))
+                }
+            })
         });
         matches
             .into_iter()
@@ -1640,7 +1747,7 @@ impl Workspace {
         cx: &mut Context<Self>,
     ) {
         let WorkspaceView::NewSession {
-            step: PickerStep::Agents { project_index },
+            step: PickerStep::Agents { project_index } | PickerStep::ProjectAgents { project_index },
             ..
         } = self.view
         else {
@@ -1719,6 +1826,16 @@ impl Workspace {
     }
 
     fn move_agent(&mut self, dragged: u64, target: u64, cx: &mut Context<Self>) {
+        if self.nested_sidebar
+            && self
+                .agent_location(dragged)
+                .map(|location| location.project_index)
+                != self
+                    .agent_location(target)
+                    .map(|location| location.project_index)
+        {
+            return;
+        }
         if move_sidebar_id(&mut self.sidebar_order, dragged, target) {
             self.persist();
             cx.notify();
@@ -1807,7 +1924,7 @@ impl Workspace {
                 }
             }
             WorkspaceView::NewSession {
-                step: PickerStep::Agents { .. },
+                step: PickerStep::Agents { .. } | PickerStep::ProjectAgents { .. },
                 ..
             } => {
                 if let Some(agent) = self.agent_results(cx).get(self.picker.selection).cloned() {
@@ -1974,7 +2091,7 @@ impl Workspace {
             PickerStep::Folders | PickerStep::ChangeFolder { .. } => {
                 self.picker.folder_search.results().len()
             }
-            PickerStep::Agents { .. } => {
+            PickerStep::Agents { .. } | PickerStep::ProjectAgents { .. } => {
                 self.agent_results(cx).len()
                     + usize::from(!self.picker.input.read(cx).value().trim().is_empty())
             }
@@ -1991,7 +2108,9 @@ impl Workspace {
                 cx.notify();
             }
             "escape" => {
-                if self.picker.input.read(cx).value().is_empty() {
+                if matches!(step, PickerStep::ProjectAgents { .. })
+                    || self.picker.input.read(cx).value().is_empty()
+                {
                     self.back_from_picker(window, cx);
                 } else {
                     self.picker
@@ -2170,6 +2289,17 @@ impl Workspace {
     }
 
     fn handle_escape(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if matches!(
+            self.view,
+            WorkspaceView::NewSession {
+                step: PickerStep::ProjectAgents { .. },
+                ..
+            }
+        ) {
+            self.back_from_picker(window, cx);
+            cx.stop_propagation();
+            return;
+        }
         if self.settings.is_some() {
             return;
         }

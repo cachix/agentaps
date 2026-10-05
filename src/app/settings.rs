@@ -487,6 +487,16 @@ impl Workspace {
         cx.notify();
     }
 
+    pub(super) fn set_nested_sidebar(&mut self, enabled: bool, cx: &mut Context<Self>) {
+        if self.nested_sidebar == enabled {
+            return;
+        }
+        self.nested_sidebar = enabled;
+        self.sidebar_selection = 0;
+        self.persist();
+        cx.notify();
+    }
+
     pub(super) fn set_reduced_motion(&mut self, enabled: bool, cx: &mut Context<Self>) {
         if enabled == self.reduced_motion {
             return;
@@ -573,6 +583,7 @@ impl Workspace {
     }
 
     pub(super) fn reset_settings(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.set_nested_sidebar(Config::default().nested_sidebar, cx);
         self.set_font(None, cx);
         self.select_theme(crate::appearance::Choice::default(), cx);
         self.set_font_scale(1.0, cx);
@@ -600,6 +611,15 @@ impl Workspace {
                     setting_row("Theme", settings_select(&page.theme), palette),
                     setting_row("Font", settings_select(&page.font), palette),
                     setting_row("Text size", settings_select(&page.text_size), palette),
+                    setting_row(
+                        "Group sessions by project",
+                        Switch::new("settings-nested-sidebar")
+                            .checked(self.nested_sidebar)
+                            .on_click(cx.listener(|this, checked: &bool, _, cx| {
+                                this.set_nested_sidebar(*checked, cx);
+                            })),
+                        palette,
+                    ),
                 ],
                 palette,
             ),

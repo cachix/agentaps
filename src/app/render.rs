@@ -467,8 +467,16 @@ impl Workspace {
 impl Render for Workspace {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let palette = theme::palette(cx);
+        let project_agent_dialog = matches!(
+            self.view,
+            WorkspaceView::NewSession {
+                step: PickerStep::ProjectAgents { .. },
+                ..
+            }
+        );
         let root = div()
             .track_focus(&self.workspace_focus)
+            .relative()
             .size_full()
             .flex()
             .bg(palette.color(BG))
@@ -552,6 +560,17 @@ impl Render for Workspace {
             .when_some(mobile_loading, |chat, loading| chat.child(loading))
             .when_some(mobile_pairing, |chat, pairing| chat.child(pairing))
             .when_some(mobile_provider, |chat, provider| chat.child(provider));
-        root.child(sidebar).child(divider).child(chat)
+        root.child(
+            div()
+                .size_full()
+                .relative()
+                .flex()
+                .child(sidebar)
+                .child(divider)
+                .child(chat)
+                .when(project_agent_dialog, |workspace| {
+                    self.render_picker(workspace, cx)
+                }),
+        )
     }
 }

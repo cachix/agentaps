@@ -645,6 +645,8 @@ fn zoom_shortcuts_and_menu_actions_change_the_font_scale(cx: &mut gpui_kit::Test
     cx.update(|_, cx| restored.update(cx, |this, _| this.persistence.wait().unwrap()));
     mobile::verify_session_switching_and_mobile_routing(&restored, temp.path(), cx);
     verify_resets_and_folder_moves_preserve_harness_references(&restored, temp.path(), cx);
+    verify_project_session_sidebar(&restored, cx);
+    verify_project_agent_dialog(&restored, cx);
     verify_inline_session_renaming(&restored, cx);
     verify_settings_apply_and_persist(&restored, temp.path(), cx);
     verify_notifications_for_background_sessions(&restored, temp.path(), cx);
@@ -1052,6 +1054,7 @@ fn verify_settings_apply_and_persist(
             this.set_thoughts_expanded(true, cx);
             this.set_tool_activity_expanded(false, cx);
             this.set_diff_layout(DiffPresentation::Split, cx);
+            this.set_nested_sidebar(false, cx);
             assert!(this.conversation.toggled_thought_rows.is_empty());
             assert!(this.conversation.toggled_tool_groups.is_empty());
             assert_eq!(this.diff.presentation, DiffPresentation::Split);
@@ -1062,6 +1065,7 @@ fn verify_settings_apply_and_persist(
     assert!(saved.thoughts_expanded);
     assert!(!saved.tool_activity_expanded);
     assert_eq!(saved.diff_layout, DiffPresentation::Split);
+    assert!(!saved.nested_sidebar);
     let default_font = cx.update(|_, cx| Theme::global(cx).font_family.clone());
     cx.update(|_, cx| {
         workspace.update(cx, |this, cx| {
@@ -1084,6 +1088,7 @@ fn verify_settings_apply_and_persist(
         assert!(!this.conversation.thoughts_expanded);
         assert!(this.conversation.tool_activity_expanded);
         assert_eq!(this.diff.presentation, DiffPresentation::Unified);
+        assert!(this.nested_sidebar);
     });
     assert_eq!(selected_text_size(cx), Some(100));
     assert_eq!(
@@ -1093,6 +1098,7 @@ fn verify_settings_apply_and_persist(
     cx.update(|_, cx| workspace.update(cx, |this, _| this.persistence.wait().unwrap()));
     let (saved, _) = config::load().unwrap();
     assert_eq!(saved.theme, crate::appearance::Choice::Agentaps);
+    assert!(saved.nested_sidebar);
     cx.simulate_keystrokes("escape");
     assert_eq!(selected_text_size(cx), None);
     cx.update(|window, cx| workspace.update(cx, |this, cx| this.open_settings(window, cx)));
@@ -1738,5 +1744,233 @@ fn verify_split_panes(
             this.close_pane(window, cx);
             assert_eq!(this.view, WorkspaceView::Empty);
         });
+    });
+}
+
+fn verify_project_session_sidebar(
+    workspace: &Entity<Workspace>,
+    cx: &mut gpui_kit::VisualTestContext,
+) {
+    cx.update(|window, cx| {
+        workspace.update(cx, |this, cx| {
+            let agent = |id, title: &str, archived| {
+                let mut controller = test_agent(ProtocolVersion::V2);
+                controller.config.id = id;
+                controller.config.command.clear();
+                controller.config.custom_title = Some(title.into());
+                controller.config.archived = archived;
+                AgentView {
+                    controller,
+                    elicitations: Vec::new(),
+                }
+            };
+            this.projects = vec![
+                ProjectView {
+                    path: PathBuf::from("/projects/first"),
+                    ssh_host: None,
+                    branch: "main".into(),
+                    sync_counts: None,
+                    agents: vec![
+                        agent(401, "Fix sidebar", false),
+                        agent(402, "Sidebar tests", false),
+                        agent(403, "Old sidebar", true),
+                    ],
+                },
+                ProjectView {
+                    path: PathBuf::from("/projects/second"),
+                    ssh_host: Some("remote".into()),
+                    branch: "topic".into(),
+                    sync_counts: None,
+                    agents: vec![
+                        agent(404, "Sidebar", false),
+                        agent(405, "Archived sidebar", true),
+                    ],
+                },
+            ];
+            this.sidebar_order = vec![404, 402, 405, 401, 403];
+            this.set_view(
+                WorkspaceView::Conversation(SessionLocation {
+                    project_index: 0,
+                    agent_index: 0,
+                }),
+                window,
+                cx,
+            );
+            let ids = |this: &Workspace, query| {
+                this.sidebar_results(query)
+                    .into_iter()
+                    .map(|location| {
+                        this.projects[location.project_index].agents[location.agent_index]
+                            .config
+                            .id
+                    })
+                    .collect::<Vec<_>>()
+            };
+            assert_eq!(ids(this, ""), vec![402, 401, 404]);
+            assert_eq!(ids(this, "first"), vec![402, 401]);
+            let search = this.sidebar_results("sidebar");
+            assert_eq!(search.len(), 3);
+            assert_eq!(
+                search
+                    .iter()
+                    .map(|location| location.project_index)
+                    .collect::<Vec<_>>(),
+                vec![0, 0, 1]
+            );
+            this.move_agent(401, 404, cx);
+            assert_eq!(this.sidebar_order, vec![404, 402, 405, 401, 403]);
+            this.move_agent(401, 402, cx);
+            assert_eq!(ids(this, ""), vec![401, 402, 404]);
+            let view = this.view;
+            this.toggle_project(0, cx);
+            this.toggle_project(1, cx);
+            assert_eq!(this.view, view, "collapsing keeps the conversation open");
+            this.move_project(0, 1, cx);
+            assert_eq!(this.sidebar_projects(), vec![1, 0]);
+            assert_eq!(ids(this, ""), vec![404, 401, 402]);
+            assert_eq!(
+                this.view, view,
+                "reordering preserves the open conversation"
+            );
+            assert!(this.collapsed_projects.contains(&0));
+            assert!(this.collapsed_projects.contains(&1));
+            assert_eq!(this.projects[0].agents[0].config.id, 401);
+            let saved: Config =
+                serde_json::from_slice(&serde_json::to_vec(&this.config()).unwrap()).unwrap();
+            assert_eq!(saved.projects[0].path, PathBuf::from("/projects/second"));
+            assert_eq!(saved.projects[0].ssh_host.as_deref(), Some("remote"));
+            assert_eq!(
+                saved.projects[0]
+                    .agents
+                    .iter()
+                    .map(|agent| agent.id)
+                    .collect::<Vec<_>>(),
+                vec![404, 405]
+            );
+            assert_eq!(saved.projects[1].path, PathBuf::from("/projects/first"));
+            this.move_project(0, 0, cx);
+            this.move_project(9, 0, cx);
+            assert_eq!(this.sidebar_projects(), vec![1, 0]);
+            this.move_project(0, 1, cx);
+            assert_eq!(this.sidebar_projects(), vec![0, 1]);
+            assert_eq!(ids(this, ""), vec![401, 402, 404]);
+            this.set_nested_sidebar(false, cx);
+            assert_eq!(ids(this, ""), vec![404, 401, 402]);
+            assert_eq!(
+                ids(this, "sidebar")[0],
+                404,
+                "flat search ranks sessions across projects"
+            );
+            this.move_agent(401, 404, cx);
+            assert_eq!(
+                ids(this, ""),
+                vec![401, 404, 402],
+                "flat sessions can reorder across projects"
+            );
+            assert_eq!(
+                this.view, view,
+                "switching layouts preserves the conversation"
+            );
+            assert!(!this.config().nested_sidebar);
+            this.set_nested_sidebar(true, cx);
+            assert_eq!(ids(this, ""), vec![401, 402, 404]);
+            assert_eq!(
+                ids(this, "sidebar").len(),
+                3,
+                "collapsed sessions stay searchable"
+            );
+            this.toggle_project(0, cx);
+            assert!(!this.collapsed_projects.contains(&0));
+            assert!(this.collapsed_projects.contains(&1));
+            this.set_view(
+                WorkspaceView::Conversation(SessionLocation {
+                    project_index: 1,
+                    agent_index: 0,
+                }),
+                window,
+                cx,
+            );
+            assert!(
+                this.collapsed_projects.is_empty(),
+                "selecting a session reveals its project"
+            );
+            this.set_view(WorkspaceView::Archive { return_to: None }, window, cx);
+            assert_eq!(ids(this, ""), vec![403, 405]);
+            assert!(ids(this, "missing").is_empty());
+        });
+    });
+}
+
+fn verify_project_agent_dialog(
+    workspace: &Entity<Workspace>,
+    cx: &mut gpui_kit::VisualTestContext,
+) {
+    let previous = SessionLocation {
+        project_index: 0,
+        agent_index: 0,
+    };
+    let available = cx.update(|window, cx| {
+        workspace.update(cx, |this, cx| {
+            let available = std::mem::replace(
+                &mut this.picker.available_agents,
+                vec![AgentChoice {
+                    name: "Test agent".into(),
+                    detail: "Test only".into(),
+                    command: Vec::new(),
+                }],
+            );
+            this.set_view(WorkspaceView::Conversation(previous), window, cx);
+            this.conversation.composer.update(cx, |input, cx| {
+                input.replace_all("Unsent draft", window, cx)
+            });
+            this.toggle_project(1, cx);
+            this.open_picker(PickerStep::ProjectAgents { project_index: 1 }, window, cx);
+            assert_eq!(this.view.displayed_session(), Some(previous));
+            assert_eq!(this.view.highlighted_session(), Some(previous));
+            available
+        })
+    });
+    cx.run_until_parked();
+    cx.simulate_keystrokes("escape");
+    cx.update(|window, cx| {
+        workspace.update(cx, |this, cx| {
+            assert_eq!(this.view, WorkspaceView::Conversation(previous));
+            assert_eq!(
+                this.conversation.composer.read(cx).value().as_ref(),
+                "Unsent draft"
+            );
+            assert!(this.composer_focused(window, cx));
+            assert!(
+                this.collapsed_projects.contains(&1),
+                "dismissing the chooser keeps its project collapsed"
+            );
+            this.open_picker(PickerStep::ProjectAgents { project_index: 1 }, window, cx);
+        })
+    });
+    cx.run_until_parked();
+    cx.simulate_keystrokes("enter");
+    cx.update(|window, cx| {
+        workspace.update(cx, |this, cx| {
+            // An empty command exercises session creation without starting a harness.
+            assert_eq!(
+                this.view,
+                WorkspaceView::Conversation(SessionLocation {
+                    project_index: 1,
+                    agent_index: 2
+                })
+            );
+            assert_eq!(this.projects[0].agents.len(), 3);
+            assert_eq!(this.projects[1].agents.len(), 3);
+            assert_eq!(this.projects[1].agents[2].name, "Test agent");
+            assert!(
+                !this.collapsed_projects.contains(&1),
+                "a new session expands its project"
+            );
+            this.set_view(WorkspaceView::Empty, window, cx);
+            this.open_picker(PickerStep::ProjectAgents { project_index: 0 }, window, cx);
+            this.back_from_picker(window, cx);
+            assert_eq!(this.view, WorkspaceView::Empty);
+            this.picker.available_agents = available;
+        })
     });
 }

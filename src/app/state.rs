@@ -312,7 +312,9 @@ impl PickerState {
                     PickerStep::CloneRepository => {
                         "Repository URL or git@host:owner/repository.git"
                     }
-                    PickerStep::Agents { .. } => "Search installed agents or enter an ACP command…",
+                    PickerStep::Agents { .. } | PickerStep::ProjectAgents { .. } => {
+                        "Search installed agents or enter an ACP command…"
+                    }
                     PickerStep::Folders | PickerStep::ChangeFolder { .. } => {
                         "Search recent folders or enter a local or SSH path…"
                     }

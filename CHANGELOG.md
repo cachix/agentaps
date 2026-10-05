@@ -33,6 +33,12 @@ Notable changes to Agentaps are recorded here.
 - Apply desktop send-key and conversation display settings across split panes, and edit queued messages in their originating pane.
 - Keep the shared diff populated when switching sessions in the same project, and reveal a session when its pane is showing the new-session picker.
 
+- Grouped project dividers shrink away for long branch names instead of limiting them to a small portion of the header. Full branch names are available on hover.
+
+- The active sidebar hides project headers when all their sessions are archived, matching the previous sidebar.
+
+- Sidebar projects without visible sessions no longer leave extra space below their headers.
+
 - The default Agentaps theme now follows the desktop light/dark scheme with matching light and dark palettes across the conversation, sidebar, controls, and diffs.
 
 - Conversation history comes from harness session replay instead of a duplicate local transcript. Config saves contain only session references and app state, skip unchanged data, and retain prior session references in the archive after context resets or folder moves. An opt-in smoke test verifies history replay after restarting an authenticated harness.
@@ -43,6 +49,32 @@ Notable changes to Agentaps are recorded here.
 - Factory reset is available in Advanced settings, and the Back icon sits at the bottom of the settings sidebar.
 
 - Session Thought rows show an outline brain icon beside the label, using the selected theme's working activity color.
+
+- Grouped sidebar project headers use subtle inline divider segments around the folder label, with a small gap between projects, making session groups easier to distinguish.
+
+- Sidebar labels clip without an ellipsis. Ungrouped branch labels align to the right edge and make room for actions on hover.
+
+- Ungrouped sidebar sessions show their Git branch at the end of the row, with the project path available in its tooltip.
+
+- Grouped session dots and idle titles align with the visible edge of the folder caret.
+
+- Grouped sidebar sessions start at the left padding, with no extra indentation for titles or status dots.
+
+- Sidebar branch labels are smaller and softer, Git counts sit beside them so project names align, and session titles reserve space for archive and sync actions.
+
+- Sidebar project and session rows share compact spacing, aligned controls, and consistent hover states. Selected sessions stay highlighted on hover, and project names stand out from session titles.
+
+- Settings > Interface can turn off grouping sessions by project for a flat sidebar. The choice is remembered, and resetting settings restores the nested view.
+
+- Drag project headers up or down to reorder whole sidebar groups. The order survives restarts and is shared by active sessions, search, and archives.
+
+- Click a project name or its disclosure arrow to collapse or expand its sidebar sessions. Selecting a session or starting a new one reveals its project automatically.
+
+- Sidebar rows use tighter vertical spacing and slightly smaller text, and sessions without a status badge no longer reserve space before their titles.
+
+- Each project’s + button opens an agent chooser dialog for that folder, keeping split-pane conversations visible and returning directly to the originating pane when dismissed.
+
+- The desktop sidebar groups sessions beneath project folders, with session titles, folder-level branch and Git sync controls, and a new-session action for each folder. Search and archived sessions retain the same grouping.
 
 - The main website download button shows the latest Agentaps release version.
 

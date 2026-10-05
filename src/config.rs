@@ -209,6 +209,8 @@ pub struct Config {
     pub projects: Vec<ProjectConfig>,
     #[serde(default)]
     pub sidebar_order: Vec<u64>,
+    #[serde(default = "default_nested_sidebar")]
+    pub nested_sidebar: bool,
     #[serde(default = "default_sidebar_fraction")]
     pub sidebar_fraction: f32,
     #[serde(default = "default_font_scale")]
@@ -298,6 +300,10 @@ pub enum ThemeSource {
     Qt,
 }
 
+fn default_nested_sidebar() -> bool {
+    true
+}
+
 fn default_tool_activity_expanded() -> bool {
     true
 }
@@ -334,6 +340,7 @@ impl Default for Config {
             pane_layout: None,
             projects: Vec::new(),
             sidebar_order: Vec::new(),
+            nested_sidebar: default_nested_sidebar(),
             sidebar_fraction: default_sidebar_fraction(),
             font_scale: default_font_scale(),
             send_key: SendKey::default(),
@@ -628,6 +635,7 @@ mod tests {
     fn sidebar_order_is_saved_and_old_configs_still_load() {
         let old: Config = serde_json::from_str(r#"{"projects":[]}"#).unwrap();
         assert!(old.sidebar_order.is_empty());
+        assert!(old.nested_sidebar);
         assert_eq!(old.font_scale, 1.0);
         assert_eq!(old.theme, crate::appearance::Choice::Agentaps);
         assert_eq!(old.send_key, SendKey::Enter);
@@ -646,6 +654,7 @@ mod tests {
         let config = Config {
             projects: vec![],
             sidebar_order: vec![3, 1, 2],
+            nested_sidebar: false,
             sidebar_fraction: 0.32,
             font_scale: 1.25,
             theme: crate::appearance::Choice::SolarizedLight,
@@ -669,6 +678,7 @@ mod tests {
         let restored: Config =
             serde_json::from_slice(&serde_json::to_vec(&config).unwrap()).unwrap();
         assert_eq!(restored.sidebar_order, vec![3, 1, 2]);
+        assert!(!restored.nested_sidebar);
         assert_eq!(restored.sidebar_fraction, 0.32);
         assert_eq!(restored.font_scale, 1.25);
         assert_eq!(restored.theme, crate::appearance::Choice::SolarizedLight);
