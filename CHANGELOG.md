@@ -4,6 +4,10 @@ Notable changes to Agentaps are recorded here.
 
 ## [Unreleased]
 
+### Fixed
+
+- Git fetch tests work with Git 2.56, which refreshes tracking refs during direct URL pushes.
+
 ### Added
 
 - When the sidebar is hidden, a button with the sidebar-open icon appears in the bottom-left corner to restore it.

@@ -375,6 +375,9 @@ mod tests {
             &local,
             &["push", "-q", remote.to_str().unwrap(), "HEAD:main"],
         );
+        // Git 2.56 also updates tracking refs when pushing to a matching URL.
+        // Make the tracking ref stale explicitly so this tests fetch on all versions.
+        git(&local, &["update-ref", "refs/remotes/origin/main", "HEAD^"]);
         assert_eq!(counts(&local), Some((1, 0)));
         assert!(fetch(&local));
         assert_eq!(counts(&local), Some((0, 0)));
