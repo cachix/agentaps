@@ -200,7 +200,7 @@ impl Workspace {
             let row = sidebar_row()
                 .id(("agent", agent_id))
                 .group(row_group.clone())
-                // Match the caret's visible edge inside its icon box.
+                // Keep sessions indented beneath their project header.
                 .when(nested_sidebar, |row| row.pl(rems(1.0625)))
                 .pr(rems(if nested_sidebar { 1.875 } else { 0.25 }))
                 .cursor_pointer()
@@ -438,6 +438,8 @@ impl Workspace {
                 .contains(&(project.path.clone(), project.ssh_host.clone()));
             let header = sidebar_row()
                 .id(("project", project_index))
+                .ml(rems(-0.5))
+                .pl_0()
                 .when(nested_sidebar, |header| {
                     header.cursor_move().on_drag(
                         ProjectDrag {
@@ -453,15 +455,6 @@ impl Workspace {
                 .tooltip({
                     let path = project.display_path();
                     move |window, cx| Tooltip::new(path.clone()).build(window, cx)
-                })
-                .when(nested_sidebar, |header| {
-                    header.child(
-                        div()
-                            .w(rems(0.375))
-                            .h(px(1.))
-                            .flex_shrink_0()
-                            .bg(palette.color(BORDER).opacity(0.5)),
-                    )
                 })
                 .child(
                     div()

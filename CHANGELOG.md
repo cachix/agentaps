@@ -12,6 +12,8 @@ Notable changes to Agentaps are recorded here.
 
 ### Changed
 
+- Project rows align with the left edge of the session sidebar, with sessions indented beneath them.
+
 - The folder picker opens with Cmd+Shift+N / Ctrl+Shift+N, alongside Cmd+N / Ctrl+N for a new session, instead of Cmd+P / Ctrl+P.
 - Desktop notifications include the project name alongside the session title so background sessions are easier to identify.
 
