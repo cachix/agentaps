@@ -77,7 +77,6 @@ impl Workspace {
         match node {
             Node::Pane { id, .. } => {
                 let id = *id;
-                let focused = self.pane_layout.focused == id;
                 let focus = if id == self.pane_id {
                     self.pane_focus.clone()
                 } else {
@@ -181,8 +180,6 @@ impl Workspace {
                     .h(px(height))
                     .flex_shrink_0()
                     .relative()
-                    .border_1()
-                    .border_color(palette.color(if focused { ACCENT } else { BORDER }))
                     .overflow_hidden()
                     .capture_any_mouse_down(cx.listener(move |this, _, _, cx| {
                         this.activate_pane(id, cx);
@@ -229,6 +226,7 @@ impl Workspace {
                 let direction = *direction;
                 let divider = div()
                     .id(("pane-divider", split_id))
+                    .relative()
                     .flex_shrink_0()
                     .when(right, |divider| {
                         divider
@@ -244,6 +242,16 @@ impl Workspace {
                     })
                     .bg(palette.color(BORDER))
                     .hover(|style| style.bg(palette.color(ACCENT)))
+                    .child(
+                        div()
+                            .absolute()
+                            .when(right, |target| {
+                                target.left(px(-2.5)).top_0().w(px(6.)).h_full()
+                            })
+                            .when(!right, |target| {
+                                target.top(px(-2.5)).left_0().h(px(6.)).w_full()
+                            }),
+                    )
                     .on_drag(
                         PaneResize {
                             split_id,

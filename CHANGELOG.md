@@ -12,6 +12,8 @@ Notable changes to Agentaps are recorded here.
 
 ### Changed
 
+- Chat panes fill their available space without an outer frame, with thin separators between split panes.
+
 - Project rows align with the left edge of the session sidebar, with sessions indented beneath them.
 
 - The folder picker opens with Cmd+Shift+N / Ctrl+Shift+N, alongside Cmd+N / Ctrl+N for a new session, instead of Cmd+P / Ctrl+P.

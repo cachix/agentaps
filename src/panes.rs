@@ -3,7 +3,7 @@ use serde::{Deserialize, Serialize};
 
 pub(crate) const MIN_WIDTH: f32 = 320.;
 pub(crate) const MIN_HEIGHT: f32 = 280.;
-pub(crate) const DIVIDER: f32 = 6.;
+pub(crate) const DIVIDER: f32 = 1.;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -236,7 +236,7 @@ mod tests {
         }
         assert!(layout.split(1, Direction::Right, 2, 3));
         assert!(layout.split(3, Direction::Down, 4, 5));
-        assert_eq!(layout.root.minimum_size(), (646., 566.));
+        assert_eq!(layout.root.minimum_size(), (641., 561.));
         assert_eq!(layout.focused, 5);
         assert!(layout.close(5));
         assert_eq!(layout.focused, 3);
@@ -304,8 +304,8 @@ mod tests {
             panic!()
         };
         *ratio = 0.99;
-        assert_eq!(layout.root.minimum_size(), (972., 280.));
-        assert_eq!(layout.root.sizes(1200., 800.), Some((548., 646.)));
-        assert_eq!(layout.root.sizes(400., 200.), Some((320., 646.)));
+        assert_eq!(layout.root.minimum_size(), (962., 280.));
+        assert_eq!(layout.root.sizes(1200., 800.), Some((558., 641.)));
+        assert_eq!(layout.root.sizes(400., 200.), Some((320., 641.)));
     }
 }
