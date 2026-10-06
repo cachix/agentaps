@@ -498,14 +498,21 @@ impl Render for Workspace {
             .on_action(cx.listener(Self::zoom_reset))
             .capture_key_down(cx.listener(Self::workspace_key_down))
             .capture_action(cx.listener(|this, _: &MoveUp, window, cx| {
-                this.handle_slash_action(SlashAction::Up, window, cx)
+                if !this.shortcut_customized(Shortcut::Previous) {
+                    this.handle_slash_action(SlashAction::Up, window, cx);
+                }
             }))
             .capture_action(cx.listener(|this, _: &MoveDown, window, cx| {
-                this.handle_slash_action(SlashAction::Down, window, cx)
+                if !this.shortcut_customized(Shortcut::Next) {
+                    this.handle_slash_action(SlashAction::Down, window, cx);
+                }
             }))
             .capture_action(cx.listener(|this, action: &Enter, window, cx| {
                 this.activate_keyboard_pane(window, cx);
-                if enter_sends_prompt(this.send_key, action) && this.composer_focused(window, cx) {
+                if !this.shortcut_customized(Shortcut::Send)
+                    && enter_sends_prompt(this.send_key, action)
+                    && this.composer_focused(window, cx)
+                {
                     cx.stop_propagation();
                     this.send_prompt(window, cx);
                 } else if !action.secondary {
@@ -513,11 +520,15 @@ impl Render for Workspace {
                 }
             }))
             .capture_action(cx.listener(|this, _: &IndentInline, window, cx| {
-                this.handle_slash_action(SlashAction::Complete, window, cx)
+                if !this.shortcut_customized(Shortcut::Complete) {
+                    this.handle_slash_action(SlashAction::Complete, window, cx);
+                }
             }))
-            .capture_action(
-                cx.listener(|this, _: &Escape, window, cx| this.handle_escape(window, cx)),
-            )
+            .capture_action(cx.listener(|this, _: &Escape, window, cx| {
+                if !this.shortcut_customized(Shortcut::Dismiss) {
+                    this.handle_escape(window, cx);
+                }
+            }))
             .on_drag_move(
                 cx.listener(|this, event: &DragMoveEvent<SidebarResize>, window, cx| {
                     let viewport_width = f32::from(window.viewport_size().width);

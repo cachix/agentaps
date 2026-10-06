@@ -219,6 +219,8 @@ pub struct Config {
     pub font_scale: f32,
     #[serde(default, deserialize_with = "known_or_default")]
     pub send_key: SendKey,
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub key_bindings: BTreeMap<String, String>,
     #[serde(default)]
     pub reduced_motion: bool,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -347,6 +349,7 @@ impl Default for Config {
             sidebar_hidden: false,
             font_scale: default_font_scale(),
             send_key: SendKey::default(),
+            key_bindings: BTreeMap::new(),
             reduced_motion: false,
             font: None,
             thoughts_expanded: false,
@@ -663,6 +666,7 @@ mod tests {
             font_scale: 1.25,
             theme: crate::appearance::Choice::SolarizedLight,
             send_key: SendKey::ShiftEnter,
+            key_bindings: BTreeMap::new(),
             reduced_motion: true,
             font: Some("Inter".into()),
             thoughts_expanded: true,

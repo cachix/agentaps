@@ -6,6 +6,8 @@ use std::borrow::Cow;
 
 pub(super) struct AppAssets;
 
+gpui_kit::assets::icon_assets!(SettingsAssets, [Keyboard]);
+
 const APP_ASSETS: [(&str, &[u8]); 6] = [
     ("icons/brain.svg", include_bytes!("../../assets/brain.svg")),
     (
@@ -43,12 +45,16 @@ impl AssetSource for AppAssets {
     fn load(&self, path: &str) -> Result<Option<Cow<'static, [u8]>>> {
         match APP_ASSETS.iter().find(|(asset, _)| *asset == path) {
             Some((_, bytes)) => Ok(Some(Cow::Borrowed(bytes))),
-            None => Assets.load(path),
+            None => match SettingsAssets.load(path)? {
+                Some(icon) => Ok(Some(icon)),
+                None => Assets.load(path),
+            },
         }
     }
 
     fn list(&self, path: &str) -> Result<Vec<SharedString>> {
         let mut assets = Assets.list(path)?;
+        assets.extend(SettingsAssets.list(path)?);
         assets.extend(
             APP_ASSETS
                 .iter()
@@ -62,6 +68,21 @@ impl AssetSource for AppAssets {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn serves_key_binding_icons() {
+        let listed = AppAssets.list("icons/").unwrap();
+        let path = "icons/keyboard.svg";
+        let svg = AppAssets
+            .load(path)
+            .unwrap()
+            .expect("settings icon is bundled");
+        assert!(svg.starts_with(b"<svg"), "{path}");
+        assert!(
+            listed.iter().any(|listed| listed.as_ref() == path),
+            "{path}"
+        );
+    }
 
     #[test]
     fn serves_bundled_agent_logos() {

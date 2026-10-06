@@ -60,7 +60,11 @@ impl Workspace {
                     }
                 ) {
                     match event {
-                        InputEvent::PressEnter { .. } => this.start_clone(cx),
+                        InputEvent::PressEnter { .. }
+                            if !this.shortcut_customized(Shortcut::Confirm) =>
+                        {
+                            this.start_clone(cx)
+                        }
                         InputEvent::Change => {
                             this.picker.clone.error = None;
                             cx.notify();

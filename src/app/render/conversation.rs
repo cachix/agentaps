@@ -515,7 +515,7 @@ impl Workspace {
             .get(&agent_id)
             .map(Vec::as_slice)
             .unwrap_or_default();
-        let send_tooltip = format!("Send ({})", settings::send_key_label(self.send_key));
+        let send_tooltip = format!("Send ({})", self.shortcut_label(Shortcut::Send));
         let can_send = !draft_images.is_empty()
             || !draft_files.is_empty()
             || !self

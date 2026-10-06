@@ -50,11 +50,13 @@ mod state;
 use state::*;
 mod assets;
 mod elicitation;
+mod key_bindings;
 mod mobile;
 mod notifications;
 mod render;
 mod sessions;
 mod settings;
+use key_bindings::Shortcut;
 #[cfg(test)]
 mod tests;
 mod tool_activity;
@@ -534,6 +536,7 @@ struct Workspace {
     font_scale: f32,
     theme_choice: crate::appearance::Choice,
     send_key: SendKey,
+    key_bindings: BTreeMap<String, String>,
     reduced_motion: bool,
     font: Option<String>,
     diff_layout: DiffPresentation,
@@ -747,7 +750,7 @@ impl Workspace {
                     InputEvent::PressEnter {
                         secondary: false,
                         shift: false,
-                    } if this.send_key == SendKey::Enter => this.send_prompt(window, cx),
+                    } if this.composer_submits_on_enter() => this.send_prompt(window, cx),
                     _ => {}
                 }
             },
@@ -798,7 +801,7 @@ impl Workspace {
                         self.conversation.composer.clone()
                     } else {
                         let composer = ConversationState::new_composer(
-                            self.send_key == SendKey::Enter,
+                            self.composer_submits_on_enter(),
                             window,
                             cx,
                         );
@@ -1016,7 +1019,7 @@ impl Workspace {
                     InputEvent::PressEnter {
                         secondary: false,
                         shift: false,
-                    } => {
+                    } if !this.shortcut_customized(Shortcut::Confirm) => {
                         this.confirm_sidebar_session(window, cx);
                     }
                     _ => {}
@@ -1066,8 +1069,12 @@ impl Workspace {
             eprintln!("could not apply theme: {error:#}");
         }
         cx.set_reduce_motion(config.reduced_motion);
-        let composer =
-            ConversationState::new_composer(config.send_key == SendKey::Enter, window, cx);
+        let composer = ConversationState::new_composer(
+            config.send_key == SendKey::Enter
+                && !config.key_bindings.contains_key(Shortcut::Send.id()),
+            window,
+            cx,
+        );
         let projects: Vec<ProjectView> = config
             .projects
             .into_iter()
@@ -1127,6 +1134,7 @@ impl Workspace {
             font_scale,
             theme_choice,
             send_key: config.send_key,
+            key_bindings: key_bindings::validated(config.key_bindings, config.send_key),
             reduced_motion: config.reduced_motion,
             font: config.font.clone(),
             diff_layout: config.diff_layout,
@@ -1221,6 +1229,16 @@ impl Workspace {
                 Theme::sync_system_appearance(Some(window), cx);
                 crate::theming::set_input_background(Theme::global(cx).input_background(), cx);
                 crate::appearance::system_changed(cx);
+            }));
+        this.sync_composer_send_key(cx);
+        let shortcut_workspace = cx.entity().downgrade();
+        let shortcut_window = window.window_handle();
+        this._subscriptions
+            .push(cx.intercept_keystrokes(move |event, window, cx| {
+                if window.window_handle() == shortcut_window {
+                    let _ = shortcut_workspace
+                        .update(cx, |this, cx| this.intercept_shortcut(event, window, cx));
+                }
             }));
         let picker_input = this.picker.input.clone();
         this.subscribe_picker(&picker_input, window, cx);
@@ -1384,6 +1402,7 @@ impl Workspace {
             font_scale: self.font_scale,
             theme: self.theme_choice,
             send_key: self.send_key,
+            key_bindings: self.key_bindings.clone(),
             reduced_motion: self.reduced_motion,
             font: self.font.clone(),
             thoughts_expanded: self.conversation.thoughts_expanded,
@@ -2218,8 +2237,19 @@ impl Workspace {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
+        self.workspace_key_down_with_key(event, None, window, cx);
+    }
+
+    fn workspace_key_down_with_key(
+        &mut self,
+        event: &KeyDownEvent,
+        logical_key: Option<&str>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
         self.activate_keyboard_pane(window, cx);
-        if self.send_key == SendKey::AltEnter
+        if !self.shortcut_customized(Shortcut::Send)
+            && self.send_key == SendKey::AltEnter
             && is_alt_enter(&event.keystroke)
             && self.composer_focused(window, cx)
         {
@@ -2234,7 +2264,9 @@ impl Workspace {
             .is_focused(window)
         {
             let value = self.sidebar_search.read(cx).value().to_string();
-            if event.keystroke.key == "escape" && !value.is_empty() {
+            if logical_key.unwrap_or_else(|| self.navigation_key(&event.keystroke.key)) == "escape"
+                && !value.is_empty()
+            {
                 self.sidebar_search
                     .update(cx, |input, cx| input.set_value("", window, cx));
                 cx.stop_propagation();
@@ -2243,7 +2275,7 @@ impl Workspace {
             let query = value.trim();
             if !query.is_empty() {
                 let count = self.sidebar_results(query).len();
-                match event.keystroke.key.as_str() {
+                match logical_key.unwrap_or_else(|| self.navigation_key(&event.keystroke.key)) {
                     "down" if count > 0 => {
                         self.sidebar_selection = (self.sidebar_selection + 1) % count;
                         self.select_sidebar_session(window, cx);
@@ -2265,7 +2297,8 @@ impl Workspace {
             return;
         };
         if matches!(step, PickerStep::CloneRepository) {
-            if event.keystroke.key == "escape" {
+            if logical_key.unwrap_or_else(|| self.navigation_key(&event.keystroke.key)) == "escape"
+            {
                 self.back_from_picker(window, cx);
                 cx.stop_propagation();
             }
@@ -2281,7 +2314,7 @@ impl Workspace {
                     + usize::from(!self.picker.input.read(cx).value().trim().is_empty())
             }
         };
-        match event.keystroke.key.as_str() {
+        match logical_key.unwrap_or_else(|| self.navigation_key(&event.keystroke.key)) {
             "down" if count > 0 => {
                 self.picker.selection = (self.picker.selection + 1) % count;
                 cx.stop_propagation();

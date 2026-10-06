@@ -651,6 +651,7 @@ fn zoom_shortcuts_and_menu_actions_change_the_font_scale(cx: &mut gpui_kit::Test
     verify_inline_session_renaming(&restored, cx);
     verify_workspace_shortcuts(&restored, cx);
     verify_settings_apply_and_persist(&restored, temp.path(), cx);
+    verify_key_bindings(&restored, cx);
     verify_notifications_for_background_sessions(&restored, temp.path(), cx);
     verify_repository_cloning(&restored, temp.path(), cx);
     verify_split_panes(&restored, temp.path(), cx);
@@ -989,6 +990,141 @@ fn verify_inline_session_renaming(
             });
         });
     }
+}
+
+fn verify_key_bindings(workspace: &Entity<Workspace>, cx: &mut gpui_kit::VisualTestContext) {
+    let record = |shortcut, cx: &mut gpui_kit::VisualTestContext| {
+        cx.update(|window, cx| {
+            workspace.update(cx, |this, cx| {
+                if this.settings.is_none() {
+                    this.open_settings(window, cx);
+                }
+                let page = this.settings.as_mut().unwrap();
+                page.section = settings::SettingsSection::KeyBindings;
+                page.recording = Some(shortcut);
+                page.binding_error = None;
+                window.focus(&page.focus, cx);
+                cx.notify();
+            })
+        });
+    };
+    record(Shortcut::ZoomIn, cx);
+    let scale = cx.update(|_, cx| workspace.read(cx).font_scale);
+    cx.simulate_keystrokes("secondary-shift-n");
+    cx.update(|_, cx| {
+        let this = workspace.read(cx);
+        assert_eq!(
+            this.settings.as_ref().unwrap().recording,
+            Some(Shortcut::ZoomIn)
+        );
+        assert!(this.settings.as_ref().unwrap().binding_error.is_some());
+        assert_eq!(this.font_scale, scale);
+    });
+    cx.simulate_keystrokes("f6");
+    cx.update(|_, cx| {
+        let this = workspace.read(cx);
+        assert_eq!(this.settings.as_ref().unwrap().recording, None);
+        assert_eq!(
+            this.font_scale, scale,
+            "recording must not execute the shortcut"
+        );
+    });
+    cx.simulate_keystrokes("f6");
+    assert_eq!(
+        cx.update(|_, cx| workspace.read(cx).font_scale),
+        scale + FONT_SCALE_STEP
+    );
+    cx.simulate_keystrokes("secondary-=");
+    assert_eq!(
+        cx.update(|_, cx| workspace.read(cx).font_scale),
+        scale + FONT_SCALE_STEP,
+        "the previous binding must stop executing"
+    );
+    record(Shortcut::Send, cx);
+    cx.simulate_keystrokes("escape");
+    cx.update(|_, cx| assert!(!workspace.read(cx).shortcut_customized(Shortcut::Send)));
+    record(Shortcut::Send, cx);
+    cx.simulate_keystrokes("f7");
+    record(Shortcut::Newline, cx);
+    cx.simulate_keystrokes("f8");
+    cx.update(|window, cx| {
+        workspace.update(cx, |this, cx| {
+            this.persistence.wait().unwrap();
+            let (saved, _) = config::load().unwrap();
+            assert_eq!(saved.key_bindings, this.key_bindings);
+            assert_eq!(
+                key_bindings::validated(saved.key_bindings, saved.send_key),
+                this.key_bindings
+            );
+            this.close_settings(window, cx);
+            this.projects[0].agents[0].status = Status::Connecting;
+            this.projects[0].agents[0].config.pending_prompts.clear();
+            this.conversation.composer.update(cx, |input, cx| {
+                input.set_value("custom", window, cx);
+                input.set_cursor_position(Position::new(0, 6), window, cx);
+                input.focus(window, cx);
+            });
+        })
+    });
+    cx.simulate_keystrokes("enter");
+    cx.update(|_, cx| {
+        let this = workspace.read(cx);
+        assert!(this.projects[0].agents[0].config.pending_prompts.is_empty());
+        assert_eq!(
+            this.conversation.composer.read(cx).value().as_ref(),
+            "custom"
+        );
+    });
+    cx.simulate_keystrokes("f8");
+    cx.update(|_, cx| {
+        assert_eq!(
+            workspace
+                .read(cx)
+                .conversation
+                .composer
+                .read(cx)
+                .value()
+                .as_ref(),
+            "custom\n"
+        )
+    });
+    cx.simulate_keystrokes("f7");
+    cx.update(|_, cx| {
+        let this = workspace.read(cx);
+        assert_eq!(
+            this.projects[0].agents[0].config.pending_prompts,
+            [Prompt::from("custom")]
+        );
+    });
+    record(Shortcut::Confirm, cx);
+    cx.simulate_keystrokes("f9");
+    cx.update(|window, cx| {
+        workspace.update(cx, |this, cx| {
+            this.close_settings(window, cx);
+            this.open_picker(PickerStep::Folders, window, cx);
+            this.picker.folder_search = FolderSearch::new(vec![]);
+            this.notice = None;
+        })
+    });
+    cx.simulate_keystrokes("enter");
+    cx.update(|_, cx| assert!(workspace.read(cx).notice.is_none()));
+    cx.simulate_keystrokes("f9");
+    cx.update(|_, cx| assert!(workspace.read(cx).notice.is_some()));
+    record(Shortcut::Dismiss, cx);
+    cx.simulate_keystrokes("f10");
+    cx.simulate_keystrokes("escape");
+    cx.update(|_, cx| assert!(workspace.read(cx).settings.is_some()));
+    cx.simulate_keystrokes("f10");
+    cx.update(|_, cx| assert!(workspace.read(cx).settings.is_none()));
+    cx.update(|window, cx| {
+        workspace.update(cx, |this, cx| {
+            this.back_from_picker(window, cx);
+            this.reset_settings(window, cx);
+            assert!(this.key_bindings.is_empty());
+            assert!(this.composer_submits_on_enter());
+            this.notice = None;
+        })
+    });
 }
 
 fn verify_settings_apply_and_persist(

@@ -163,7 +163,8 @@ impl Workspace {
     }
 
     fn add_pane_state(&mut self, id: u64, window: &mut Window, cx: &mut Context<Self>) {
-        let composer = ConversationState::new_composer(self.send_key == SendKey::Enter, window, cx);
+        let composer =
+            ConversationState::new_composer(self.composer_submits_on_enter(), window, cx);
         self.subscribe_composer(&composer, window, cx);
         let input = cx.new(|cx| {
             InputState::new(window, cx)
@@ -368,7 +369,11 @@ impl Workspace {
                         }
                         cx.notify();
                     }
-                    InputEvent::PressEnter { .. } => this.confirm_picker(window, cx),
+                    InputEvent::PressEnter { .. }
+                        if !this.shortcut_customized(Shortcut::Confirm) =>
+                    {
+                        this.confirm_picker(window, cx)
+                    }
                     _ => {}
                 }
             },

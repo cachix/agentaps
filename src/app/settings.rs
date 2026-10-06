@@ -19,16 +19,18 @@ pub(super) enum SettingsSection {
     Interface,
     Conversation,
     Behavior,
+    KeyBindings,
     Agents,
     Accessibility,
     Advanced,
 }
 
 impl SettingsSection {
-    const ALL: [Self; 6] = [
+    const ALL: [Self; 7] = [
         Self::Interface,
         Self::Conversation,
         Self::Behavior,
+        Self::KeyBindings,
         Self::Agents,
         Self::Accessibility,
         Self::Advanced,
@@ -39,6 +41,7 @@ impl SettingsSection {
             Self::Interface => "Interface",
             Self::Conversation => "Conversation",
             Self::Behavior => "Behavior",
+            Self::KeyBindings => "Key bindings",
             Self::Agents => "Agents",
             Self::Advanced => "Advanced",
             Self::Accessibility => "Accessibility",
@@ -50,6 +53,7 @@ impl SettingsSection {
             Self::Interface => Icon::new(IconName::Palette),
             Self::Conversation => Icon::new(IconName::Bot),
             Self::Behavior => Icon::new(IconName::Settings2),
+            Self::KeyBindings => Icon::new(gpui_kit::assets::IconName::Keyboard),
             Self::Agents => Icon::new(IconName::SquareTerminal),
             Self::Advanced => Icon::new(IconName::Cpu),
             Self::Accessibility => Icon::new(IconName::Eye),
@@ -107,7 +111,9 @@ pub(super) struct SettingsPage {
     pub(super) web_connect_url: Entity<InputState>,
     pub(super) new_agent_name: Entity<InputState>,
     pub(super) new_agent_command: Entity<InputState>,
-    focus: FocusHandle,
+    pub(super) focus: FocusHandle,
+    pub(super) recording: Option<Shortcut>,
+    pub(super) binding_error: Option<String>,
     _subscriptions: Vec<Subscription>,
 }
 
@@ -302,6 +308,8 @@ impl Workspace {
             new_agent_name,
             new_agent_command,
             focus,
+            recording: None,
+            binding_error: None,
             _subscriptions: subscriptions,
         });
         cx.notify();
@@ -466,23 +474,14 @@ impl Workspace {
     }
 
     pub(super) fn set_send_key(&mut self, send_key: SendKey, cx: &mut Context<Self>) {
-        if send_key == self.send_key {
+        let customized = self.key_bindings.remove(Shortcut::Send.id()).is_some();
+        if send_key == self.send_key && !customized {
             return;
         }
         self.send_key = send_key;
-        let submit_on_enter = send_key == SendKey::Enter;
-        for composer in std::iter::once(&self.conversation.composer)
-            .chain(self.session_composers.values())
-            .chain(
-                self.inactive_panes
-                    .values()
-                    .map(|pane| &pane.conversation.composer),
-            )
-        {
-            composer.update(cx, |input, cx| {
-                input.set_submit_on_enter(submit_on_enter, cx)
-            });
-        }
+        self.key_bindings =
+            key_bindings::validated(std::mem::take(&mut self.key_bindings), send_key);
+        self.sync_composer_send_key(cx);
         self.persist();
         cx.notify();
     }
@@ -590,7 +589,9 @@ impl Workspace {
         self.set_thoughts_expanded(false, cx);
         self.set_tool_activity_expanded(true, cx);
         self.set_diff_layout(DiffPresentation::default(), cx);
+        self.key_bindings.clear();
         self.set_send_key(SendKey::default(), cx);
+        self.sync_composer_send_key(cx);
         self.set_notifications(true, cx);
         self.set_reduced_motion(false, cx);
         self.set_claude_executable(None, cx);
@@ -638,7 +639,19 @@ impl Workspace {
             SettingsSection::Behavior => settings_group(
                 [
                     setting_row(
-                        "Send message with",
+                        div()
+                            .flex()
+                            .flex_col()
+                            .gap_1()
+                            .child("Send message with")
+                            .when(self.shortcut_customized(Shortcut::Send), |label| {
+                                label.child(div().text_xs().text_color(palette.color(MUTED)).child(
+                                    format!(
+                                        "Custom key: {}. Choosing a preset replaces it.",
+                                        self.shortcut_label(Shortcut::Send)
+                                    ),
+                                ))
+                            }),
                         settings_select(&page.send_key),
                         palette,
                     ),
@@ -654,6 +667,7 @@ impl Workspace {
                 ],
                 palette,
             ),
+            SettingsSection::KeyBindings => self.key_bindings_page(page, palette, cx),
             SettingsSection::Agents => div()
                 .flex()
                 .flex_col()
@@ -760,7 +774,8 @@ impl Workspace {
             .size_full()
             .flex()
             .on_key_down(cx.listener(|this, event: &KeyDownEvent, window, cx| {
-                if event.keystroke.key == "escape"
+                if !this.shortcut_customized(Shortcut::Dismiss)
+                    && event.keystroke.key == "escape"
                     && this
                         .settings
                         .as_ref()
@@ -795,6 +810,8 @@ impl Workspace {
                             cx.listener(move |this, _, _, cx| {
                                 if let Some(page) = &mut this.settings {
                                     page.section = candidate;
+                                    page.recording = None;
+                                    page.binding_error = None;
                                 }
                                 cx.notify();
                             }),
@@ -832,6 +849,130 @@ impl Workspace {
                     )
                     .child(content),
             )
+    }
+}
+
+impl Workspace {
+    fn key_bindings_page(
+        &self,
+        page: &SettingsPage,
+        palette: Palette,
+        cx: &mut Context<Self>,
+    ) -> Div {
+        let groups = [
+            (
+                "Workspace",
+                vec![
+                    Shortcut::NewSession,
+                    Shortcut::QuickOpen,
+                    Shortcut::OpenSettings,
+                    Shortcut::ToggleSidebar,
+                    Shortcut::ToggleDiff,
+                    Shortcut::SearchSessions,
+                    Shortcut::NextSession,
+                    Shortcut::PreviousSession,
+                    Shortcut::ZoomIn,
+                    Shortcut::ZoomOut,
+                    Shortcut::ZoomReset,
+                    Shortcut::Minimize,
+                    Shortcut::Hide,
+                    Shortcut::HideOthers,
+                    Shortcut::Quit,
+                ],
+            ),
+            (
+                "Session selection",
+                vec![
+                    Shortcut::Session1,
+                    Shortcut::Session2,
+                    Shortcut::Session3,
+                    Shortcut::Session4,
+                    Shortcut::Session5,
+                    Shortcut::Session6,
+                    Shortcut::Session7,
+                    Shortcut::Session8,
+                    Shortcut::Session9,
+                ],
+            ),
+            (
+                "Composer",
+                vec![Shortcut::Send, Shortcut::Newline, Shortcut::Complete],
+            ),
+            (
+                "Navigation",
+                vec![
+                    Shortcut::Previous,
+                    Shortcut::Next,
+                    Shortcut::Confirm,
+                    Shortcut::Dismiss,
+                ],
+            ),
+        ];
+        div()
+            .w_full()
+            .max_w(px(SETTINGS_CONTENT_WIDTH))
+            .flex()
+            .flex_col()
+            .gap_4()
+            .child(div().text_sm().text_color(palette.color(MUTED)).child(
+                "Click a shortcut, then press the new key combination. Escape cancels. Changes are saved automatically.",
+            ))
+            .when_some(page.binding_error.clone(), |page, error| {
+                page.child(div().text_sm().text_color(palette.color(TEXT)).child(error))
+            })
+            .child(div().flex().gap_2()
+                .when(page.recording.is_some(), |row| row.child(
+                    Button::new("cancel-key-recording").ghost().label("Cancel")
+                        .on_click(cx.listener(|this, _, window, cx| {
+                            if let Some(page) = &mut this.settings {
+                                page.recording = None;
+                                page.binding_error = None;
+                                window.focus(&page.focus, cx);
+                            }
+                            cx.notify();
+                        })),
+                ))
+                .child(Button::new("reset-key-bindings").ghost().label("Restore default keys")
+                    .on_click(cx.listener(|this, _, window, cx| {
+                        this.key_bindings.clear();
+                        if let Some(page) = &mut this.settings {
+                            page.recording = None;
+                            page.binding_error = None;
+                            window.focus(&page.focus, cx);
+                        }
+                        this.set_send_key(SendKey::default(), cx);
+                        this.sync_composer_send_key(cx);
+                        this.sync_settings(window, cx);
+                        this.persist();
+                        cx.notify();
+                    })),
+                ))
+            .children(groups.into_iter().map(|(label, shortcuts)| {
+                div().flex().flex_col().gap_2()
+                    .child(settings_group_label(label, palette))
+                    .child(settings_group(shortcuts.into_iter().filter(|shortcut| shortcut.available()).map(|shortcut| {
+                        let recording = page.recording == Some(shortcut);
+                        setting_row(
+                            div().flex_1().min_w(px(0.)).text_sm().child(shortcut.label()),
+                            Button::new(("record-key-binding", shortcut as usize))
+                                .ghost()
+                                .label(if recording { "Press new keys…".to_owned() } else { self.shortcut_label(shortcut) })
+                                .tooltip("Click to change this shortcut")
+                                .on_click(cx.listener(move |this, _, window, cx| {
+                                    if let Some(page) = &mut this.settings {
+                                        page.recording = Some(shortcut);
+                                        page.binding_error = None;
+                                        window.focus(&page.focus, cx);
+                                    }
+                                    cx.notify();
+                                })),
+                            palette,
+                        )
+                    }), palette))
+            }))
+            .child(div().text_sm().text_color(palette.color(MUTED)).child(
+                "In the composer, type / for agent commands, @ for project files, or ! at the start for shell commands. Up edits the last queued message when the composer is empty; prompt recall uses the first or last line.",
+            ))
     }
 }
 
