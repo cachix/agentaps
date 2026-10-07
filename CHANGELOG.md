@@ -4,6 +4,18 @@ Notable changes to Agentaps are recorded here.
 
 ## [Unreleased]
 
+### Fixed
+
+- Split panes resize correctly from either side of thin separators.
+- Narrow chat panes keep session titles readable by moving project and diff controls onto a second header row.
+- Keep the Active session marker readable against sidebar selection colors in light and dark themes.
+
+### Changed
+
+- Empty checkout diffs show a disabled Diff button without +0 and -0 totals.
+- Show checkout diff totals in every open chat pane, mark the active pane with an accent line, and distinguish Active and Open sessions in the sidebar.
+- Reuse the active checkout’s diff watcher for pane totals instead of rescanning it on the background polling timer.
+
 ## [0.5.1] - 2026-10-07
 
 ### Fixed

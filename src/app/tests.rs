@@ -656,6 +656,7 @@ fn zoom_shortcuts_and_menu_actions_change_the_font_scale(cx: &mut gpui_kit::Test
     verify_repository_cloning(&restored, temp.path(), cx);
     verify_split_panes(&restored, temp.path(), cx);
     verify_project_archiving(&restored, cx);
+    verify_pane_resize_grab_areas(&restored, cx);
     // SAFETY: restore the process environment modified for this test.
     unsafe {
         if let Some(original) = original_config_home {
@@ -1909,11 +1910,55 @@ fn verify_split_panes(
             );
             this.diff.visible = true;
             this.diff.counts = Some((99, 99));
+            this.diff.loading = false;
+            let first = SessionLocation {
+                project_index: 0,
+                agent_index: 0,
+            };
+            let second = SessionLocation {
+                project_index: 0,
+                agent_index: 1,
+            };
+            assert_eq!(this.session_pane(first), Some(1));
+            assert_eq!(this.session_pane(second), Some(3));
+            assert_eq!(this.pane_diff_counts(0), Some((99, 99)));
+            this.diff
+                .pane_counts
+                .remember(path.to_owned(), this.diff.counts);
+            this.diff.loading = true;
+            assert_eq!(
+                this.pane_diff_counts(0),
+                Some((99, 99)),
+                "refreshing must retain checkout totals"
+            );
+            this.diff.loading = false;
+            this.with_pane(3, cx, |this, _| {
+                assert_eq!(this.pane_diff_counts(0), Some((99, 99)));
+                assert_eq!(this.session_pane(first), Some(1));
+                assert_eq!(this.session_pane(second), Some(3));
+            });
+            let other_path = path.join("other-checkout");
+            this.projects.push(ProjectView {
+                path: other_path.clone(),
+                ssh_host: None,
+                branch: "main".into(),
+                sync_counts: None,
+                agents: Vec::new(),
+            });
+            this.diff
+                .pane_counts
+                .counts
+                .insert(other_path.clone(), (7, 2));
+            assert_eq!(this.pane_diff_counts(1), Some((7, 2)));
+            this.projects[1].ssh_host = Some("example.test".into());
+            assert_eq!(this.pane_diff_counts(1), None);
+            this.projects.pop();
+            this.diff.pane_counts.counts.remove(&other_path);
             let request = this.diff.request_id;
             this.activate_pane(3, cx);
             assert!(this.diff.visible);
-            assert_ne!(this.diff.request_id, request);
-            assert_eq!(this.diff.counts, None);
+            assert_eq!(this.diff.request_id, request);
+            assert_eq!(this.diff.counts, Some((99, 99)));
             this.persist();
             this.persistence.wait().unwrap();
         });
@@ -2362,4 +2407,81 @@ fn verify_project_agent_dialog(
             this.picker.available_agents = available;
         })
     });
+}
+
+fn verify_pane_resize_grab_areas(
+    workspace: &Entity<Workspace>,
+    cx: &mut gpui_kit::VisualTestContext,
+) {
+    use crate::panes::{Direction, Layout, Node};
+    use gpui_kit::{MouseMoveEvent, point};
+
+    let original_size = cx.update(|window, _| window.viewport_size());
+    cx.simulate_resize(size(px(1200.), px(900.)));
+    for direction in [Direction::Right, Direction::Down] {
+        for offset in [-2., 2.] {
+            cx.update(|window, cx| {
+                workspace.update(cx, |this, cx| {
+                    this.pane_layout = Layout::default();
+                    this.pane_id = 1;
+                    this.next_pane_id = 2;
+                    this.inactive_panes.clear();
+                    this.view = WorkspaceView::Empty;
+                    this.diff.visible = false;
+                    this.pane_area_bounds.set(Bounds::default());
+                    this.pane_bounds.clear();
+                    this.pane_bounds.insert(
+                        1,
+                        std::rc::Rc::new(std::cell::Cell::new(Bounds::new(
+                            Default::default(),
+                            size(px(1200.), px(900.)),
+                        ))),
+                    );
+                    this.split_pane(direction, window, cx);
+                });
+            });
+            cx.update(|window, cx| {
+                window.draw(cx).clear(cx);
+            });
+            cx.update(|window, cx| {
+                window.draw(cx).clear(cx);
+            });
+            let start = cx.update(|_, cx| {
+                let bounds = workspace.read(cx).pane_bounds[&1].get();
+                match direction {
+                    Direction::Right => point(bounds.right() + px(offset), bounds.center().y),
+                    Direction::Down => point(bounds.center().x, bounds.bottom() + px(offset)),
+                }
+            });
+            // Grab outside the visible one-pixel line, on either side.
+            cx.simulate_mouse_down(start, MouseButton::Left, Default::default());
+            let mut end = start;
+            for distance in [20., 60.] {
+                end = match direction {
+                    Direction::Right => start + point(px(distance), px(0.)),
+                    Direction::Down => start + point(px(0.), px(distance)),
+                };
+                cx.simulate_event(MouseMoveEvent {
+                    position: end,
+                    pressed_button: Some(MouseButton::Left),
+                    modifiers: Default::default(),
+                });
+                cx.update(|window, cx| {
+                    window.draw(cx).clear(cx);
+                });
+            }
+            cx.update(|_, cx| assert!(cx.has_active_drag(), "grab area must start a resize"));
+            cx.simulate_mouse_up(end, MouseButton::Left, Default::default());
+            cx.update(|window, cx| {
+                workspace.update(cx, |this, cx| {
+                    let Node::Split { ratio, .. } = &this.pane_layout.root else {
+                        panic!("expected the split to remain open");
+                    };
+                    assert!(*ratio > 0.5, "dragging the grab area must resize the panes: direction={direction:?}, offset={offset}, ratio={ratio}, bounds={:?}, start={start:?}, end={end:?}", this.pane_bounds[&2].get());
+                    this.close_pane(window, cx);
+                });
+            });
+        }
+    }
+    cx.simulate_resize(original_size);
 }

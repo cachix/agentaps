@@ -12,16 +12,21 @@ impl Workspace {
         mut chat: Div,
         project_index: usize,
         agent_index: usize,
+        pane_width: f32,
         window: &Window,
         cx: &mut Context<Self>,
     ) -> Div {
         let palette = theme::palette(cx);
+        let compact_header = pane_width < 600. * self.font_scale;
         let project = &self.projects[project_index];
         let agent = &project.agents[agent_index];
-        let diff_counts = (self.pane_id == self.pane_layout.focused)
-            .then_some(self.diff.counts)
-            .flatten();
+        let diff_counts = self.pane_diff_counts(project_index);
+        let diff_shown = self.diff.visible
+            && self
+                .pane_session(self.pane_layout.focused)
+                .is_some_and(|session| session.project_index == project_index);
         let (added, removed) = diff_counts.unwrap_or_default();
+        let has_diff = added > 0 || removed > 0;
         let available_agents = self.picker.available_agents.clone();
         let current_command = agent.config.command.clone();
         let current_name = agent.name.clone();
@@ -122,6 +127,7 @@ impl Workspace {
         let agent_controls = div()
             .flex()
             .flex_1()
+            .when(compact_header, |controls| controls.flex_none().w_full())
             .min_w(px(0.))
             .items_center()
             .gap_2()
@@ -247,6 +253,7 @@ impl Workspace {
         let project_controls = div()
             .flex()
             .flex_1()
+            .when(compact_header, |controls| controls.flex_none().w_full())
             .min_w(px(0.))
             .items_center()
             .justify_end()
@@ -285,20 +292,23 @@ impl Workspace {
                     .border_1()
                     .border_color(palette.color(BORDER))
                     .text_sm()
-                    .text_color(palette.color(TEXT))
-                    .cursor_pointer()
-                    .hover(|style| style.bg(palette.color(HOVER)))
+                    .text_color(palette.color(if has_diff { TEXT } else { MUTED }))
+                    .when(has_diff, |button| {
+                        button
+                            .cursor_pointer()
+                            .hover(|style| style.bg(palette.color(HOVER)))
+                    })
                     .child(
                         div()
                             .flex()
                             .items_center()
                             .gap_2()
-                            .child(if self.diff.visible {
+                            .child(if has_diff && diff_shown {
                                 "Hide diff"
                             } else {
                                 "Diff"
                             })
-                            .when(diff_counts.is_some(), |element| {
+                            .when(has_diff, |element| {
                                 element
                                     .child(
                                         div()
@@ -312,13 +322,22 @@ impl Workspace {
                                     )
                             }),
                     )
-                    .tooltip(|window, cx| {
-                        let tooltip = Tooltip::new("Toggle diff").action(&ToggleDiff, None);
-                        tooltip.build(window, cx)
-                    })
-                    .on_click(self.pane_listener(cx, |this, _, window, cx| {
-                        this.toggle_diff(&ToggleDiff, window, cx);
-                    })),
+                    .when(has_diff, |button| {
+                        button
+                            .tooltip(|window, cx| {
+                                Tooltip::new("Toggle diff")
+                                    .action(&ToggleDiff, None)
+                                    .build(window, cx)
+                            })
+                            .on_click(self.pane_listener(cx, move |this, _, _, cx| {
+                                if diff_shown && this.diff.visible {
+                                    this.close_diff();
+                                    cx.notify();
+                                } else {
+                                    this.open_diff(project_index, cx);
+                                }
+                            }))
+                    }),
             )
             .child(session_menu);
         chat = chat.child(
@@ -330,6 +349,9 @@ impl Workspace {
                 .flex()
                 .items_center()
                 .gap_3()
+                .when(compact_header, |header| {
+                    header.flex_col().items_stretch().gap_1()
+                })
                 .child(agent_controls)
                 .child(project_controls),
         );

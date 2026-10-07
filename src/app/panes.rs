@@ -13,6 +13,38 @@ pub(super) struct PaneState {
 }
 
 impl Workspace {
+    pub(super) fn pane_session(&self, id: u64) -> Option<SessionLocation> {
+        if id == self.pane_id {
+            self.view.displayed_session()
+        } else {
+            self.inactive_panes.get(&id)?.view.displayed_session()
+        }
+    }
+
+    pub(super) fn session_pane(&self, session: SessionLocation) -> Option<u64> {
+        self.pane_layout
+            .root
+            .panes()
+            .into_iter()
+            .find_map(|(id, _)| (self.pane_session(id) == Some(session)).then_some(id))
+    }
+
+    pub(super) fn pane_diff_counts(&self, project_index: usize) -> Option<(usize, usize)> {
+        let project = &self.projects[project_index];
+        if project.ssh_host.is_some() {
+            return None;
+        }
+        let focused_project = self
+            .pane_session(self.pane_layout.focused)
+            .map(|session| session.project_index);
+        let counts = if focused_project == Some(project_index) && !self.diff.loading {
+            self.diff.counts
+        } else {
+            self.diff.pane_counts.counts.get(&project.path).copied()
+        };
+        Some(counts.unwrap_or_default())
+    }
+
     fn swap_pane(&mut self, id: u64) -> bool {
         if self.pane_id == id {
             return true;
@@ -46,23 +78,32 @@ impl Workspace {
     }
 
     pub(super) fn activate_pane(&mut self, id: u64, cx: &mut Context<Self>) -> bool {
+        let previous_project = self
+            .pane_session(self.pane_layout.focused)
+            .map(|session| session.project_index);
         if !self.swap_pane(id) {
             return false;
         }
         if self.pane_layout.focused != id {
             self.pane_layout.focused = id;
             self.persistence.dirty = true;
-            self.diff.request_id += 1;
-            self.diff.loading = false;
-            self.diff.counts = None;
-            self.diff.files.clear();
-            self.diff.file_stats.clear();
-            self.diff.error = None;
-            self.diff.selected_file = None;
-            self.diff.rows = Arc::new(Vec::new());
-            self.diff.list = ListState::new(0, ListAlignment::Top, px(28.));
-            if let Some(session) = self.view.displayed_session() {
-                self.refresh_diff(session.project_index, cx);
+            let project = self
+                .view
+                .displayed_session()
+                .map(|session| session.project_index);
+            if previous_project != project {
+                self.diff.request_id += 1;
+                self.diff.loading = false;
+                self.diff.counts = None;
+                self.diff.files.clear();
+                self.diff.file_stats.clear();
+                self.diff.error = None;
+                self.diff.selected_file = None;
+                self.diff.rows = Arc::new(Vec::new());
+                self.diff.list = ListState::new(0, ListAlignment::Top, px(28.));
+                if let Some(session) = self.view.displayed_session() {
+                    self.refresh_diff(session.project_index, cx);
+                }
             }
             self.mark_displayed_agent_viewed();
             cx.notify();

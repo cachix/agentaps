@@ -1184,6 +1184,7 @@ impl Workspace {
                 last_snapshot: None,
             },
             diff: DiffState {
+                pane_counts: Default::default(),
                 visible: false,
                 selected_file: None,
                 presentation: config.diff_layout,

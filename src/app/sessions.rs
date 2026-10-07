@@ -629,7 +629,31 @@ impl Workspace {
                 });
             }
         }
+        let open_paths = self
+            .pane_layout
+            .root
+            .panes()
+            .into_iter()
+            .filter_map(|(id, _)| self.pane_session(id))
+            .map(|session| &self.projects[session.project_index])
+            .filter(|project| project.ssh_host.is_none())
+            .map(|project| project.path.clone())
+            .collect();
+        let watched_path = project_index
+            .map(|index| &self.projects[index])
+            .filter(|project| project.ssh_host.is_none())
+            .map(|project| project.path.clone());
+        if self
+            .diff
+            .pane_counts
+            .poll(open_paths, watched_path.as_deref())
+        {
+            cx.notify();
+        }
         if self.diff.poll_results() {
+            if let Some(path) = watched_path {
+                self.diff.pane_counts.remember(path, self.diff.counts);
+            }
             cx.notify();
         }
         while let Ok((generation, watcher)) = self.diff.watcher_rx.try_recv() {
