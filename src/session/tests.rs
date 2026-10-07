@@ -871,6 +871,196 @@ fn next_request(rx: &mpsc::Receiver<Event>) -> Value {
 
 #[cfg(unix)]
 #[test]
+fn context_reset_keeps_live_agent_and_restores_settings_before_prompts() {
+    for protocol in [ProtocolVersion::V1, ProtocolVersion::V2] {
+        let mut session = agent(protocol);
+        session.active_work = false;
+        session.status = Status::Idle;
+        session.config.title = Some("My task".into());
+        session.config.custom_title = Some("My session".into());
+        session.context = Some((42, 100));
+        session.log(Role::User, "Old context");
+        session.config.prompt_history.push("Old context".into());
+        session.config.pending_prompts.push("Next task".into());
+        let mut options = json!([
+            {"id":"model","category":"model","currentValue":"strong",
+                "options":[{"value":"default","name":"Default"},{"value":"strong","name":"Strong"}]},
+            {"id":"reasoning_effort","currentValue":"high",
+                "options":[{"value":"low","name":"Low"},{"value":"high","name":"High"}]},
+            {"id":"mode","category":"mode","currentValue":"auto",
+                "options":[{"value":"default","name":"Default"},{"value":"auto","name":"Auto"}]},
+            {"id":"collaboration_mode","currentValue":"plan",
+                "options":[{"value":"default","name":"Default"},{"value":"plan","name":"Plan"}]}
+        ]);
+        update_config_options(&mut session, &options);
+        let rx = echo_requests(&mut session);
+        session.next_request_id = 20;
+        session.reset_context(Path::new("/")).unwrap();
+        assert_eq!(next_request(&rx)["method"], "session/new");
+        assert_eq!(session.config.id, 1);
+        assert_eq!(session.config.session_title(), Some("My session"));
+        assert_eq!(session.config.title.as_deref(), Some("My task"));
+        assert_eq!(session.config.prompt_history, ["Old context"]);
+        assert_eq!(session.config.pending_prompts[0].text, "Next task");
+        assert!(session.connection.is_some());
+        assert_eq!(session.protocol, Some(protocol));
+        assert_eq!(session.context, None);
+        assert_eq!(session.messages.len(), 1);
+        assert_eq!(session.messages[0].role, Role::ContextReset);
+        session.handle_update(&json!({"params":{"sessionId":"session-1","update":{
+            "sessionUpdate":"agent_message","messageId":"late","content":[{"type":"text","text":"Old reply"}]
+        }}}));
+        assert_eq!(session.messages.len(), 1);
+        // The default model initially offers only low effort. Restoring the model
+        // makes high effort available, so effort must be restored afterwards.
+        options[0]["currentValue"] = json!("default");
+        options[1]["currentValue"] = json!("low");
+        options[1]["options"] = json!([{"value":"low","name":"Low"}]);
+        options[2]["currentValue"] = json!("default");
+        options[3]["currentValue"] = json!("default");
+        session.handle_message(
+            Path::new("/"),
+            &json!({"id":2,"result":{
+                "sessionId":"fresh-session","configOptions":options
+            }}),
+        );
+        for (index, id, selected) in [
+            (0, "model", "strong"),
+            (1, "reasoning_effort", "high"),
+            (2, "mode", "auto"),
+            (3, "collaboration_mode", "plan"),
+        ] {
+            let request = next_request(&rx);
+            assert_eq!(request["method"], "session/set_config_option");
+            assert_eq!(request["params"]["sessionId"], "fresh-session");
+            assert_eq!(request["params"]["configId"], id);
+            assert_eq!(request["params"]["value"], selected);
+            assert!(session.setting_pending());
+            assert!(session.start_prompt("Too soon".into()).is_err());
+            assert!(!session.start_next_queued_prompt());
+            options[index]["currentValue"] = json!(selected);
+            options[1]["options"] =
+                json!([{"value":"low","name":"Low"},{"value":"high","name":"High"}]);
+            session.handle_message(
+                Path::new("/"),
+                &json!({"id":request["id"],"result":{"configOptions":options}}),
+            );
+        }
+        assert!(!session.setting_pending());
+        assert_eq!(session.status, Status::Idle);
+        assert_eq!(session.effort_option.as_ref().unwrap().current, "high");
+        assert!(session.plan_toggle().unwrap().active);
+        assert!(session.start_next_queued_prompt());
+        let prompt = next_request(&rx);
+        assert_eq!(prompt["method"], "session/prompt");
+        assert_eq!(prompt["params"]["sessionId"], "fresh-session");
+        assert_eq!(prompt["params"]["prompt"][0]["text"], "Next task");
+    }
+}
+
+#[cfg(unix)]
+#[test]
+fn context_reset_restores_legacy_modes_and_handles_setting_errors() {
+    let mut session = agent(ProtocolVersion::V1);
+    session.active_work = false;
+    session.status = Status::Idle;
+    let modes = json!({"currentModeId":"auto","availableModes":[
+        {"id":"default","name":"Default"},{"id":"auto","name":"Auto"}
+    ]});
+    update_session_modes(&mut session, &modes);
+    let rx = echo_requests(&mut session);
+    session.reset_context(Path::new("/")).unwrap();
+    assert_eq!(next_request(&rx)["method"], "session/new");
+    let mut defaults = modes.clone();
+    defaults["currentModeId"] = json!("default");
+    session.handle_message(
+        Path::new("/"),
+        &json!({"id":2,"result":{
+            "sessionId":"fresh-session","modes":defaults
+        }}),
+    );
+    let request = next_request(&rx);
+    assert_eq!(request["method"], "session/set_mode");
+    assert_eq!(request["params"]["modeId"], "auto");
+    session.handle_message(
+        Path::new("/"),
+        &json!({"id":request["id"],"error":{"message":"Mode refused"}}),
+    );
+    assert!(!session.setting_pending());
+    assert_eq!(session.status, Status::Idle);
+    assert!(
+        session
+            .messages
+            .last()
+            .unwrap()
+            .text
+            .contains("Mode refused")
+    );
+}
+
+#[cfg(unix)]
+#[test]
+fn context_reset_skips_unavailable_selections_and_clears_pending_state_on_failure() {
+    let mut session = agent(ProtocolVersion::V2);
+    session.active_work = false;
+    session.status = Status::Idle;
+    update_config_options(
+        &mut session,
+        &json!([
+            {"id":"reasoning_effort","currentValue":"high","options":[{"value":"high","name":"High"}]}
+        ]),
+    );
+    let rx = echo_requests(&mut session);
+    session.reset_context(Path::new("/")).unwrap();
+    assert_eq!(next_request(&rx)["method"], "session/new");
+    session.handle_message(Path::new("/"), &json!({"id":2,"result":{
+        "sessionId":"fresh-session","configOptions":[
+            {"id":"reasoning_effort","currentValue":"low","options":[{"value":"low","name":"Low"}]}
+        ]
+    }}));
+    assert!(!session.setting_pending());
+    assert_eq!(session.status, Status::Idle);
+    assert!(
+        session
+            .messages
+            .last()
+            .unwrap()
+            .text
+            .contains("no longer available")
+    );
+    assert_eq!(session.effort_option.as_ref().unwrap().current, "low");
+    session.reset_context(Path::new("/")).unwrap();
+    assert_eq!(next_request(&rx)["method"], "session/new");
+    session.handle_message(
+        Path::new("/"),
+        &json!({"id":2,"error":{"message":"Session refused"}}),
+    );
+    assert!(!session.setting_pending());
+    assert_eq!(session.status, Status::Error);
+    assert!(
+        session
+            .messages
+            .last()
+            .unwrap()
+            .text
+            .contains("Session refused")
+    );
+}
+
+#[test]
+fn context_reset_rejects_busy_or_disconnected_agents_without_clearing_context() {
+    let mut session = agent(ProtocolVersion::V2);
+    session.log(Role::User, "Keep this context");
+    assert!(session.reset_context(Path::new("/")).is_err());
+    session.active_work = false;
+    session.status = Status::Idle;
+    assert!(session.reset_context(Path::new("/")).is_err());
+    assert_eq!(session.session_id.as_deref(), Some("session-1"));
+    assert_eq!(session.messages[0].text, "Keep this context");
+}
+
+#[cfg(unix)]
+#[test]
 fn v2_resume_requests_history_and_rebuilds_the_view_from_harness_replay() {
     let mut session = agent(ProtocolVersion::V2);
     session.active_work = false;
