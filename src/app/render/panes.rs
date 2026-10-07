@@ -6,7 +6,7 @@ use gpui_kit::component::menu::PopupMenu;
 struct PaneResize {
     split_id: u64,
     direction: Direction,
-    bounds: Bounds<gpui_kit::Pixels>,
+    bounds: std::rc::Rc<std::cell::Cell<Bounds<gpui_kit::Pixels>>>,
 }
 
 impl Render for PaneResize {
@@ -111,6 +111,7 @@ impl Workspace {
                                 chat,
                                 session.project_index,
                                 session.agent_index,
+                                width,
                                 window,
                                 cx,
                             )
@@ -195,6 +196,20 @@ impl Workspace {
                         .size_full(),
                     )
                     .child(content)
+                    .when(
+                        id == self.pane_layout.focused && !self.inactive_panes.is_empty(),
+                        |pane| {
+                            pane.child(
+                                div()
+                                    .absolute()
+                                    .top_0()
+                                    .left_0()
+                                    .w_full()
+                                    .h(px(2.))
+                                    .bg(palette.color(ACCENT)),
+                            )
+                        },
+                    )
                     .into_any_element()
             }
             Node::Split {
@@ -221,49 +236,58 @@ impl Workspace {
                     cx,
                 );
                 let bounds = self.pane_bounds.entry(*id).or_default().clone();
-                let drag_bounds = bounds.clone();
                 let split_id = *id;
                 let direction = *direction;
                 let divider = div()
-                    .id(("pane-divider", split_id))
-                    .relative()
-                    .flex_shrink_0()
+                    .absolute()
                     .when(right, |divider| {
                         divider
+                            .left(px(a))
+                            .top_0()
                             .w(px(crate::panes::DIVIDER))
                             .h_full()
-                            .cursor_ew_resize()
                     })
                     .when(!right, |divider| {
                         divider
+                            .top(px(a))
+                            .left_0()
                             .h(px(crate::panes::DIVIDER))
                             .w_full()
-                            .cursor_ns_resize()
                     })
                     .bg(palette.color(BORDER))
-                    .hover(|style| style.bg(palette.color(ACCENT)))
                     .child(
                         div()
+                            .id(("pane-divider", split_id))
                             .absolute()
+                            .occlude()
                             .when(right, |target| {
-                                target.left(px(-2.5)).top_0().w(px(6.)).h_full()
+                                target
+                                    .left(px(-2.5))
+                                    .top_0()
+                                    .w(px(6.))
+                                    .h_full()
+                                    .cursor_ew_resize()
                             })
                             .when(!right, |target| {
-                                target.top(px(-2.5)).left_0().h(px(6.)).w_full()
-                            }),
-                    )
-                    .on_drag(
-                        PaneResize {
-                            split_id,
-                            direction,
-                            bounds: Bounds::default(),
-                        },
-                        move |drag, _, _, cx| {
-                            cx.stop_propagation();
-                            let mut drag = drag.clone();
-                            drag.bounds = drag_bounds.get();
-                            cx.new(|_| drag)
-                        },
+                                target
+                                    .top(px(-2.5))
+                                    .left_0()
+                                    .h(px(6.))
+                                    .w_full()
+                                    .cursor_ns_resize()
+                            })
+                            .hover(|style| style.bg(palette.color(ACCENT).opacity(0.3)))
+                            .on_drag(
+                                PaneResize {
+                                    split_id,
+                                    direction,
+                                    bounds: bounds.clone(),
+                                },
+                                move |drag, _, _, cx| {
+                                    cx.stop_propagation();
+                                    cx.new(|_| drag.clone())
+                                },
+                            ),
                     );
                 div()
                     .id(("pane-split", split_id))
@@ -284,8 +308,15 @@ impl Workspace {
                         .size_full(),
                     )
                     .child(first)
-                    .child(divider)
+                    .child(
+                        div()
+                            .flex_shrink_0()
+                            .when(right, |gap| gap.w(px(crate::panes::DIVIDER)).h_full())
+                            .when(!right, |gap| gap.h(px(crate::panes::DIVIDER)).w_full()),
+                    )
                     .child(second)
+                    // Paint the grab area above both panes so its outer edges receive input.
+                    .child(divider)
                     .into_any_element()
             }
         }
@@ -368,6 +399,7 @@ impl Workspace {
             .on_drag_move(
                 cx.listener(|this, event: &DragMoveEvent<PaneResize>, _, cx| {
                     let drag = event.drag(cx);
+                    let bounds = drag.bounds.get();
                     let Some(node @ Node::Split { .. }) =
                         this.pane_layout.root.find_mut(drag.split_id)
                     else {
@@ -390,14 +422,14 @@ impl Workspace {
                     let b = second.minimum_size();
                     let (position, total, min_a, min_b) = match direction {
                         Direction::Right => (
-                            f32::from(event.event.position.x - drag.bounds.origin.x),
-                            f32::from(drag.bounds.size.width) - crate::panes::DIVIDER,
+                            f32::from(event.event.position.x - bounds.origin.x),
+                            f32::from(bounds.size.width) - crate::panes::DIVIDER,
                             a.0,
                             b.0,
                         ),
                         Direction::Down => (
-                            f32::from(event.event.position.y - drag.bounds.origin.y),
-                            f32::from(drag.bounds.size.height) - crate::panes::DIVIDER,
+                            f32::from(event.event.position.y - bounds.origin.y),
+                            f32::from(bounds.size.height) - crate::panes::DIVIDER,
                             a.1,
                             b.1,
                         ),

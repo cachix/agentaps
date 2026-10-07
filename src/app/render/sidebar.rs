@@ -174,10 +174,20 @@ impl Workspace {
                 .to_owned();
             visible_sessions += 1;
             projects_with_sessions.insert(project_index);
+            let open_pane = self.session_pane(location);
+            let active = open_pane == Some(self.pane_layout.focused);
+            let open = open_pane.is_some();
             let selected = if session_query.is_empty() {
-                self.view.highlighted_session() == Some(location)
+                active && self.view.highlighted_session() == Some(location)
             } else {
                 index == self.sidebar_selection
+            };
+            let row_color = if selected {
+                SELECTED
+            } else if open {
+                SURFACE
+            } else {
+                SIDEBAR
             };
             let agent_id = agent.config.id;
             let order_index = self
@@ -205,7 +215,7 @@ impl Workspace {
                 .pr(rems(if nested_sidebar { 1.875 } else { 0.25 }))
                 .cursor_pointer()
                 .when(!archived, |element| element.cursor_move())
-                .bg(palette.color(if selected { SELECTED } else { SIDEBAR }))
+                .bg(palette.color(row_color))
                 .hover(|style| {
                     let style = style.bg(palette.color(if selected { SELECTED } else { HOVER }));
                     if nested_sidebar {
@@ -303,6 +313,28 @@ impl Workspace {
                         .text_color(palette.color(TEXT))
                         .child(name),
                 )
+                .when(open, |row| {
+                    let label = if active { "Active" } else { "Open" };
+                    row.child(
+                        div()
+                            .id(("session-pane-state", agent_id))
+                            .flex_shrink_0()
+                            .px_1()
+                            .rounded_sm()
+                            .when(active, |badge| badge.bg(palette.color(BG)))
+                            .text_size(rems(0.625))
+                            .text_color(palette.color(if active { ACCENT } else { MUTED }))
+                            .child(label)
+                            .tooltip(move |window, cx| {
+                                Tooltip::new(if active {
+                                    "Shown in the active pane"
+                                } else {
+                                    "Shown in another pane. Click to focus it"
+                                })
+                                .build(window, cx)
+                            }),
+                    )
+                })
                 .when(!nested_sidebar, |row| {
                     let tooltip = format!("{} · {}", project.display_path(), project.branch);
                     row.child(

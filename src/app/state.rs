@@ -1,7 +1,72 @@
 //! UI components own their related state rather than sharing flat workspace fields.
 use super::*;
 
+/// Checkout totals remain available to every visible pane, independently of
+/// the shared review panel and its focused checkout.
+pub(super) struct PaneDiffCounts {
+    pub(super) counts: HashMap<PathBuf, (usize, usize)>,
+    pending: HashSet<PathBuf>,
+    refreshed: HashMap<PathBuf, Instant>,
+    tx: Sender<(PathBuf, Option<(usize, usize)>)>,
+    rx: Receiver<(PathBuf, Option<(usize, usize)>)>,
+}
+
+impl Default for PaneDiffCounts {
+    fn default() -> Self {
+        let (tx, rx) = mpsc::channel();
+        Self {
+            counts: HashMap::new(),
+            pending: HashSet::new(),
+            refreshed: HashMap::new(),
+            tx,
+            rx,
+        }
+    }
+}
+
+impl PaneDiffCounts {
+    pub(super) fn remember(&mut self, path: PathBuf, counts: Option<(usize, usize)>) {
+        self.counts.insert(path.clone(), counts.unwrap_or_default());
+        self.refreshed.insert(path, Instant::now());
+    }
+
+    pub(super) fn poll(&mut self, paths: HashSet<PathBuf>, watched_path: Option<&Path>) -> bool {
+        let mut changed = false;
+        while let Ok((path, counts)) = self.rx.try_recv() {
+            self.pending.remove(&path);
+            self.refreshed.insert(path.clone(), Instant::now());
+            if let Some(counts) = counts {
+                changed |= self.counts.insert(path, counts) != Some(counts);
+            } else {
+                changed |= self.counts.remove(&path).is_some();
+            }
+        }
+        self.counts.retain(|path, _| paths.contains(path));
+        self.refreshed.retain(|path, _| paths.contains(path));
+        for path in paths {
+            // The active checkout already has a watcher and a load in flight.
+            if watched_path == Some(path.as_path())
+                || self.pending.contains(&path)
+                || self
+                    .refreshed
+                    .get(&path)
+                    .is_some_and(|at| at.elapsed() < Duration::from_secs(3))
+            {
+                continue;
+            }
+            self.pending.insert(path.clone());
+            let tx = self.tx.clone();
+            std::thread::spawn(move || {
+                let counts = crate::git_diff::line_counts(&path).ok().flatten();
+                let _ = tx.send((path, counts));
+            });
+        }
+        changed
+    }
+}
+
 pub(super) struct DiffState {
+    pub(super) pane_counts: PaneDiffCounts,
     pub(super) visible: bool,
     pub(super) selected_file: Option<String>,
     pub(super) presentation: DiffPresentation,
