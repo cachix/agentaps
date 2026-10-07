@@ -193,38 +193,27 @@ impl Workspace {
         agent_index: usize,
         cx: &mut Context<Self>,
     ) {
-        let old_id = self.projects[project_index].agents[agent_index].config.id;
-        let new_id = self.next_agent_id;
-        self.next_agent_id += 1;
-        let agent = &self.projects[project_index].agents[agent_index];
-        let messages = vec![ChatEntry {
-            role: Role::ContextReset,
-            key: None,
-            text: "Context reset. The previous session is archived; this session starts with fresh context.".into(),
-            images: Vec::new(),
-        }];
-        let config = agent.reset_config(new_id, messages);
+        let agent = &mut self.projects[project_index].agents[agent_index];
+        let old_id = agent.config.id;
         let mut archived = agent.snapshot();
+        archived.id = self.next_agent_id;
         archived.archived = true;
-        self.projects[project_index].agents[agent_index] =
-            AgentView::new(config, self.images.clone());
+        let path = self.projects[project_index].path.clone();
+        if let Err(error) = self.projects[project_index].agents[agent_index]
+            .controller
+            .reset_context(&path)
+        {
+            self.notice = Some(Notice::Error(error));
+            cx.notify();
+            return;
+        }
+        self.projects[project_index].agents[agent_index]
+            .elicitations
+            .clear();
+        self.next_agent_id += 1;
         self.projects[project_index]
             .agents
             .push(AgentView::new(archived, self.images.clone()));
-        if let Some(id) = self.sidebar_order.iter_mut().find(|id| **id == old_id) {
-            *id = new_id;
-        } else {
-            self.sidebar_order.push(new_id);
-        }
-        if let Some(composer) = self.session_composers.remove(&old_id) {
-            self.session_composers.insert(new_id, composer);
-        }
-        if let Some(images) = self.draft_images.remove(&old_id) {
-            self.draft_images.insert(new_id, images);
-        }
-        if let Some(files) = self.draft_files.remove(&old_id) {
-            self.draft_files.insert(new_id, files);
-        }
         self.conversation
             .toggled_tool_groups
             .retain(|(id, _)| *id != old_id);
@@ -239,8 +228,6 @@ impl Workspace {
             .retain(|(id, _)| *id != old_id);
         self.conversation.chat_list_agent = None;
         self.conversation.chat_rows.clear();
-        self.pane_layout.root = self.saved_pane_layout().root;
-        self.connect(project_index, agent_index);
         self.notice = None;
         self.persist();
         cx.notify();

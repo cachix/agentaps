@@ -136,6 +136,8 @@ pub(crate) struct SessionController {
     pub(crate) pending_mode: Option<(u64, String)>,
     pub(crate) collaboration_option: Option<ConfigSelectOption>,
     pub(crate) pending_collaboration: Option<(u64, String)>,
+    reset_settings: Vec<(ConfigOptionKind, String)>,
+    resetting_context: bool,
     pub(crate) context: Option<(u64, u64)>,
     pub(crate) status: Status,
     pub(crate) protocol: Option<ProtocolVersion>,
@@ -303,7 +305,8 @@ pub(crate) fn set_config_option_request(
 impl SessionController {
     /// A setting change is waiting for the agent's reply.
     pub(crate) fn setting_pending(&self) -> bool {
-        self.pending_model.is_some()
+        self.resetting_context
+            || self.pending_model.is_some()
             || self.pending_effort.is_some()
             || self.pending_mode.is_some()
             || self.pending_collaboration.is_some()
@@ -381,6 +384,97 @@ impl SessionController {
             fork_pending: false,
             fork_source: None,
         }
+    }
+
+    /// Clear conversation context while retaining the live harness and UI identity.
+    pub(crate) fn reset_context(&mut self, path: &Path) -> Result<(), String> {
+        if self.active_work || self.setting_pending() || self.status == Status::Connecting {
+            return Err("Wait for the current request before resetting context".into());
+        }
+        if self.session_id.is_none() {
+            return Err("Agent is not connected".into());
+        }
+        let request = json!({"jsonrpc":"2.0","id":2,"method":"session/new","params":{
+            "cwd":path,"mcpServers":[]
+        }});
+        self.send(request.clone())?;
+        self.resetting_context = true;
+        self.reset_settings = [
+            (ConfigOptionKind::Model, &self.model_option),
+            (ConfigOptionKind::Effort, &self.effort_option),
+            (ConfigOptionKind::Mode, &self.mode_option),
+            (ConfigOptionKind::Collaboration, &self.collaboration_option),
+        ]
+        .into_iter()
+        .filter_map(|(kind, option)| option.as_ref().map(|option| (kind, option.current.clone())))
+        .collect();
+        let title = self.config.title.clone();
+        let pending_prompts = std::mem::take(&mut self.config.pending_prompts);
+        let commands = std::mem::take(&mut self.config.available_commands);
+        let history = std::mem::take(&mut self.config.prompt_history);
+        self.config = self.reset_config(self.config.id, Vec::new());
+        self.config.title = title;
+        self.config.pending_prompts = pending_prompts;
+        self.config.available_commands = commands;
+        self.config.prompt_history = history;
+        self.context = None;
+        self.messages.clear();
+        self.messages.push(ChatEntry {
+            role: Role::ContextReset,
+            key: None,
+            text: "Context reset. Your session settings are preserved; the previous conversation is archived.".into(),
+            images: Vec::new(),
+        });
+        self.status = Status::Connecting;
+        self.session_id = None;
+        self.restoring = None;
+        self.recovery_due = None;
+        self.cancel_requested = false;
+        self.awaiting_response = false;
+        self.permissions.clear();
+        self.remember_auth_request(request);
+        Ok(())
+    }
+
+    /// Apply selections in order because changing model can change effort choices.
+    fn restore_reset_settings(&mut self) {
+        while !self.reset_settings.is_empty() {
+            let (kind, value) = self.reset_settings.remove(0);
+            let Some(option) = self.setting_option(kind).clone() else {
+                continue;
+            };
+            if option.current == value {
+                continue;
+            }
+            if !option.choices.iter().any(|choice| choice.value == value) {
+                self.log(
+                    Role::System,
+                    format!("The previous setting is no longer available: {value}"),
+                );
+                continue;
+            }
+            let Some(session_id) = self.session_id.as_deref() else {
+                self.reset_settings.clear();
+                return;
+            };
+            let id = self.next_request_id;
+            let request = if kind == ConfigOptionKind::Mode {
+                mode_request(id, session_id, &option, self.legacy_modes, &value)
+            } else {
+                set_config_option_request(id, session_id, &option, &value)
+            };
+            match self.send(request) {
+                Ok(()) => {
+                    self.next_request_id += 1;
+                    *self.pending_setting(kind) = Some((id, value));
+                    self.status = Status::Connecting;
+                    return;
+                }
+                Err(error) => self.log(Role::System, format!("Could not restore setting: {error}")),
+            }
+        }
+        self.resetting_context = false;
+        self.status = Status::Idle;
     }
 
     pub(crate) fn fork_config(&self, id: u64, response_index: usize) -> Option<AgentConfig> {
@@ -489,6 +583,8 @@ impl SessionController {
             pending_mode: None,
             collaboration_option: None,
             pending_collaboration: None,
+            reset_settings: Vec::new(),
+            resetting_context: false,
             context,
             status: Status::Connecting,
             protocol: None,
@@ -680,6 +776,9 @@ impl SessionController {
     }
 
     pub(crate) fn start_prompt(&mut self, prompt: Prompt) -> Result<(), String> {
+        if self.resetting_context {
+            return Err("Agent is still connecting".into());
+        }
         let session_id = self.session_id.clone().ok_or("Agent is still connecting")?;
         if !prompt.images.is_empty() && !self.accepts_images {
             return Err("This agent does not accept images.".into());
@@ -740,6 +839,7 @@ impl SessionController {
 
     pub(crate) fn start_next_queued_prompt(&mut self) -> bool {
         if self.active_work
+            || self.resetting_context
             || self.restoring.is_some()
             || self.config.was_working
             || !matches!(self.status, Status::Idle | Status::Done)
@@ -1124,6 +1224,9 @@ impl SessionController {
                     agent.model = Some(option.label());
                 }
             }
+            if agent.resetting_context {
+                agent.restore_reset_settings();
+            }
             return None;
         }
         if let Some(error) = value.get("error") {
@@ -1137,6 +1240,10 @@ impl SessionController {
                 .is_some_and(|retry| retry.request["id"] == id)
             {
                 agent.oauth_retry = None;
+            }
+            if id == 2 {
+                agent.reset_settings.clear();
+                agent.resetting_context = false;
             }
             if id == 2 && agent.restoring.take().is_some() {
                 agent.log(
@@ -1284,8 +1391,10 @@ impl SessionController {
                     agent.session_id = Some(session_id.to_owned());
                     agent.config.session_id = agent.session_id.clone();
                     update_session_settings(agent, &value["result"]);
-                    agent.status = Status::Idle;
+                    agent.restore_reset_settings();
                 } else {
+                    agent.reset_settings.clear();
+                    agent.resetting_context = false;
                     agent.status = Status::Error;
                     agent.log(Role::System, "Agent returned no session ID");
                 }
@@ -1343,6 +1452,8 @@ impl SessionController {
         self.oauth_retry = None;
         self.awaiting_response = false;
         self.clear_pending_settings();
+        self.reset_settings.clear();
+        self.resetting_context = false;
         self.cancel_requested = false;
         self.permissions.clear();
         if self.status != Status::Error {
@@ -1369,6 +1480,9 @@ impl SessionController {
     }
 
     pub(crate) fn handle_update(&mut self, value: &Value) {
+        if self.resetting_context && self.session_id.is_none() {
+            return;
+        }
         let event = match decode_update(self.protocol, self.session_id.as_deref(), value) {
             Ok(Some(event)) => event,
             Ok(None) => return,
@@ -1389,6 +1503,9 @@ impl SessionController {
             SessionUpdate::Commands(commands) => self.config.available_commands = commands,
             SessionUpdate::Running => self.enter_running(),
             SessionUpdate::Idle(reason) => {
+                if self.resetting_context {
+                    return;
+                }
                 if self.oauth_retry.as_ref().is_some_and(|retry| {
                     retry.due.is_some() && retry.request["method"] == "session/prompt"
                 }) {

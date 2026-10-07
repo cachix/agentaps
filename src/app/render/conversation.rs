@@ -115,7 +115,10 @@ impl Workspace {
         let location = project.display_path();
         let can_reset = agent
             .context
-            .is_some_and(|(used, size)| used > 0 && size > 0);
+            .is_some_and(|(used, size)| used > 0 && size > 0)
+            && !agent.active_work
+            && !agent.setting_pending()
+            && agent.status != Status::Connecting;
         let agent_controls = div()
             .flex()
             .flex_1()
@@ -1047,7 +1050,10 @@ impl Workspace {
                 compact_tokens(used),
                 compact_tokens(size)
             );
-            let can_reset = used > 0;
+            let can_reset = used > 0
+                && !agent.active_work
+                && !agent.setting_pending()
+                && agent.status != Status::Connecting;
             let pane_id = self.pane_id;
             let agent_id = agent.config.id;
             let view = cx.entity().clone();

@@ -703,8 +703,27 @@ fn verify_resets_and_folder_moves_preserve_harness_references(
     cx.update(|window, cx| {
         workspace.update(cx, |this, cx| {
             let mut original = test_agent(ProtocolVersion::V2);
-            original.config.command.clear(); // No harness process is needed for this UI state check.
+            original.config.command.clear(); // The folder move should not launch another harness.
             original.active_work = false;
+            original.status = Status::Idle;
+            let command = if cfg!(windows) {
+                vec![
+                    "powershell".into(),
+                    "-NoProfile".into(),
+                    "-Command".into(),
+                    "$input | ForEach-Object { $_ }".into(),
+                ]
+            } else {
+                vec![
+                    "/bin/sh".into(),
+                    "-c".into(),
+                    "while IFS= read -r request; do printf '%s\\n' \"$request\"; done".into(),
+                ]
+            };
+            let (events_tx, _events_rx) = mpsc::channel();
+            original.connection =
+                Some(Connection::spawn(1, &command, path, None, None, events_tx).unwrap());
+            original.config.custom_title = Some("Keep my session name".into());
             original.log(Role::User, "Previous conversation");
             this.projects = vec![ProjectView {
                 path: path.to_owned(),
@@ -721,6 +740,14 @@ fn verify_resets_and_folder_moves_preserve_harness_references(
             this.deferred_connections.clear();
             this.reset_context(0, 0, cx);
             assert_eq!(this.projects[0].agents.len(), 2);
+            assert_eq!(this.projects[0].agents[0].config.id, 1);
+            assert_eq!(this.sidebar_order, [1]);
+            assert_eq!(
+                this.projects[0].agents[0].config.session_title(),
+                Some("Keep my session name")
+            );
+            assert!(this.projects[0].agents[0].connection.is_some());
+            assert_eq!(this.projects[0].agents[1].config.id, 200);
             let archived = &this.projects[0].agents[1];
             assert!(archived.config.archived);
             assert_eq!(archived.config.session_id.as_deref(), Some("session-1"));

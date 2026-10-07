@@ -6,6 +6,8 @@ Notable changes to Agentaps are recorded here.
 
 ### Fixed
 
+- Reset context keeps the running agent, session identity, name, drafts, and selected model, reasoning effort, permission mode, and plan mode while archiving the previous conversation.
+
 - Git fetch tests work with Git 2.56, which refreshes tracking refs during direct URL pushes.
 
 ### Added
