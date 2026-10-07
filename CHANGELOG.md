@@ -4,6 +4,8 @@ Notable changes to Agentaps are recorded here.
 
 ## [Unreleased]
 
+## [0.5.1] - 2026-10-07
+
 ### Fixed
 
 - Reset context keeps the running agent, session identity, name, drafts, and selected model, reasoning effort, permission mode, and plan mode while archiving the previous conversation.
@@ -328,7 +330,8 @@ Notable changes to Agentaps are recorded here.
 - Added chat controls for queued messages, stopping turns, resetting agent context, and completing agent slash commands.
 - Added ACP form questions with answer, decline, and cancel actions.
 
-[Unreleased]: https://github.com/domenkozar/agentaps/compare/v0.5.0...HEAD
+[Unreleased]: https://github.com/domenkozar/agentaps/compare/v0.5.1...HEAD
+[0.5.1]: https://github.com/domenkozar/agentaps/compare/v0.5.0...v0.5.1
 [0.5.0]: https://github.com/domenkozar/agentaps/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/domenkozar/agentaps/compare/v0.3.1...v0.4.0
 [0.3.1]: https://github.com/domenkozar/agentaps/compare/v0.3.0...v0.3.1
