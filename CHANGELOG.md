@@ -17,6 +17,7 @@ Notable changes to Agentaps are recorded here.
 ### Changed
 
 - Remove the Active and Open text badges from sidebar sessions shown in panes.
+- Terminal usage and build requirements live in a dedicated guide, keeping the README concise.
 
 - Empty checkout diffs show a disabled Diff button without +0 and -0 totals.
 - Show checkout diff totals in every open chat pane, mark the active pane with an accent line, and distinguish Active and Open sessions in the sidebar.

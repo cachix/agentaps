@@ -53,7 +53,8 @@ devenv shell cargo packager --release --formats deb --out-dir dist/desktop
 ```
 
 Standard Linux and macOS builds include the session terminal. CI installs Zig
-0.16 and the native terminal libraries before building. Linux DEB installs
+0.16 and the native terminal libraries before building. See the
+[terminal guide](session-terminal.md) for source build requirements. Linux DEB installs
 require libc++ 21 and libxml2; Ubuntu 24.04 needs the [LLVM APT repository](https://apt.llvm.org/)
 for the libc++ runtime packages. Include terminal launch, theme switching, and
 Ctrl+D exit in platform smoke tests.
