@@ -313,28 +313,6 @@ impl Workspace {
                         .text_color(palette.color(TEXT))
                         .child(name),
                 )
-                .when(open, |row| {
-                    let label = if active { "Active" } else { "Open" };
-                    row.child(
-                        div()
-                            .id(("session-pane-state", agent_id))
-                            .flex_shrink_0()
-                            .px_1()
-                            .rounded_sm()
-                            .when(active, |badge| badge.bg(palette.color(BG)))
-                            .text_size(rems(0.625))
-                            .text_color(palette.color(if active { ACCENT } else { MUTED }))
-                            .child(label)
-                            .tooltip(move |window, cx| {
-                                Tooltip::new(if active {
-                                    "Shown in the active pane"
-                                } else {
-                                    "Shown in another pane. Click to focus it"
-                                })
-                                .build(window, cx)
-                            }),
-                    )
-                })
                 .when(!nested_sidebar, |row| {
                     let tooltip = format!("{} · {}", project.display_path(), project.branch);
                     row.child(
