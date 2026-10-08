@@ -10,6 +10,7 @@ use gpui_kit::component::attachment::{
     Attachment, AttachmentContent, AttachmentGroup, AttachmentMedia, AttachmentTitle,
 };
 use gpui_kit::component::progress::Progress;
+use gpui_kit::component::scroll::Scrollbar;
 
 impl Workspace {
     pub(in crate::app) fn render_conversation(
@@ -402,7 +403,24 @@ impl Workspace {
                 .min_h(px(0.))
                 .relative()
                 .child(div().id("chat-scroll").size_full().px_4().child(history))
-                .vertical_scrollbar(&self.conversation.chat_list),
+                .child(
+                    div().absolute().inset_0().child(
+                        Scrollbar::vertical(&self.conversation.chat_list)
+                            .id("chat-scrollbar")
+                            .viewport_from_layout()
+                            .styles(|styles| {
+                                styles
+                                    .track(|track| {
+                                        track
+                                            .bg(gpui_kit::transparent_black())
+                                            .border_color(gpui_kit::transparent_black())
+                                    })
+                                    .thumb(|thumb| thumb.bg(rgb(ACCENT)))
+                                    .thumb_hover(|thumb| thumb.bg(rgb(ACCENT)))
+                                    .thumb_active(|thumb| thumb.bg(rgb(ACCENT)))
+                            }),
+                    ),
+                ),
         );
         let file_results = self.file_results(cx);
         if self.file_mention_active(cx) {

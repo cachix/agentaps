@@ -10,6 +10,8 @@ Notable changes to Agentaps are recorded here.
 
 ### Fixed
 
+- Session scrollbars show a light blue thumb on transparent tracks without a shaded background or border.
+
 - Split panes resize correctly from either side of thin separators.
 - Narrow chat panes keep session titles readable by moving project and diff controls onto a second header row.
 - Keep the Active session marker readable against sidebar selection colors in light and dark themes.
