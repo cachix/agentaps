@@ -748,7 +748,7 @@ impl Workspace {
                 )
                 .disabled(project.ssh_host.is_some())
                 .tooltip(if project.ssh_host.is_some() {
-                    "Terminal prototype supports local projects".to_string()
+                    "Terminal supports local projects".to_string()
                 } else {
                     let action = if self
                         .terminals

@@ -5,6 +5,7 @@
     clang
     trunk
     python312
+    zig_0_16
   ] ++ lib.optionals stdenv.hostPlatform.isLinux [
     gtk4
     qt6.qtbase
@@ -14,29 +15,14 @@
     libxkbcommon
     wayland
     vulkan-loader
+    llvmPackages.libcxx
+    libxml2
+    libglvnd
   ];
 
   enterShell = lib.optionalString pkgs.stdenv.hostPlatform.isLinux ''
     unset NIX_CFLAGS_COMPILE NIX_LDFLAGS
   '';
-
-  scripts.terminal-prototype = {
-    description = "Run Agentaps with the experimental Ghostty session terminal";
-    exec = let
-      terminalLibraries = lib.makeLibraryPath (lib.optionals pkgs.stdenv.hostPlatform.isLinux [
-        pkgs.llvmPackages.libcxx
-        pkgs.libxml2
-        pkgs.libglvnd
-      ]);
-    in ''
-      export ZIG="${pkgs.zig_0_16}/bin/zig"
-      ${lib.optionalString pkgs.stdenv.hostPlatform.isLinux ''
-        export LIBRARY_PATH="${terminalLibraries}''${LIBRARY_PATH:+:$LIBRARY_PATH}"
-        export LD_LIBRARY_PATH="${terminalLibraries}''${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
-      ''}
-      exec cargo run --features ghostty-terminal "$@"
-    '';
-  };
 
   languages.rust = {
     enable = true;
@@ -47,6 +33,11 @@
 
   env = lib.mkMerge [
     (lib.optionalAttrs pkgs.stdenv.hostPlatform.isLinux {
+      LIBRARY_PATH = lib.makeLibraryPath [
+        pkgs.llvmPackages.libcxx
+        pkgs.libxml2
+        pkgs.libglvnd
+      ];
       LD_LIBRARY_PATH = lib.makeLibraryPath [
         pkgs.gtk4
         pkgs.qt6.qtbase
@@ -56,9 +47,13 @@
         pkgs.libxkbcommon
         pkgs.wayland
         pkgs.vulkan-loader
+        pkgs.llvmPackages.libcxx
+        pkgs.libxml2
+        pkgs.libglvnd
       ];
     })
     {
+      ZIG = "${pkgs.zig_0_16}/bin/zig";
       CC_wasm32_unknown_unknown = "${pkgs.llvmPackages.clang-unwrapped}/bin/clang";
     }
   ];

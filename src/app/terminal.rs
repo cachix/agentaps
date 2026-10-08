@@ -207,9 +207,7 @@ impl Workspace {
         };
         let project = &self.projects[session.project_index];
         if project.ssh_host.is_some() {
-            self.notice = Some(Notice::Info(
-                "The terminal prototype supports local projects.".into(),
-            ));
+            self.notice = Some(Notice::Info("The terminal supports local projects.".into()));
             cx.notify();
             return;
         }

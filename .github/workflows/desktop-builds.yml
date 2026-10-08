@@ -7,6 +7,7 @@ on:
   pull_request:
     paths:
       - .github/workflows/desktop-builds.yml
+      - .github/actions/setup-terminal/**
       - Cargo.toml
       - Cargo.lock
       - crates/**
@@ -53,6 +54,9 @@ jobs:
             libxkbcommon-dev libxkbcommon-x11-dev libwayland-dev libx11-dev \
             libxcb-shape0-dev libxcb-xfixes0-dev libxcb-randr0-dev \
             libxcb-xinput-dev libegl1-mesa-dev libgles2-mesa-dev libglib2.0-dev libgtk-4-dev qt6-base-dev
+      - name: Set up session terminal
+        if: runner.os != 'Windows'
+        uses: ./.github/actions/setup-terminal
       - name: Install Rust toolchain
         shell: bash
         run: |
