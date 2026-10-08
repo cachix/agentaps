@@ -52,6 +52,9 @@ jobs:
         run: cargo clippy --workspace --locked --all-targets -- -D warnings
       - name: Test desktop
         run: cargo test --workspace --locked
+      - name: Validate crates.io packages
+        if: runner.os == 'Linux'
+        run: cargo publish --workspace --dry-run --locked
 
   web:
     name: Browser tests and WASM build

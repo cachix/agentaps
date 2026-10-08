@@ -1474,7 +1474,7 @@ checksum = "af491d569909a7e4dee0ad7db7f5341fef5c614d5b8ec8cf765732aba3cff681"
 dependencies = [
  "serde",
  "termcolor",
- "unicode-width 0.2.2",
+ "unicode-width 0.1.14",
 ]
 
 [[package]]
@@ -2173,7 +2173,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c54e03a951783e8b327515db3f2a2fd0e3bed362a96b066f341ce66ed49b4ead"
 dependencies = [
  "data-encoding",
- "syn 2.0.119",
+ "syn 3.0.6",
 ]
 
 [[package]]
@@ -3822,7 +3822,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1c91d8cffac8849493a82233811bd02b2b183b8cf39bf704de0fa0841b737595"
 dependencies = [
  "bstr",
- "hashbrown 0.17.1",
+ "hashbrown 0.15.5",
 ]
 
 [[package]]
@@ -3832,7 +3832,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "305657ad44356151d73c145f567c25b24fdf2466bfb3e90727e1d5461a4e9748"
 dependencies = [
  "bstr",
- "hashbrown 0.17.1",
+ "hashbrown 0.15.5",
 ]
 
 [[package]]
@@ -7081,7 +7081,8 @@ dependencies = [
 [[package]]
 name = "native-theme"
 version = "0.6.0"
-source = "git+https://github.com/tiborgats/native-theme.git?rev=0edab06a4a56114fe6994bfbbc17c70d8e0c4572#0edab06a4a56114fe6994bfbbc17c70d8e0c4572"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a75fb8b1933207a81a7e1c55c340788db1883acacfe92309a4cf9614c70da0c4"
 dependencies = [
  "arc-swap",
  "ashpd",
@@ -7117,7 +7118,8 @@ dependencies = [
 [[package]]
 name = "native-theme-derive"
 version = "0.6.0"
-source = "git+https://github.com/tiborgats/native-theme.git?rev=0edab06a4a56114fe6994bfbbc17c70d8e0c4572#0edab06a4a56114fe6994bfbbc17c70d8e0c4572"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a36828930ce9b61be73b098bae84cda13792426ced2871a411590493aba5b165"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -7127,7 +7129,8 @@ dependencies = [
 [[package]]
 name = "native-theme-gpui"
 version = "0.6.0"
-source = "git+https://github.com/tiborgats/native-theme.git?rev=0edab06a4a56114fe6994bfbbc17c70d8e0c4572#0edab06a4a56114fe6994bfbbc17c70d8e0c4572"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "87553b20056aabeed29f8e3000a7ff275cad3c93992318b9d4c43ccc9a6cf3e9"
 dependencies = [
  "gpui-base",
  "gpui-component",
@@ -10588,7 +10591,7 @@ version = "0.9.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "287f59010008f0d7cf5e3b03196d666c1acc46c8d3e9cf34c28a1a7157601e72"
 dependencies = [
- "heck 0.5.0",
+ "heck 0.4.1",
  "proc-macro2",
  "quote",
  "syn 2.0.119",

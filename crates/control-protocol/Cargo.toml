@@ -2,7 +2,9 @@
 name = "agentaps-control-protocol"
 version = "0.1.0"
 edition = "2024"
-publish = false
+description = "Shared Web Connect protocol for Agentaps desktop and browser clients"
+license = "Apache-2.0"
+repository = "https://github.com/domenkozar/agentaps"
 
 [dependencies]
 serde = { version = "1", features = ["derive"] }

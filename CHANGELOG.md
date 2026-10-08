@@ -20,6 +20,8 @@ Notable changes to Agentaps are recorded here.
 
 ### Changed
 
+- Desktop builds use the published native-theme-gpui 0.6.0 release, and the shared Web Connect protocol has registry publishing metadata so current Agentaps releases can return to crates.io. Linux CI validates both packages without uploading them.
+
 - Remove the Active and Open text badges from sidebar sessions shown in panes.
 - The terminal toggle sits at the bottom-right corner beneath the composer and defaults to Ctrl+T.
 - Terminal usage and build requirements live in a dedicated guide, keeping the README concise.

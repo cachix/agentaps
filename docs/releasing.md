@@ -33,13 +33,8 @@ credentials and session storage. This opt-in test is skipped by the regular suit
 ## Prepare a release
 
 GitHub releases are the current distribution channel. The desktop workflow does
-not publish to crates.io. Publishing there is blocked by the pinned
-`native-theme-gpui` Git dependency and the unpublished local
-`agentaps-control-protocol` crate. Before resuming crates.io releases, switch to
-a compatible registry release of the theme dependency and publish the protocol
-crate with a versioned dependency in the desktop manifest. Validate packaging
-with `cargo publish --dry-run --locked` before publishing. Until then, install
-instructions should use GitHub packages or a source checkout.
+not publish to crates.io. The workspace uses registry dependencies and supports
+publishing the shared protocol crate before the desktop app.
 
 1. Update the version in `Cargo.toml` and `Cargo.lock`. Move the relevant
    `CHANGELOG.md` entries from `Unreleased` to a dated version heading, then
@@ -53,6 +48,31 @@ instructions should use GitHub packages or a source checkout.
    the draft when the files are ready, then update the fallback release label
    and installer links in `web/site/index.html` to match the published assets.
    Check the website download links both with and without the GitHub API available.
+
+## Publish to crates.io
+
+Use the same release commit and version as the GitHub release. With Cargo 1.97.1
+and the native build dependencies installed, validate both packages together:
+
+```sh
+devenv shell cargo publish --workspace --dry-run --locked
+```
+
+Cargo verifies workspace dependencies using a temporary registry, so this also
+works before the protocol crate's first publication. Linux CI runs this check
+after the workspace tests. After validation, publish
+the workspace with crates.io credentials configured:
+
+```sh
+devenv shell cargo publish --workspace --locked
+```
+
+Cargo publishes dependencies before dependents. If `agentaps-control-protocol`
+0.1.0 is already published and unchanged, publish only `agentaps` with
+`devenv shell cargo publish -p agentaps --locked`. Changes to the protocol crate
+require a new protocol version and an updated version requirement in the desktop
+manifest. Confirm that `cargo install agentaps --version X.Y.Z --locked` installs
+the release before updating the public install instructions.
 
 For a local Linux packaging check, install the pinned packager, build the
 desktop binary, and create a DEB:

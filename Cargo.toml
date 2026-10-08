@@ -30,9 +30,8 @@ installer-icon = "assets/packaging/icon.ico"
 
 [dependencies]
 anyhow = "1"
-# GPUI Kit 0.7 support is on upstream main, ahead of the published 0.5.9.
-native-theme-gpui = { git = "https://github.com/tiborgats/native-theme.git", rev = "0edab06a4a56114fe6994bfbbc17c70d8e0c4572", default-features = false }
-agentaps-control-protocol = { path = "crates/control-protocol" }
+native-theme-gpui = { version = "=0.6.0", default-features = false }
+agentaps-control-protocol = { version = "0.1.0", path = "crates/control-protocol" }
 agent-client-protocol-schema = { version = "1.9.1", default-features = false, features = ["unstable_protocol_v2"] }
 base64 = "0.22"
 etcetera = "0.11"

@@ -41,7 +41,7 @@ See the [Web Connect guide](docs/web-connect.md) for setup, storage, revocation,
 
 ## Build from source
 
-Use the [GitHub releases](https://github.com/domenkozar/agentaps/releases) for current installers. The crates.io package is older and does not track current GitHub releases. Current releases cannot be published to crates.io while they depend on a pinned Git revision of `native-theme-gpui` and the unpublished local `agentaps-control-protocol` crate.
+Use the [GitHub releases](https://github.com/domenkozar/agentaps/releases) for current installers. The crates.io package is older and does not yet track current GitHub releases. Registry publishing is now supported by the source checkout; see the [release guide](docs/releasing.md) for publishing both workspace packages.
 
 With Rust and the native build dependencies installed, build and install from a checkout:
 
