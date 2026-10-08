@@ -19,7 +19,7 @@ license-file = "LICENSE"
 icons = ["assets/packaging/icon.png"]
 
 [package.metadata.packager.deb]
-depends = ["libgtk-4-1 (>= 4.10)", "libqt6widgets6t64 (>= 6.2) | libqt6widgets6 (>= 6.2)", "qt6-qpa-plugins"]
+depends = ["libgtk-4-1 (>= 4.10)", "libqt6widgets6t64 (>= 6.2) | libqt6widgets6 (>= 6.2)", "qt6-qpa-plugins", "libc++1-21", "libc++abi1-21", "libxml2"]
 files = { "LICENSE" = "usr/share/doc/agentaps/copyright" }
 
 [package.metadata.packager.macos]
@@ -56,7 +56,8 @@ toml = "1.1"
 url = "2"
 
 [features]
-# Experimental native terminal, currently macOS and Linux Wayland only.
+# Native terminal on macOS and Linux Wayland; omit with --no-default-features.
+default = ["ghostty-terminal"]
 ghostty-terminal = ["dep:gpui-libghostty"]
 
 [target.'cfg(any(target_os = "linux", target_os = "macos"))'.dependencies]

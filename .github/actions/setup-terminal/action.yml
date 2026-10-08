@@ -1,0 +1,18 @@
+name: Set up session terminal
+description: Install Zig 0.16 and Ghostty native libraries for desktop builds
+runs:
+  using: composite
+  steps:
+    - name: Install Linux terminal libraries
+      if: runner.os == 'Linux'
+      shell: bash
+      run: |
+        curl --fail --silent --show-error https://apt.llvm.org/llvm-snapshot.gpg.key \
+          | sudo tee /etc/apt/trusted.gpg.d/apt.llvm.org.asc >/dev/null
+        echo 'deb https://apt.llvm.org/noble/ llvm-toolchain-noble-21 main' \
+          | sudo tee /etc/apt/sources.list.d/llvm-21.list >/dev/null
+        sudo apt-get update
+        sudo apt-get install -y libc++-21-dev libc++abi-21-dev libxml2-dev libgl-dev
+    - name: Install Zig
+      shell: bash
+      run: python3 "${{ github.action_path }}/install-zig.py"
