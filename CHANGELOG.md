@@ -20,6 +20,8 @@ Notable changes to Agentaps are recorded here.
 
 ### Changed
 
+- The selected pane's accent highlight line appears along its bottom edge.
+
 - Desktop builds use the published native-theme-gpui 0.6.0 release, and the shared Web Connect protocol has registry publishing metadata so current Agentaps releases can return to crates.io. Linux CI validates both packages without uploading them.
 
 - Remove the Active and Open text badges from sidebar sessions shown in panes.

@@ -202,7 +202,7 @@ impl Workspace {
                             pane.child(
                                 div()
                                     .absolute()
-                                    .top_0()
+                                    .bottom_0()
                                     .left_0()
                                     .w_full()
                                     .h(px(2.))
