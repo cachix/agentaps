@@ -1,6 +1,11 @@
 use super::*;
 use crate::diff_view;
 use gpui_kit::ExternalPaths;
+#[cfg(all(
+    feature = "ghostty-terminal",
+    any(target_os = "linux", target_os = "macos")
+))]
+use gpui_kit::base::Selectable;
 use gpui_kit::component::attachment::{
     Attachment, AttachmentContent, AttachmentGroup, AttachmentMedia, AttachmentTitle,
 };
@@ -722,6 +727,52 @@ impl Workspace {
                     "Agent is working · Esc to stop"
                 })
         });
+        #[cfg(all(
+            feature = "ghostty-terminal",
+            any(target_os = "linux", target_os = "macos")
+        ))]
+        let terminal_control = Some(
+            Button::new(("open-terminal", agent_id))
+                .ghost()
+                .compact()
+                .icon(IconName::SquareTerminal)
+                .selected(
+                    self.terminals
+                        .get(&agent_id)
+                        .is_some_and(|terminal| terminal.open),
+                )
+                .toggled(
+                    self.terminals
+                        .get(&agent_id)
+                        .is_some_and(|terminal| terminal.open),
+                )
+                .disabled(project.ssh_host.is_some())
+                .tooltip(if project.ssh_host.is_some() {
+                    "Terminal prototype supports local projects".to_string()
+                } else {
+                    let action = if self
+                        .terminals
+                        .get(&agent_id)
+                        .is_some_and(|terminal| terminal.open)
+                    {
+                        "Hide terminal, keeping its shell running"
+                    } else {
+                        "Open terminal"
+                    };
+                    format!(
+                        "{action} ({})",
+                        self.shortcut_label(Shortcut::ToggleTerminal)
+                    )
+                })
+                .on_click(self.pane_listener(cx, move |this, _, window, cx| {
+                    this.toggle_terminal(agent_id, window, cx);
+                })),
+        );
+        #[cfg(not(all(
+            feature = "ghostty-terminal",
+            any(target_os = "linux", target_os = "macos")
+        )))]
+        let terminal_control: Option<Button> = None;
         chat = chat.child(
             div().px_4().pb_3().flex().justify_center().child(
                 div()
@@ -745,10 +796,18 @@ impl Workspace {
                             .children(self.render_plan_toggle(project_index, agent_index, cx))
                             .children(status)
                             .child(div().flex_1())
+                            .children(terminal_control)
                             .child(self.render_session_settings(project_index, agent_index, cx)),
                     ),
             ),
         );
+        #[cfg(all(
+            feature = "ghostty-terminal",
+            any(target_os = "linux", target_os = "macos")
+        ))]
+        if let Some(terminal) = self.render_terminal(agent_id, cx) {
+            chat = chat.child(terminal);
+        }
         chat
     }
 

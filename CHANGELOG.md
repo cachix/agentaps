@@ -4,6 +4,10 @@ Notable changes to Agentaps are recorded here.
 
 ## [Unreleased]
 
+### Added
+
+- An optional Ghostty terminal drawer opens a local shell per session on macOS and Linux Wayland. Toggle it beside the composer or with configurable Ctrl + backtick, resize it with a draggable divider, and keep its shell and height when hidden or switching sessions. Colors follow the app theme live. Shell exit, including Ctrl+D at an empty prompt, closes the drawer and returns focus to the composer; reopening starts a fresh shell at the previous height.
+
 ### Fixed
 
 - Split panes resize correctly from either side of thin separators.

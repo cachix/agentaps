@@ -20,6 +20,24 @@
     unset NIX_CFLAGS_COMPILE NIX_LDFLAGS
   '';
 
+  scripts.terminal-prototype = {
+    description = "Run Agentaps with the experimental Ghostty session terminal";
+    exec = let
+      terminalLibraries = lib.makeLibraryPath (lib.optionals pkgs.stdenv.hostPlatform.isLinux [
+        pkgs.llvmPackages.libcxx
+        pkgs.libxml2
+        pkgs.libglvnd
+      ]);
+    in ''
+      export ZIG="${pkgs.zig_0_16}/bin/zig"
+      ${lib.optionalString pkgs.stdenv.hostPlatform.isLinux ''
+        export LIBRARY_PATH="${terminalLibraries}''${LIBRARY_PATH:+:$LIBRARY_PATH}"
+        export LD_LIBRARY_PATH="${terminalLibraries}''${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+      ''}
+      exec cargo run --features ghostty-terminal "$@"
+    '';
+  };
+
   languages.rust = {
     enable = true;
     channel = "stable";

@@ -183,6 +183,7 @@ dependencies = [
  "gix",
  "gix-imara-diff 0.2.5",
  "gpui-kit",
+ "gpui-libghostty",
  "hex",
  "iroh",
  "libc",
@@ -4579,6 +4580,24 @@ dependencies = [
  "rust-embed",
  "wasm-bindgen",
  "wasm-bindgen-futures",
+]
+
+[[package]]
+name = "gpui-libghostty"
+version = "0.3.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2b12d0d271cf0ca99a9073bdc148ce43782713c6d01be33af2a105b00c62ef5d"
+dependencies = [
+ "async-channel",
+ "image",
+ "khronos-egl",
+ "libc",
+ "libloading",
+ "raw-window-handle",
+ "tempfile",
+ "wayland-backend",
+ "wayland-client",
+ "wayland-protocols",
 ]
 
 [[package]]
