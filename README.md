@@ -20,6 +20,7 @@ If Codex or Claude is installed without its ACP adapter, Agentaps can offer to s
 - **View chats together.** Use the session **••• menu** to **Split Right** or **Split Down**, then select a sidebar session or create one in the new pane. Empty panes keep a small **••• menu** in the top-right corner. Split any pane again, drag dividers to resize, and use **Close Pane** to remove a view while its agent keeps running. Sidebar selections open in the active pane; sessions already visible receive focus. Layouts restore on restart, and the shared Diff panel follows the active pane.
 - **Choose your theme.** Open **Theme** using the settings button at the bottom of the sidebar. Choose Agentaps, System, or a bundled light or dark palette. Agentaps follows the desktop light/dark scheme using its own palettes; bundled presets keep their selected scheme. The choice and zoom are remembered across restarts. On Linux, System follows the current GTK or Qt theme, including desktop settings changes.
 - **Review local changes.** Select **Diff** in a conversation to inspect staged and unstaged changes against HEAD. Open files in unified or split view. The diff refreshes as the checkout changes.
+- **Open a terminal.** Use the terminal icon or **Ctrl + backtick** for a shell below the composer in local macOS and Linux Wayland sessions. See the [terminal guide](docs/session-terminal.md).
 - **Use your agent's controls.** Choose a model or reasoning effort when the agent offers them, run its slash commands, and answer ACP form questions in the chat.
 - **Work over SSH.** Enter a path such as `ssh://user@server.example/home/user/project` when creating a project. Agentaps runs the agent on that server using your existing SSH configuration and keys. The agent and its ACP adapter must be installed there, and the server's host key must already be known. Try `ssh user@server.example` first. Diff review is currently available for local projects only.
 - **Continue in a browser.** Pair a phone browser with the desktop app to read conversations, send prompts, stop turns, and answer permission requests. Agent processes and project files stay on the desktop computer.
@@ -54,7 +55,7 @@ On Linux, fontconfig, FreeType, GTK 4.10 or later, and Qt 6 Widgets development 
 devenv shell cargo run --release
 ```
 
-The development environment provides Rust, Zig, GPUI and terminal native libraries, and Node for optional ACP adapters. To build the static website and Web Connect UI in `web/`:
+The development environment provides Rust, GPUI's native libraries, and Node for optional ACP adapters. To build the static website and Web Connect UI in `web/`:
 
 ```sh
 devenv shell -- bash web/build.sh
@@ -63,44 +64,6 @@ devenv shell -- bash web/build.sh
 The output is in `web/dist/`. See the [web deployment guide](docs/web-deployment.md) for hosting and local testing, and the [desktop build guide](docs/releasing.md) for package builds and releases.
 
 For local Claude ACP sessions, Agentaps uses the Claude Code CLI at `CLAUDE_CODE_EXECUTABLE`, at the path set in Settings > Agents, or found on `PATH`. When a CLI path is available, Agentaps omits the inherited `ANTHROPIC_API_KEY` so Claude Code can use its configured authentication.
-
-## Session terminal
-
-The terminal is enabled by default on macOS and Linux Wayland. Open it with
-the terminal icon beside the composer controls in a local session. The panel runs
-your `$SHELL` (or `/bin/sh`) in the session's project directory. Hiding the panel,
-switching sessions, or closing a pane keeps the shell running. **Stop** closes
-the shell; **Restart** replaces it with a fresh shell. Exiting the shell, including
-**Ctrl+D** at an empty prompt, closes the drawer and returns focus to the composer.
-Opening it again starts a fresh shell at the previous height. The terminal opens
-below the composer and follows the app's theme, including live dark/light changes.
-**Ctrl + backtick** toggles the terminal in the focused session, including from
-the shell.
-Opening focuses the shell; hiding returns focus to the composer. The shortcut
-can be changed in Settings > Key bindings.
-Drag the divider above the terminal to resize it. Each session remembers its
-height while hidden or restarting its shell; smaller panes temporarily limit
-the height to keep room for the composer.
-Terminals end when the app exits and are not restored on restart.
-
-Run `devenv shell cargo run` to build and launch with all dependencies supplied.
-For builds without devenv, install the dependencies below.
-
-The terminal uses [gpui-libghostty](https://github.com/behzade/gpui-libghostty).
-Building requires Zig 0.16 on `PATH` (or set `ZIG` to its executable). macOS also
-requires Xcode command-line tools. Linux requires Wayland, EGL, OpenGL 4.3,
-libxml2, and libc++ 21 or newer, including development libraries for linking.
-The first build downloads Ghostty's Zig dependencies. On Ubuntu 24.04, install
-`libc++-21-dev` and `libc++abi-21-dev` from [LLVM's APT repository](https://apt.llvm.org/),
-plus `libxml2-dev` and `libgl-dev`. Linux packages require the corresponding
-libc++ 21 and libxml2 runtime libraries.
-
-For a build without the terminal and its dependencies, use
-`cargo run --no-default-features`.
-
-SSH, Windows, X11, Web Connect, agent-controlled terminals, and sending terminal
-selections into chat are not yet supported. Agent commands still
-run through ACP independently of the shell.
 
 ## Current limitations
 
