@@ -470,6 +470,11 @@ impl Workspace {
 
 impl Render for Workspace {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        #[cfg(all(
+            feature = "ghostty-terminal",
+            any(target_os = "linux", target_os = "macos")
+        ))]
+        self.sync_terminals(cx);
         let palette = theme::palette(cx);
         let project_agent_dialog = matches!(
             self.view,
@@ -539,6 +544,11 @@ impl Render for Workspace {
                     cx.notify();
                 }),
             );
+        #[cfg(all(
+            feature = "ghostty-terminal",
+            any(target_os = "linux", target_os = "macos")
+        ))]
+        let root = root.on_drag_move(cx.listener(Self::resize_terminal));
         if let Some(page) = &self.settings {
             return root.child(self.render_settings(page, cx));
         }

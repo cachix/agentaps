@@ -57,6 +57,11 @@ mod render;
 mod sessions;
 mod settings;
 use key_bindings::Shortcut;
+#[cfg(all(
+    feature = "ghostty-terminal",
+    any(target_os = "linux", target_os = "macos")
+))]
+mod terminal;
 #[cfg(test)]
 mod tests;
 mod tool_activity;
@@ -548,6 +553,11 @@ struct Workspace {
     theme_source: ThemeSource,
     settings: Option<settings::SettingsPage>,
     session_composers: HashMap<u64, Entity<TextareaState>>,
+    #[cfg(all(
+        feature = "ghostty-terminal",
+        any(target_os = "linux", target_os = "macos")
+    ))]
+    terminals: HashMap<u64, terminal::SessionTerminal>,
     draft_images: HashMap<u64, Vec<ChatImage>>,
     draft_files: HashMap<u64, Vec<ChatFile>>,
     conversation: ConversationState,
@@ -1146,6 +1156,11 @@ impl Workspace {
             theme_source: config.theme_source,
             settings: None,
             session_composers: HashMap::new(),
+            #[cfg(all(
+                feature = "ghostty-terminal",
+                any(target_os = "linux", target_os = "macos")
+            ))]
+            terminals: HashMap::new(),
             draft_images: HashMap::new(),
             draft_files: HashMap::new(),
             conversation: ConversationState::new(
@@ -1353,6 +1368,11 @@ impl Workspace {
                     this.poll_events(window, cx);
                     this.poll_sync_counts(cx);
                     this.tick_panes(window, cx);
+                    #[cfg(all(
+                        feature = "ghostty-terminal",
+                        any(target_os = "linux", target_os = "macos")
+                    ))]
+                    this.close_exited_terminals(window, cx);
                     if last_branch_refresh.elapsed() >= Duration::from_secs(5) {
                         last_branch_refresh = Instant::now();
                         this.refresh_branches(cx);
@@ -2508,6 +2528,13 @@ impl Workspace {
     }
 
     fn handle_escape(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        #[cfg(all(
+            feature = "ghostty-terminal",
+            any(target_os = "linux", target_os = "macos")
+        ))]
+        if self.terminal_focused(window, cx) {
+            return;
+        }
         if matches!(
             self.view,
             WorkspaceView::NewSession {

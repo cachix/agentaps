@@ -4,6 +4,7 @@ use gpui_kit::{KeybindingKeystroke, Keystroke, KeystrokeEvent};
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(super) enum Shortcut {
     QuickOpen,
+    ToggleTerminal,
     NewSession,
     OpenSettings,
     ToggleSidebar,
@@ -37,8 +38,9 @@ pub(super) enum Shortcut {
 }
 
 impl Shortcut {
-    pub(super) const ALL: [Self; 31] = [
+    pub(super) const ALL: [Self; 32] = [
         Self::QuickOpen,
+        Self::ToggleTerminal,
         Self::NewSession,
         Self::OpenSettings,
         Self::ToggleSidebar,
@@ -74,6 +76,7 @@ impl Shortcut {
     pub(super) fn id(self) -> &'static str {
         match self {
             Self::QuickOpen => "quick_open",
+            Self::ToggleTerminal => "toggle_terminal",
             Self::NewSession => "new_session",
             Self::OpenSettings => "open_settings",
             Self::ToggleSidebar => "toggle_sidebar",
@@ -111,6 +114,7 @@ impl Shortcut {
     pub(super) fn label(self) -> &'static str {
         match self {
             Self::QuickOpen => "New session in folder",
+            Self::ToggleTerminal => "Show or hide the session terminal",
             Self::NewSession => "New session",
             Self::OpenSettings => "Open settings",
             Self::ToggleSidebar => "Show or hide sidebar",
@@ -146,10 +150,15 @@ impl Shortcut {
     }
 
     pub(super) fn available(self) -> bool {
-        !matches!(
+        (!matches!(
             self,
             Self::Quit | Self::Minimize | Self::Hide | Self::HideOthers
-        ) || cfg!(target_os = "macos")
+        ) || cfg!(target_os = "macos"))
+            && (self != Self::ToggleTerminal
+                || cfg!(all(
+                    feature = "ghostty-terminal",
+                    any(target_os = "linux", target_os = "macos")
+                )))
     }
 
     fn global(self) -> bool {
@@ -218,6 +227,7 @@ impl Shortcut {
                 .collect();
         }
         let keys = match self {
+            Self::ToggleTerminal => vec!["ctrl-`"],
             Self::Send => vec![match send_key {
                 SendKey::Enter => "enter",
                 SendKey::ShiftEnter => "shift-enter",
@@ -435,7 +445,14 @@ impl Workspace {
             .into_iter()
             .filter(|shortcut| shortcut.available())
         {
-            if !self.shortcut_customized(shortcut) {
+            #[cfg(all(
+                feature = "ghostty-terminal",
+                any(target_os = "linux", target_os = "macos")
+            ))]
+            if !shortcut.global() && self.terminal_focused(window, cx) {
+                continue;
+            }
+            if !self.shortcut_customized(shortcut) && shortcut != Shortcut::ToggleTerminal {
                 continue;
             }
             let applicable = shortcut.global()
@@ -456,6 +473,13 @@ impl Workspace {
             {
                 cx.stop_propagation();
                 match shortcut {
+                    Shortcut::ToggleTerminal => {
+                        #[cfg(all(
+                            feature = "ghostty-terminal",
+                            any(target_os = "linux", target_os = "macos")
+                        ))]
+                        self.toggle_active_terminal(window, cx);
+                    }
                     Shortcut::Send => {
                         if self.file_results(cx).is_empty() && self.slash_results(cx).is_empty() {
                             self.send_prompt(window, cx);
@@ -531,6 +555,15 @@ mod tests {
     #[test]
     fn bindings_reject_overlapping_shortcuts_but_allow_separate_contexts() {
         let bindings = BTreeMap::new();
+        if Shortcut::ToggleTerminal.available() {
+            let toggle = Shortcut::ToggleTerminal.keys(&bindings, SendKey::Enter);
+            assert_eq!(toggle.len(), 1);
+            assert_eq!(toggle[0], Keystroke::parse("ctrl-`").unwrap());
+            assert_eq!(
+                conflict(Shortcut::QuickOpen, &toggle[0], &bindings, SendKey::Enter),
+                Some(Shortcut::ToggleTerminal)
+            );
+        }
         let enter = Keystroke::parse("enter").unwrap();
         assert_eq!(
             conflict(Shortcut::Send, &enter, &bindings, SendKey::Enter),
