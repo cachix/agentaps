@@ -227,7 +227,7 @@ impl Shortcut {
                 .collect();
         }
         let keys = match self {
-            Self::ToggleTerminal => vec!["ctrl-`"],
+            Self::ToggleTerminal => vec!["ctrl-t"],
             Self::Send => vec![match send_key {
                 SendKey::Enter => "enter",
                 SendKey::ShiftEnter => "shift-enter",
@@ -558,7 +558,7 @@ mod tests {
         if Shortcut::ToggleTerminal.available() {
             let toggle = Shortcut::ToggleTerminal.keys(&bindings, SendKey::Enter);
             assert_eq!(toggle.len(), 1);
-            assert_eq!(toggle[0], Keystroke::parse("ctrl-`").unwrap());
+            assert_eq!(toggle[0], Keystroke::parse("ctrl-t").unwrap());
             assert_eq!(
                 conflict(Shortcut::QuickOpen, &toggle[0], &bindings, SendKey::Enter),
                 Some(Shortcut::ToggleTerminal)
