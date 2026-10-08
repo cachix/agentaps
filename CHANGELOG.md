@@ -6,7 +6,7 @@ Notable changes to Agentaps are recorded here.
 
 ### Added
 
-- A Ghostty terminal drawer, enabled by default, opens a local shell per session on macOS and Linux Wayland. Toggle it beside the composer or with configurable Ctrl + backtick, resize it with a draggable divider, and keep its shell and height when hidden or switching sessions. Colors follow the app theme live. Standard development environments and desktop builds include the terminal dependencies. Shell exit, including Ctrl+D at an empty prompt, closes the drawer and returns focus to the composer; reopening starts a fresh shell at the previous height.
+- A Ghostty terminal drawer, enabled by default, opens a local shell per session on macOS and Linux Wayland. Toggle it from the bottom-right corner beneath the composer or with configurable Ctrl+T, resize it with a draggable divider, and keep its shell and height when hidden or switching sessions. Colors follow the app theme live. Standard development environments and desktop builds include the terminal dependencies. Shell exit, including Ctrl+D at an empty prompt, closes the drawer and returns focus to the composer; reopening starts a fresh shell at the previous height.
 
 ### Fixed
 
@@ -15,6 +15,8 @@ Notable changes to Agentaps are recorded here.
 - Keep the Active session marker readable against sidebar selection colors in light and dark themes.
 
 ### Changed
+
+- The terminal toggle sits at the bottom-right corner beneath the composer and defaults to Ctrl+T.
 
 - Terminal usage and build requirements live in a dedicated guide, keeping the README concise.
 

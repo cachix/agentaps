@@ -796,8 +796,8 @@ impl Workspace {
                             .children(self.render_plan_toggle(project_index, agent_index, cx))
                             .children(status)
                             .child(div().flex_1())
-                            .children(terminal_control)
-                            .child(self.render_session_settings(project_index, agent_index, cx)),
+                            .child(self.render_session_settings(project_index, agent_index, cx))
+                            .children(terminal_control),
                     ),
             ),
         );

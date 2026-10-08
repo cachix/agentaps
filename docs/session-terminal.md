@@ -1,14 +1,14 @@
 # Session terminal
 
 The terminal is enabled by default on macOS and Linux Wayland. Open it with
-the terminal icon beside the composer controls in a local session. The panel runs
+the terminal icon at the bottom-right corner beneath the composer in a local session. The panel runs
 your `$SHELL` (or `/bin/sh`) in the session's project directory. Hiding the panel,
 switching sessions, or closing a pane keeps the shell running. **Stop** closes
 the shell; **Restart** replaces it with a fresh shell. Exiting the shell, including
 **Ctrl+D** at an empty prompt, closes the drawer and returns focus to the composer.
 Opening it again starts a fresh shell at the previous height. The terminal opens
 below the composer and follows the app's theme, including live dark/light changes.
-**Ctrl + backtick** toggles the terminal in the focused session, including from
+**Ctrl+T** toggles the terminal in the focused session, including from
 the shell.
 Opening focuses the shell; hiding returns focus to the composer. The shortcut
 can be changed in Settings > Key bindings.
