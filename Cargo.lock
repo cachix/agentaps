@@ -170,7 +170,7 @@ dependencies = [
 
 [[package]]
 name = "agentaps"
-version = "0.5.1"
+version = "0.5.2"
 dependencies = [
  "agent-client-protocol-schema",
  "agentaps-control-protocol",

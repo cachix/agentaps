@@ -4,6 +4,8 @@ Notable changes to Agentaps are recorded here.
 
 ## [Unreleased]
 
+## [0.5.2] - 2026-10-08
+
 ### Added
 
 - A Ghostty terminal drawer, enabled by default, opens a local shell per session on macOS and Linux Wayland. Toggle it from the bottom-right corner beneath the composer or with configurable Ctrl+T, resize it with a draggable divider, and keep its shell and height when hidden or switching sessions. Colors follow the app theme live. Standard development environments and desktop builds include the terminal dependencies. Shell exit, including Ctrl+D at an empty prompt, closes the drawer and returns focus to the composer; reopening starts a fresh shell at the previous height.
@@ -19,8 +21,6 @@ Notable changes to Agentaps are recorded here.
 - Keep the Active session marker readable against sidebar selection colors in light and dark themes.
 
 ### Changed
-
-- The selected pane's accent highlight line appears along its bottom edge.
 
 - Desktop builds use the published native-theme-gpui 0.6.0 release, and the shared Web Connect protocol has registry publishing metadata so current Agentaps releases can return to crates.io. Linux CI validates both packages without uploading them.
 
@@ -358,7 +358,8 @@ Notable changes to Agentaps are recorded here.
 - Added chat controls for queued messages, stopping turns, resetting agent context, and completing agent slash commands.
 - Added ACP form questions with answer, decline, and cancel actions.
 
-[Unreleased]: https://github.com/domenkozar/agentaps/compare/v0.5.1...HEAD
+[Unreleased]: https://github.com/domenkozar/agentaps/compare/v0.5.2...HEAD
+[0.5.2]: https://github.com/domenkozar/agentaps/compare/v0.5.1...v0.5.2
 [0.5.1]: https://github.com/domenkozar/agentaps/compare/v0.5.0...v0.5.1
 [0.5.0]: https://github.com/domenkozar/agentaps/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/domenkozar/agentaps/compare/v0.3.1...v0.4.0
