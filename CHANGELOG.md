@@ -10,6 +10,8 @@ Notable changes to Agentaps are recorded here.
 
 ### Fixed
 
+- Installation guidance uses current GitHub releases or source checkouts, explains the crates.io publishing blockers, and lists Ubuntu native build dependencies. Website fallback downloads point to 0.5.1.
+
 - Session scrollbars show a light blue thumb on transparent tracks without a shaded background or border.
 
 - Split panes resize correctly from either side of thin separators.

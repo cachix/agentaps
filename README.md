@@ -41,15 +41,29 @@ See the [Web Connect guide](docs/web-connect.md) for setup, storage, revocation,
 
 ## Build from source
 
-On a system with Rust and GPUI's native build dependencies, install from crates.io:
+Use the [GitHub releases](https://github.com/domenkozar/agentaps/releases) for current installers. The crates.io package is older and does not track current GitHub releases. Current releases cannot be published to crates.io while they depend on a pinned Git revision of `native-theme-gpui` and the unpublished local `agentaps-control-protocol` crate.
+
+With Rust and the native build dependencies installed, build and install from a checkout:
 
 ```sh
-cargo install agentaps
+git clone https://github.com/domenkozar/agentaps.git
+cd agentaps
+cargo install --path . --locked
 ```
 
-Theme conversion currently uses a pinned upstream `native-theme-gpui` Git revision for GPUI Kit 0.7 support, ahead of its crates.io release. GTK/Qt probing stays in Agentaps.
+The checkout follows `main`; to build a published release, check out its `vX.Y.Z` tag before installing. The default build includes the terminal, so also install the dependencies in the [terminal guide](docs/session-terminal.md), or use `cargo install --path . --locked --no-default-features` to omit it.
 
-On Linux, fontconfig, FreeType, GTK 4.10 or later, and Qt 6 Widgets development files must be available to `pkg-config`. Ubuntu 24.04 provides these through `libfontconfig-dev`, `libfreetype6-dev`, `libgtk-4-dev`, and `qt6-base-dev`. To run this checkout with [devenv](https://devenv.sh/) installed:
+On Linux, GPUI and theme probing require native development libraries, including fontconfig, FreeType, XKB, Wayland, GTK 4.10 or later, and Qt 6 Widgets. On Ubuntu 24.04, install:
+
+```sh
+sudo apt-get install build-essential pkg-config \
+  libfontconfig-dev libfreetype6-dev \
+  libxkbcommon-dev libxkbcommon-x11-dev libwayland-dev libx11-dev \
+  libxcb-shape0-dev libxcb-xfixes0-dev libxcb-randr0-dev libxcb-xinput-dev \
+  libegl1-mesa-dev libgles2-mesa-dev libglib2.0-dev libgtk-4-dev qt6-base-dev
+```
+
+`libfontconfig-dev` supplies the native fontconfig dependency; a distro-packaged Rust fontconfig crate is not required. To run this checkout with [devenv](https://devenv.sh/) installed:
 
 ```sh
 devenv shell cargo run --release

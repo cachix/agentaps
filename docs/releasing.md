@@ -32,6 +32,15 @@ credentials and session storage. This opt-in test is skipped by the regular suit
 
 ## Prepare a release
 
+GitHub releases are the current distribution channel. The desktop workflow does
+not publish to crates.io. Publishing there is blocked by the pinned
+`native-theme-gpui` Git dependency and the unpublished local
+`agentaps-control-protocol` crate. Before resuming crates.io releases, switch to
+a compatible registry release of the theme dependency and publish the protocol
+crate with a versioned dependency in the desktop manifest. Validate packaging
+with `cargo publish --dry-run --locked` before publishing. Until then, install
+instructions should use GitHub packages or a source checkout.
+
 1. Update the version in `Cargo.toml` and `Cargo.lock`. Move the relevant
    `CHANGELOG.md` entries from `Unreleased` to a dated version heading, then
    leave `Unreleased` ready for future changes.
@@ -41,7 +50,9 @@ credentials and session storage. This opt-in test is skipped by the regular suit
 3. Smoke test the exact files on supported systems. Sign and notarize the macOS
    build and sign the Windows build, or decide to distribute unsigned builds.
    If signed files replace draft assets, replace their checksums too. Publish
-   the draft when the files are ready, then check the website download links.
+   the draft when the files are ready, then update the fallback release label
+   and installer links in `web/site/index.html` to match the published assets.
+   Check the website download links both with and without the GitHub API available.
 
 For a local Linux packaging check, install the pinned packager, build the
 desktop binary, and create a DEB:
