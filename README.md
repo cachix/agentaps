@@ -6,7 +6,7 @@ Agentaps is a desktop workspace for coding agents that speak the [Agent Client P
 
 ## Get started
 
-1. [Download Agentaps](https://github.com/domenkozar/agentaps/releases) for Linux, Apple Silicon macOS, or Windows. You can also [build from source](#build-from-source).
+1. [Download Agentaps](https://github.com/domenkozar/agentaps/releases) for Linux, Apple Silicon macOS, or Windows. On Ubuntu 24.04, first set up the [Linux package prerequisites](docs/session-terminal.md#linux-package-prerequisites). You can also [build from source](#build-from-source).
 2. Install an ACP compatible agent or adapter. Agentaps discovers Codex and Claude adapters, Gemini CLI (`gemini --acp`), and OpenCode (`opencode acp`). You can enter another ACP command yourself.
 3. Open Agentaps and select **New**. Use **Choose Folder** to browse for a local project, select a recent folder, or enter a local absolute path. To start from a Git repository, use **Clone repository…**, enter its URL, and choose a parent folder and repository folder name. Then choose an agent and send a message.
 
@@ -41,23 +41,9 @@ See the [Web Connect guide](docs/web-connect.md) for setup, storage, revocation,
 
 ## Build from source
 
-Use the [GitHub releases](https://github.com/domenkozar/agentaps/releases) for installers, or install the current release from crates.io with Rust and the native build dependencies installed:
+Install Rust and the native build dependencies before running Cargo. **Default builds on Linux and macOS require Zig 0.16** for the built-in terminal. Linux terminal builds also need libc++ 21 or newer and libxml2 development libraries. Follow the [terminal build requirements](docs/session-terminal.md#build-requirements), including LLVM repository setup on Ubuntu 24.04. Zig is a build dependency; downloaded installers do not require it.
 
-```sh
-cargo install agentaps --locked
-```
-
-With Rust and the native build dependencies installed, build and install from a checkout:
-
-```sh
-git clone https://github.com/domenkozar/agentaps.git
-cd agentaps
-cargo install --path . --locked
-```
-
-The checkout follows `main`; to build a published release, check out its `vX.Y.Z` tag before installing. The default build includes the terminal, so also install the dependencies in the [terminal guide](docs/session-terminal.md), or use `cargo install --path . --locked --no-default-features` to omit it.
-
-On Linux, GPUI and theme probing require native development libraries, including fontconfig, FreeType, XKB, Wayland, GTK 4.10 or later, and Qt 6 Widgets. On Ubuntu 24.04, install:
+On Linux, GPUI and theme probing require native development libraries, including fontconfig, FreeType, XKB, Wayland, GTK 4.10 or later, and Qt 6 Widgets. On Ubuntu 24.04, install these in addition to the terminal dependencies:
 
 ```sh
 sudo apt-get install build-essential pkg-config \
@@ -67,13 +53,37 @@ sudo apt-get install build-essential pkg-config \
   libegl1-mesa-dev libgles2-mesa-dev libglib2.0-dev libgtk-4-dev qt6-base-dev
 ```
 
-`libfontconfig-dev` supplies the native fontconfig dependency; a distro-packaged Rust fontconfig crate is not required. To run this checkout with [devenv](https://devenv.sh/) installed:
+`libfontconfig-dev` supplies the native fontconfig dependency; a distro-packaged Rust fontconfig crate is not required.
+
+With the dependencies installed, install the current release from crates.io:
+
+```sh
+cargo install agentaps --locked
+```
+
+To install without the terminal, omit its Zig, libc++, and libxml2 build requirements with:
+
+```sh
+cargo install agentaps --locked --no-default-features
+```
+
+The GPUI and theme libraries listed above are still required. To build and install from a checkout:
+
+```sh
+git clone https://github.com/domenkozar/agentaps.git
+cd agentaps
+cargo install --path . --locked
+```
+
+The checkout follows `main`; to build a published release, check out its `vX.Y.Z` tag before installing. To omit the terminal from a checkout build, use `cargo install --path . --locked --no-default-features`.
+
+To run this checkout with [devenv](https://devenv.sh/) installed:
 
 ```sh
 devenv shell cargo run --release
 ```
 
-The development environment provides Rust, GPUI's native libraries, and Node for optional ACP adapters. To build the static website and Web Connect UI in `web/`:
+The development environment provides Rust, Zig, GPUI's native libraries, the terminal libraries, and Node for optional ACP adapters. To build the static website and Web Connect UI in `web/`:
 
 ```sh
 devenv shell -- bash web/build.sh

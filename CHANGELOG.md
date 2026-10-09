@@ -6,6 +6,8 @@ Notable changes to Agentaps are recorded here.
 
 ### Fixed
 
+- Installation guidance lists Zig and terminal build dependencies before Cargo commands, provides terminal-free installs, and explains LLVM runtime setup for Ubuntu 24.04 DEB packages.
+
 - Hide the sidebar New button label when the sidebar is narrow so its bottom controls fit.
 
 - Keep composer controls on one row and the terminal toggle clear of context usage by shortening labels and compacting indicators in narrow panes.
