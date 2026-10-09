@@ -1,0 +1,89 @@
+name: Publish crates
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Published stable release tag (vX.Y.Z)
+        required: true
+        type: string
+      dry_run:
+        description: Validate packages without uploading
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: crates-io-publish
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    if: github.event_name == 'workflow_dispatch' || !github.event.release.prerelease
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    env:
+      RELEASE_TAG: ${{ github.event.release.tag_name || inputs.tag }}
+    steps:
+      - name: Check out publishing tools
+        uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+      - name: Verify the GitHub release is public and stable
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          gh release view "$RELEASE_TAG" --json isDraft,isPrerelease \
+            | python3 -c 'import json,sys; r=json.load(sys.stdin); sys.exit("Only published stable releases can be uploaded" if r["isDraft"] or r["isPrerelease"] else 0)'
+      - name: Verify publishing credentials are configured
+        if: github.event_name == 'release' || !inputs.dry_run
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+        run: |
+          if [[ -z "$CARGO_REGISTRY_TOKEN" ]]; then
+            echo 'Configure the CARGO_REGISTRY_TOKEN repository secret before publishing.' >&2
+            exit 1
+          fi
+      - name: Check out the exact release
+        uses: actions/checkout@v5
+        with:
+          ref: ${{ env.RELEASE_TAG }}
+          path: release
+          persist-credentials: false
+      - name: Cache Cargo dependencies and builds
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            release/target
+          key: ${{ runner.os }}-publish-1.97.1-${{ hashFiles('release/Cargo.lock') }}
+          restore-keys: ${{ runner.os }}-publish-1.97.1-
+      - name: Install Linux libraries
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            pkg-config libfontconfig-dev libfreetype6-dev \
+            libxkbcommon-dev libxkbcommon-x11-dev libwayland-dev libx11-dev \
+            libxcb-shape0-dev libxcb-xfixes0-dev libxcb-randr0-dev \
+            libxcb-xinput-dev libegl1-mesa-dev libgles2-mesa-dev libglib2.0-dev libgtk-4-dev qt6-base-dev
+      - name: Set up session terminal
+        uses: ./.github/actions/setup-terminal
+      - name: Install Rust toolchain
+        run: |
+          rustup toolchain install 1.97.1 --profile minimal
+          rustup default 1.97.1
+      - name: Test publishing decisions
+        run: python3 -m unittest discover -s .github/scripts/tests
+      - name: Validate registry packages
+        run: python3 .github/scripts/publish-crates.py --path release --tag "$RELEASE_TAG" --dry-run
+      - name: Publish missing versions
+        if: github.event_name == 'release' || !inputs.dry_run
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+        run: python3 .github/scripts/publish-crates.py --path release --tag "$RELEASE_TAG" --publish

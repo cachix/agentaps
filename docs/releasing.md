@@ -32,9 +32,9 @@ credentials and session storage. This opt-in test is skipped by the regular suit
 
 ## Prepare a release
 
-GitHub releases are the current distribution channel. The desktop workflow does
-not publish to crates.io. The workspace uses registry dependencies and supports
-publishing the shared protocol crate before the desktop app.
+GitHub releases provide desktop installers. Publishing a stable GitHub release
+starts the `Publish crates` workflow, which validates and uploads the registry
+packages from the same tag. Drafts and prereleases do not publish to crates.io.
 
 1. Update the version in `Cargo.toml` and `Cargo.lock`. Move the relevant
    `CHANGELOG.md` entries from `Unreleased` to a dated version heading, then
@@ -50,6 +50,26 @@ publishing the shared protocol crate before the desktop app.
    Check the website download links both with and without the GitHub API available.
 
 ## Publish to crates.io
+
+The `Publish crates` workflow uses the `CARGO_REGISTRY_TOKEN` repository secret.
+Configure it once with a crates.io token allowed to publish `agentaps` and
+`agentaps-control-protocol`. Publishing a stable GitHub release starts it
+automatically. The workflow checks the release tag against the desktop version,
+validates both packages, then publishes missing versions in dependency order.
+It skips versions already in the registry, so the unchanged protocol crate does
+not need a new version for every desktop release and partial uploads can be retried.
+
+To validate the workflow on an existing published release without uploading:
+
+```sh
+gh workflow run publish-crates.yml -f tag=vX.Y.Z -F dry_run=true
+```
+
+To retry an upload, rerun its failed workflow job, or dispatch it with
+`-F dry_run=false`. The workflow uses the supplied published tag rather than
+the current contents of `main`.
+
+For a local publication or recovery outside Actions:
 
 Use the same release commit and version as the GitHub release. With Cargo 1.97.1
 and the native build dependencies installed, validate both packages together:

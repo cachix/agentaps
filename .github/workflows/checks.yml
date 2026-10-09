@@ -67,6 +67,8 @@ jobs:
           node-version: '24'
       - name: Test browser storage and protection
         run: node web/tests/browser.mjs
+      - name: Test publishing decisions
+        run: python3 -m unittest discover -s .github/scripts/tests
       - name: Build the website and Web Connect
         run: bash web/cloudflare-build.sh
       - name: Check WASM lints
