@@ -4,6 +4,10 @@ Notable changes to Agentaps are recorded here.
 
 ## [Unreleased]
 
+### Changed
+
+- Installation instructions and website fallback downloads point to matching Agentaps 0.5.2 releases on GitHub and crates.io.
+
 ## [0.5.2] - 2026-10-08
 
 ### Added
@@ -21,6 +25,8 @@ Notable changes to Agentaps are recorded here.
 - Keep the Active session marker readable against sidebar selection colors in light and dark themes.
 
 ### Changed
+
+- The selected pane's accent highlight line appears along its bottom edge.
 
 - Desktop builds use the published native-theme-gpui 0.6.0 release, and the shared Web Connect protocol has registry publishing metadata so current Agentaps releases can return to crates.io. Linux CI validates both packages without uploading them.
 

@@ -41,7 +41,11 @@ See the [Web Connect guide](docs/web-connect.md) for setup, storage, revocation,
 
 ## Build from source
 
-Use the [GitHub releases](https://github.com/domenkozar/agentaps/releases) for current installers. The crates.io package is older and does not yet track current GitHub releases. Registry publishing is now supported by the source checkout; see the [release guide](docs/releasing.md) for publishing both workspace packages.
+Use the [GitHub releases](https://github.com/domenkozar/agentaps/releases) for installers, or install the current release from crates.io with Rust and the native build dependencies installed:
+
+```sh
+cargo install agentaps --locked
+```
 
 With Rust and the native build dependencies installed, build and install from a checkout:
 
