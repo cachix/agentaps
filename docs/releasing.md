@@ -51,10 +51,24 @@ packages from the same tag. Drafts and prereleases do not publish to crates.io.
 
 ## Publish to crates.io
 
-The `Publish crates` workflow uses the `CARGO_REGISTRY_TOKEN` repository secret.
-Configure it once with a crates.io token allowed to publish `agentaps` and
-`agentaps-control-protocol`. Publishing a stable GitHub release starts it
-automatically. The workflow checks the release tag against the desktop version,
+The `Publish crates` workflow uses [crates.io trusted publishing](https://crates.io/docs/trusted-publishing).
+Configure a GitHub trusted publisher in the settings of both
+[`agentaps`](https://crates.io/crates/agentaps/settings) and
+[`agentaps-control-protocol`](https://crates.io/crates/agentaps-control-protocol/settings):
+
+| Field | Value |
+| --- | --- |
+| Repository owner | `domenkozar` |
+| Repository name | `agentaps` |
+| Workflow filename | `publish-crates.yml` |
+| Environment | Leave blank |
+
+The workflow exchanges its GitHub OIDC identity for a short-lived publishing
+token after package validation. The authentication action revokes the token at
+the end of the job. No repository publishing secret is needed.
+
+Publishing a stable GitHub release starts the workflow automatically.
+The workflow checks the release tag against the desktop version,
 validates both packages, then publishes missing versions in dependency order.
 It skips versions already in the registry, so the unchanged protocol crate does
 not need a new version for every desktop release and partial uploads can be retried.
@@ -64,6 +78,9 @@ To validate the workflow on an existing published release without uploading:
 ```sh
 gh workflow run publish-crates.yml -f tag=vX.Y.Z -F dry_run=true
 ```
+
+After configuring both trusted publishers, also check the OIDC token exchange
+without uploading by adding `-F verify_auth=true` to that command.
 
 To retry an upload, rerun its failed workflow job, or dispatch it with
 `-F dry_run=false`. The workflow uses the supplied published tag rather than

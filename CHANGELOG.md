@@ -6,6 +6,8 @@ Notable changes to Agentaps are recorded here.
 
 ### Changed
 
+- Automated crates.io releases use trusted publishing with short-lived GitHub OIDC credentials. Manual dry runs can verify authentication without uploading packages.
+
 - Publishing a stable GitHub release automatically uploads missing crate versions to crates.io from the same tag. Already published versions are skipped for retries, and the workflow supports manual validation without uploads.
 
 - Installation instructions and website fallback downloads point to matching Agentaps 0.5.2 releases on GitHub and crates.io.
