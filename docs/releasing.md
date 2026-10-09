@@ -58,7 +58,7 @@ Configure a GitHub trusted publisher in the settings of both
 
 | Field | Value |
 | --- | --- |
-| Repository owner | `domenkozar` |
+| Repository owner | `cachix` |
 | Repository name | `agentaps` |
 | Workflow filename | `publish-crates.yml` |
 | Environment | Leave blank |
