@@ -6,6 +6,8 @@ Notable changes to Agentaps are recorded here.
 
 ### Changed
 
+- Contributor instructions describe the release trigger, protocol versioning, and trusted publishing configuration checks.
+
 - Trusted publishing setup instructions use the transferred `cachix/agentaps` repository.
 
 - Automated crates.io releases use trusted publishing with short-lived GitHub OIDC credentials. Manual dry runs can verify authentication without uploading packages.
