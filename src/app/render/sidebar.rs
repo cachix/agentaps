@@ -656,6 +656,7 @@ impl Workspace {
         }
         let viewport_width = f32::from(window.viewport_size().width);
         let sidebar_width = (viewport_width * self.sidebar_fraction).max(180.);
+        let show_new_label = sidebar_width >= f32::from(window.rem_size()) * 14.;
         let archive_tooltip = if archive_view {
             "Show active sessions"
         } else {
@@ -755,14 +756,12 @@ impl Workspace {
                         sidebar_action(palette, new_session_view)
                             .id("quick-open")
                             .size(rems(1.75))
-                            .w_auto()
-                            .px_2()
-                            .gap_1()
+                            .when(show_new_label, |button| button.w_auto().px_2().gap_1())
                             .text_xs()
                             .child(Icon::new(IconName::Plus).size(px(14.)).text_color(
                                 palette.color(if new_session_view { TEXT } else { MUTED }),
                             ))
-                            .child("New")
+                            .when(show_new_label, |button| button.child("New"))
                             .tooltip(|window, cx| {
                                 Tooltip::new("New session in folder")
                                     .action(&QuickOpen, None)
