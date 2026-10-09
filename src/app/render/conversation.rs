@@ -24,6 +24,7 @@ impl Workspace {
     ) -> Div {
         let palette = theme::palette(cx);
         let compact_header = pane_width < 600. * self.font_scale;
+        let compact_footer = pane_width < 600. * self.font_scale;
         let project = &self.projects[project_index];
         let agent = &project.agents[agent_index];
         let diff_counts = self.pane_diff_counts(project_index);
@@ -732,18 +733,22 @@ impl Workspace {
                     .child(div().flex_shrink_0().child(action_button)),
             );
         let status = agent.active_work.then(|| {
+            let label = if agent.cancel_requested {
+                "Stopping"
+            } else if agent.awaiting_response {
+                "Waiting"
+            } else {
+                "Working"
+            };
             div()
+                .id("agent-work-status")
                 .flex()
+                .flex_shrink_0()
                 .items_center()
                 .gap_2()
                 .child(status_dot(Status::Working.color(), palette))
-                .child(if agent.cancel_requested {
-                    "Stopping agent"
-                } else if agent.awaiting_response {
-                    "Waiting for agent · Esc to stop"
-                } else {
-                    "Agent is working · Esc to stop"
-                })
+                .when(!compact_footer, |status| status.child(label))
+                .tooltip(move |window, cx| Tooltip::new(label).build(window, cx))
         });
         #[cfg(all(
             feature = "ghostty-terminal",
@@ -806,15 +811,29 @@ impl Workspace {
                             .min_h(px(24.))
                             .flex()
                             .items_center()
-                            .gap_2()
+                            .gap_1()
                             .text_xs()
                             .text_color(palette.color(MUTED))
                             .child(self.render_attach_menu(project_index, agent_index, cx))
-                            .children(self.render_mode_select(project_index, agent_index, cx))
-                            .children(self.render_plan_toggle(project_index, agent_index, cx))
+                            .children(self.render_mode_select(
+                                project_index,
+                                agent_index,
+                                compact_footer,
+                                cx,
+                            ))
+                            .children(self.render_plan_toggle(
+                                project_index,
+                                agent_index,
+                                compact_footer,
+                                cx,
+                            ))
                             .children(status)
-                            .child(div().flex_1())
-                            .child(self.render_session_settings(project_index, agent_index, cx))
+                            .child(self.render_session_settings(
+                                project_index,
+                                agent_index,
+                                compact_footer,
+                                cx,
+                            ))
                             .children(terminal_control),
                     ),
             ),
@@ -877,6 +896,7 @@ impl Workspace {
         &self,
         project_index: usize,
         agent_index: usize,
+        compact: bool,
         cx: &mut Context<Self>,
     ) -> Option<impl IntoElement + use<>> {
         let agent = &self.projects[project_index].agents[agent_index];
@@ -896,8 +916,9 @@ impl Workspace {
                 .ghost()
                 .xsmall()
                 .label(option.label())
+                .max_w(px(if compact { 64. } else { 140. }))
                 .icon(IconName::ChevronDown)
-                .tooltip("Mode")
+                .tooltip(format!("Mode: {}", option.label()))
                 .disabled(pending)
                 .dropdown_menu_with_anchor(Anchor::BottomLeft, move |mut menu, _, _| {
                     for choice in &choices {
@@ -934,6 +955,7 @@ impl Workspace {
         &self,
         project_index: usize,
         agent_index: usize,
+        compact: bool,
         cx: &mut Context<Self>,
     ) -> Option<impl IntoElement + use<>> {
         let palette = theme::palette(cx);
@@ -972,7 +994,6 @@ impl Workspace {
         let pane_id = self.pane_id;
         let agent_id = agent.config.id;
         let view = cx.entity().clone();
-        // The label and switch explain themselves, so there is no tooltip.
         // Assistive technology hears "Plan, switch" with its on/off state.
         Some(
             gpui_kit::base::Switch::new(("plan-toggle", agent.config.id as usize))
@@ -980,15 +1001,17 @@ impl Workspace {
                 .disabled(pending)
                 .accessibility_label("Plan")
                 .flex()
+                .flex_shrink_0()
                 .items_center()
                 .gap_1p5()
-                .px_1p5()
+                .px_1()
                 .py_0p5()
                 .rounded_md()
                 .text_xs()
                 .text_color(palette.color(if active { ACCENT } else { MUTED }))
                 .child(track)
-                .child("Plan")
+                .when(!compact, |toggle| toggle.child("Plan"))
+                .tooltip(|window, cx| Tooltip::new("Plan mode").build(window, cx))
                 .map(|toggle| {
                     if pending {
                         toggle.opacity(0.5)
@@ -1031,13 +1054,20 @@ impl Workspace {
         &self,
         project_index: usize,
         agent_index: usize,
+        compact: bool,
         cx: &mut Context<Self>,
     ) -> Div {
         let palette = theme::palette(cx);
         let agent = &self.projects[project_index].agents[agent_index];
         let selectable = agent.session_id.is_some() && agent.status != Status::Error;
         let pending = agent.setting_pending();
-        let mut row = div().flex().min_w(px(0.)).items_center().gap_1();
+        let mut row = div()
+            .flex()
+            .flex_1()
+            .min_w(px(0.))
+            .items_center()
+            .justify_end()
+            .gap_1();
         if let Some(model) = agent.model.as_ref() {
             row = match &agent.model_option {
                 Some(option) if selectable && !option.choices.is_empty() => {
@@ -1051,8 +1081,11 @@ impl Workspace {
                             .ghost()
                             .xsmall()
                             .label(model.clone())
+                            .min_w(px(0.))
+                            .max_w(px(if compact { 100. } else { 200. }))
+                            .flex_shrink(1.)
                             .icon(IconName::ChevronDown)
-                            .tooltip("Model")
+                            .tooltip(format!("Model: {model}"))
                             .disabled(pending)
                             .dropdown_menu_with_anchor(
                                 Anchor::BottomLeft,
@@ -1086,7 +1119,14 @@ impl Workspace {
                             ),
                     )
                 }
-                _ => row.child(div().px_1().truncate().child(model.clone())),
+                _ => row.child(
+                    div()
+                        .min_w(px(0.))
+                        .max_w(px(200.))
+                        .px_1()
+                        .truncate()
+                        .child(model.clone()),
+                ),
             };
         }
         if let Some(option) = agent.effort_option.as_ref()
@@ -1103,8 +1143,9 @@ impl Workspace {
                     .ghost()
                     .xsmall()
                     .label(option.label())
+                    .max_w(px(if compact { 48. } else { 80. }))
                     .icon(IconName::ChevronDown)
-                    .tooltip("Reasoning effort")
+                    .tooltip(format!("Reasoning effort: {}", option.label()))
                     .disabled(pending)
                     .dropdown_menu_with_anchor(Anchor::BottomRight, move |mut menu, _, _| {
                         for choice in &choices {
@@ -1166,15 +1207,17 @@ impl Workspace {
                             .flex()
                             .items_center()
                             .gap_2()
-                            .child(format!("Context {}%", percent.floor() as u32))
-                            .child(
-                                Progress::new(format!("context-progress-{}", agent.config.id))
-                                    .value(percent)
-                                    .color(palette.color(color))
-                                    .accessibility_label("Context usage")
-                                    .w(px(80.))
-                                    .h(px(6.)),
-                            ),
+                            .child(format!("{}%", percent.floor() as u32))
+                            .when(!compact, |context| {
+                                context.child(
+                                    Progress::new(format!("context-progress-{}", agent.config.id))
+                                        .value(percent)
+                                        .color(palette.color(color))
+                                        .accessibility_label("Context usage")
+                                        .w(px(48.))
+                                        .h(px(6.)),
+                                )
+                            }),
                     )
                     .dropdown_menu_with_anchor(Anchor::BottomRight, move |menu, _, _| {
                         let view = view.clone();

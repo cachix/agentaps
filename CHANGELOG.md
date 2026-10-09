@@ -4,11 +4,17 @@ Notable changes to Agentaps are recorded here.
 
 ## [Unreleased]
 
+### Fixed
+
+- Keep composer controls on one row and the terminal toggle clear of context usage by shortening labels and compacting indicators in narrow panes.
+
 ### Changed
 
 - Contributor instructions describe the release trigger, protocol versioning, and trusted publishing configuration checks.
 
 - Trusted publishing setup instructions use the transferred `cachix/agentaps` repository.
+
+- Working and waiting agent status messages no longer show the Escape stop hint.
 
 - Automated crates.io releases use trusted publishing with short-lived GitHub OIDC credentials. Manual dry runs can verify authentication without uploading packages.
 
