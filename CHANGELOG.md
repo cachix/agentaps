@@ -6,6 +6,8 @@ Notable changes to Agentaps are recorded here.
 
 ### Fixed
 
+- Session replies use the full conversation width, align text and actions with activity labels, and give paragraphs and turns more breathing room.
+
 - Hide the sidebar New button label when the sidebar is narrow so its bottom controls fit.
 
 - Keep composer controls on one row and the terminal toggle clear of context usage by shortening labels and compacting indicators in narrow panes.
