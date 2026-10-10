@@ -19,7 +19,7 @@ license-file = "LICENSE"
 icons = ["assets/packaging/icon.png"]
 
 [package.metadata.packager.deb]
-depends = ["libgtk-4-1 (>= 4.10)", "libqt6widgets6t64 (>= 6.2) | libqt6widgets6 (>= 6.2)", "qt6-qpa-plugins", "libc++1-21", "libc++abi1-21", "libxml2"]
+depends = ["libgtk-4-1 (>= 4.10)", "libqt6widgets6t64 (>= 6.2) | libqt6widgets6 (>= 6.2)", "qt6-qpa-plugins", "libc++1 (>= 1:21) | libc++1-21", "libc++abi1 (>= 1:21) | libc++abi1-21", "libxml2"]
 files = { "LICENSE" = "usr/share/doc/agentaps/copyright" }
 
 [package.metadata.packager.macos]

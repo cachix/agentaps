@@ -97,17 +97,18 @@ jobs:
           Path(os.environ["RUNNER_TEMP"], "agentaps-prerequisites.sh").write_text(script)
           PY
           bash -n "$RUNNER_TEMP/agentaps-prerequisites.sh"
-      - name: Install released DEB using the documented prerequisites
+      - name: Verify candidate DEB dependencies with the released binary
         run: |
           docker run --rm -i \
             --env AGENTAPS_VERSION \
             --env DEBIAN_FRONTEND=noninteractive \
             --volume "$RUNNER_TEMP/agentaps-prerequisites.sh:/tmp/prerequisites.sh:ro" \
+            --volume "$GITHUB_WORKSPACE/Cargo.toml:/tmp/Cargo.toml:ro" \
             ubuntu:24.04 bash -euo pipefail <<'SH'
           # Start with a plain Ubuntu image, without runner development libraries.
           echo 'APT::Get::Assume-Yes "true";' > /etc/apt/apt.conf.d/90ci
           apt-get update
-          apt-get install sudo
+          apt-get install sudo python3
           bash -euo pipefail /tmp/prerequisites.sh
 
           cd /tmp
@@ -116,9 +117,29 @@ jobs:
           curl --fail --location --retry 3 "$release/$package" --output "$package"
           curl --fail --location --retry 3 "$release/$package.sha256" --output "$package.sha256"
           sha256sum --check "$package.sha256"
-          sudo apt install "./$package"
 
-          dpkg-query -W agentaps libc++1-21 libc++abi1-21 libxml2
+          # Test this checkout's package dependencies using the verified release
+          # binary, without a full desktop build or inherited build libraries.
+          dpkg-deb --raw-extract "$package" /tmp/candidate
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+          import tomllib
+
+          manifest = tomllib.loads(Path("/tmp/Cargo.toml").read_text())
+          dependencies = manifest["package"]["metadata"]["packager"]["deb"]["depends"]
+          control = Path("/tmp/candidate/DEBIAN/control")
+          updated, count = re.subn(r"^Depends: .*", "Depends: " + ", ".join(dependencies), control.read_text(), flags=re.M)
+          assert count == 1
+          control.write_text(updated)
+          PY
+          dpkg-deb --build /tmp/candidate /tmp/agentaps-candidate.deb
+          sudo apt install ./agentaps-candidate.deb
+
+          dpkg-query -W agentaps libc++1 libc++abi1 libxml2
+          for runtime in libc++1 libc++abi1; do
+            dpkg --compare-versions "$(dpkg-query -W -f='${Version}' "$runtime")" ge 1:21
+          done
           dependencies=$(ldd /usr/bin/agentaps)
           printf '%s\n' "$dependencies"
           [[ "$dependencies" != *"not found"* ]]

@@ -47,7 +47,7 @@ GPUI and theme development libraries are still required, as listed in the
 Downloaded packages do not require Zig. The Linux DEB requires the libc++ 21,
 libc++abi 21, and libxml2 runtime packages in addition to GTK and Qt. On Ubuntu
 24.04, configure [LLVM's APT repository](https://apt.llvm.org/) before installing
-the DEB so APT can resolve `libc++1-21` and `libc++abi1-21`:
+the DEB so APT can resolve `libc++1` and `libc++abi1` at version 21 or newer:
 
 ```sh
 sudo apt-get update
@@ -59,13 +59,19 @@ sudo chmod 0644 /etc/apt/keyrings/apt.llvm.org.asc
 echo 'deb [signed-by=/etc/apt/keyrings/apt.llvm.org.asc] https://apt.llvm.org/noble/ llvm-toolchain-noble-21 main' \
   | sudo tee /etc/apt/sources.list.d/llvm-21.list >/dev/null
 sudo apt-get update
-sudo apt-get install libc++1-21 libc++abi1-21 libxml2
+sudo apt-get install libc++1 libc++abi1 libxml2
 ```
 
-Install the downloaded DEB with `sudo apt install ./agentaps_0.5.2_amd64.deb`
-from its download directory, replacing the filename for other releases. APT
-installs the remaining package dependencies. These LLVM repository commands
-are specific to Ubuntu 24.04.
+For releases with corrected runtime dependencies, install the downloaded DEB
+with `sudo apt install ./agentaps_VERSION_amd64.deb` from its download directory,
+replacing `VERSION` with the release version. APT installs the remaining package
+dependencies. These LLVM repository commands are specific to Ubuntu 24.04.
+
+The 0.5.2 DEB requires the old names `libc++1-21` and `libc++abi1-21`, which
+LLVM's Ubuntu 24.04 repository no longer supplies. Repository setup alone does
+not fix that package. Until a corrected DEB is released, use the
+[source installation instructions](../README.md#build-from-source), optionally
+with `--no-default-features` to omit the terminal.
 
 ## Current limitations
 

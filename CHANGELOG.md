@@ -6,7 +6,7 @@ Notable changes to Agentaps are recorded here.
 
 ### Fixed
 
-- CI verifies the documented Ubuntu 24.04 prerequisites and released DEB installation in a clean container without Zig.
+- Linux DEB packages accept LLVM's current libc++ runtime package names while retaining support for the older versioned names. CI verifies the documented Ubuntu 24.04 prerequisites and corrected package dependencies in a clean container without Zig.
 
 - Installation guidance lists Zig and terminal build dependencies before Cargo commands, provides terminal-free installs, and explains LLVM runtime setup for Ubuntu 24.04 DEB packages.
 
