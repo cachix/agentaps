@@ -6,6 +6,8 @@ Notable changes to Agentaps are recorded here.
 
 ### Fixed
 
+- CI verifies the documented Ubuntu 24.04 prerequisites and released DEB installation in a clean container without Zig.
+
 - Installation guidance lists Zig and terminal build dependencies before Cargo commands, provides terminal-free installs, and explains LLVM runtime setup for Ubuntu 24.04 DEB packages.
 
 - Hide the sidebar New button label when the sidebar is narrow so its bottom controls fit.
