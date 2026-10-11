@@ -12,6 +12,8 @@ Notable changes to Agentaps are recorded here.
 
 ### Fixed
 
+- Terminal dependency setup locates its Zig installer inside container-based builds.
+
 - Linux DEB packages accept LLVM's current libc++ runtime package names while retaining support for the older versioned names. CI verifies the documented Ubuntu 24.04 prerequisites and corrected package dependencies in a clean container without Zig.
 
 - Installation guidance lists Zig and terminal build dependencies before Cargo commands, provides terminal-free installs, and explains LLVM runtime setup for Ubuntu 24.04 DEB packages.

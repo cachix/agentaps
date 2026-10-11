@@ -18,4 +18,4 @@ runs:
         sudo apt-get install -y libc++-21-dev libc++abi-21-dev libxml2-dev libgl-dev
     - name: Install Zig
       shell: bash
-      run: python3 "${{ github.action_path }}/install-zig.py"
+      run: python3 "$GITHUB_WORKSPACE/.github/actions/setup-terminal/install-zig.py"
