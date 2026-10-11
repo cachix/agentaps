@@ -7,7 +7,9 @@ const patterns = {
 const platformNames = { linux: 'Linux', macos: 'macOS (Apple Silicon)', windows: 'Windows' };
 const installerFile = /\.(?:AppImage|deb|rpm|tar\.gz|tar\.xz|zip|dmg|pkg|msi|exe)$/i;
 const downloadLabel = (platform, asset) => {
-  if (platform === 'linux' && /\.deb$/i.test(asset.name)) return 'Linux DEB';
+  if (platform === 'linux' && /\.deb$/i.test(asset.name)) {
+    return /_ubuntu26\.04_/i.test(asset.name) ? 'Ubuntu 26.04 DEB' : 'Ubuntu 24.04 DEB';
+  }
   if (platform === 'linux' && /\.AppImage$/i.test(asset.name)) return 'Linux AppImage';
   return platformNames[platform];
 };

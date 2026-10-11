@@ -45,8 +45,12 @@ GPUI and theme development libraries are still required, as listed in the
 ## Linux package prerequisites
 
 Downloaded packages do not require Zig. The Linux DEB requires the libc++ 21,
-libc++abi 21, and libxml2 runtime packages in addition to GTK and Qt. On Ubuntu
-24.04, configure [LLVM's APT repository](https://apt.llvm.org/) before installing
+libc++abi 21, and libxml2 runtime packages in addition to GTK and Qt. Choose the
+DEB built for your Ubuntu version. Ubuntu 24.04 packages use `libxml2.so.2`;
+Ubuntu 26.04 packages use `libxml2.so.16` and have `_ubuntu26.04_amd64.deb` in
+their filename. The two libxml2 ABIs require separate binaries.
+
+On Ubuntu 24.04, configure [LLVM's APT repository](https://apt.llvm.org/) before installing
 the DEB so APT can resolve `libc++1` and `libc++abi1` at version 21 or newer:
 
 ```sh
@@ -72,6 +76,15 @@ LLVM's Ubuntu 24.04 repository no longer supplies. Repository setup alone does
 not fix that package. Until a corrected DEB is released, use the
 [source installation instructions](../README.md#build-from-source), optionally
 with `--no-default-features` to omit the terminal.
+
+On Ubuntu 26.04, the native runtime dependencies are available in Ubuntu's
+repositories. Install its matching DEB with
+`sudo apt install ./agentaps_VERSION_ubuntu26.04_amd64.deb`, replacing `VERSION`
+with the release version. APT installs GTK, Qt, libc++, and `libxml2-16`.
+The existing 0.5.2 Ubuntu 24.04 DEB cannot be installed this way on Ubuntu 26.04.
+For source builds on Ubuntu 26.04, install `libc++-21-dev`, `libc++abi-21-dev`,
+`libxml2-dev`, and `libgl-dev` directly from Ubuntu, along with Zig and the GPUI
+development libraries. The LLVM repository commands above are for Ubuntu 24.04 only.
 
 ## Current limitations
 

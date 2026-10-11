@@ -6,6 +6,8 @@ Notable changes to Agentaps are recorded here.
 
 ### Added
 
+- Desktop builds provide a separate Ubuntu 26.04 DEB linked against its native libxml2 ABI, with a clean-container installation check and distinct download labels.
+
 - Record voice messages or attach audio files in the desktop composer and send the recording directly to audio-capable ACP agents for transcription and a response. Queued recordings survive restarts.
 
 ### Fixed
