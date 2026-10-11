@@ -1459,11 +1459,13 @@ fn prompts_embed_text_files_and_link_the_rest() {
     let mut agent = agent(ProtocolVersion::V1);
     agent.active_work = false;
     let notes = ChatFile {
+        audio: None,
         name: "notes.md".into(),
         uri: "file:///project/notes.md".into(),
         text: Some("# Notes".into()),
     };
     let archive = ChatFile {
+        audio: None,
         name: "build.zip".into(),
         uri: "file:///project/build.zip".into(),
         text: None,
@@ -1590,4 +1592,105 @@ fn echoed_file_context_renders_as_truncated_code_block() {
         "Summarise [@notes.md](file:///tmp/notes.md)\n````\n# Title\n```rust\nline 1\nline 2\nline 3\nline 4\nline 5\nline 6\n… 4 more lines\n````\nthanks"
     );
     assert_eq!(file_context_preview("plain text"), "plain text");
+}
+
+#[test]
+fn audio_requires_the_negotiated_prompt_capability() {
+    for protocol in [ProtocolVersion::V1, ProtocolVersion::V2] {
+        assert!(!protocol::accepts_audio(protocol, &json!({})));
+        let initialize = match protocol {
+            ProtocolVersion::V1 => {
+                json!({"agentCapabilities":{"promptCapabilities":{"audio":true}}})
+            }
+            _ => json!({"capabilities":{"session":{"prompt":{"audio":{}}}}}),
+        };
+        assert!(protocol::accepts_audio(protocol, &initialize));
+    }
+    assert!(!protocol::accepts_audio(
+        ProtocolVersion::V1,
+        &json!({"agentCapabilities":{"promptCapabilities":{"audio":false}}})
+    ));
+    assert!(!protocol::accepts_audio(
+        ProtocolVersion::V2,
+        &json!({"capabilities":{"session":{"prompt":{"audio":null}}}})
+    ));
+    let mut agent = agent(ProtocolVersion::V1);
+    agent.active_work = false;
+    let file = ChatFile {
+        name: "Voice recording.wav".into(),
+        uri: "".into(),
+        text: None,
+        audio: Some(crate::config::ChatAudio {
+            mime_type: "audio/wav".into(),
+            data: "AQID".into(),
+        }),
+    };
+    let prompt = Prompt {
+        files: vec![file],
+        ..Prompt::default()
+    };
+    assert_eq!(
+        agent.start_prompt(prompt.clone()).unwrap_err(),
+        "This agent does not accept audio."
+    );
+    let restored: Prompt = serde_json::from_value(serde_json::to_value(&prompt).unwrap()).unwrap();
+    assert_eq!(restored, prompt);
+}
+
+#[test]
+#[cfg(unix)]
+fn voice_prompts_send_audio_bytes_and_transcription_instructions() {
+    for version in [ProtocolVersion::V1, ProtocolVersion::V2] {
+        let mut agent = agent(version);
+        agent.active_work = false;
+        agent.accepts_audio = true;
+        let command = vec![
+            "/bin/sh".into(),
+            "-c".into(),
+            "while IFS= read -r line; do printf '%s\\n' \"$line\"; done".into(),
+        ];
+        let (events_tx, events_rx) = mpsc::channel();
+        agent.connection =
+            Some(Connection::spawn(1, &command, Path::new("/"), None, None, events_tx).unwrap());
+        agent
+            .start_prompt(Prompt {
+                files: vec![ChatFile {
+                    name: "Voice recording.wav".into(),
+                    uri: "".into(),
+                    text: None,
+                    audio: Some(crate::config::ChatAudio {
+                        mime_type: "audio/wav".into(),
+                        data: "AQID".into(),
+                    }),
+                }],
+                ..Prompt::default()
+            })
+            .unwrap();
+        let Event::Message { value, .. } = events_rx.recv_timeout(Duration::from_secs(2)).unwrap()
+        else {
+            panic!("agent disconnected");
+        };
+        assert_eq!(value["method"], "session/prompt");
+        assert_eq!(
+            value["params"]["prompt"][1],
+            json!({"type":"audio","mimeType":"audio/wav","data":"AQID"})
+        );
+        assert!(
+            value["params"]["prompt"][0]["text"]
+                .as_str()
+                .unwrap()
+                .contains("Transcribe")
+        );
+        if version == ProtocolVersion::V1 {
+            assert_eq!(
+                agent.messages.last().unwrap().text,
+                "[file: Voice recording.wav]"
+            );
+        } else {
+            assert!(
+                agent.messages.is_empty(),
+                "v2 waits for the agent to echo the user message"
+            );
+        }
+    }
 }

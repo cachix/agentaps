@@ -27,6 +27,8 @@ If Codex or Claude is installed without its ACP adapter, Agentaps can offer to s
 
 In the composer, **Enter** sends a prompt and **Ctrl+Enter** inserts a newline. Type `/` for agent commands, `@` to find a project file, or start with `!` to ask the agent to run a shell command. Prompts sent while an agent is busy are queued. **Up/Down** recalls earlier prompts when the composer is empty. Paste an image or drop an image file on the composer to send it with your prompt when the agent accepts images. To attach other files, use **+** under the composer or drop them on it. Text files go to the agent with their contents when it supports embedded context; other files are sent as links.
 
+Use **Record** beside the attachment menu, then **Stop** and Send, to have an audio-capable agent transcribe and answer your spoken request. Recordings stop after two minutes. WAV, MP3, Ogg, FLAC, M4A, and WebM audio files can also be attached directly. Audio controls require the agent to advertise ACP audio support. When support is unavailable for Codex or Claude, hover Record for a link to the corresponding upstream pull request or issue.
+
 Keyboard shortcuts use Cmd on macOS and Ctrl elsewhere: **N** starts a new session with the current agent, **Shift+N** picks a folder for a new session, **,** opens settings, **B** toggles the sidebar, **Shift+D** toggles the diff, and **K** searches sessions. **Ctrl+Tab** and **Ctrl+Shift+Tab** move between sessions. **1** to **9** jump to the first nine sessions in the sidebar. **=**, **-**, and **0** zoom in, out, and reset.
 
 ## Web Connect
@@ -64,7 +66,7 @@ sudo apt-get install build-essential pkg-config \
   libfontconfig-dev libfreetype6-dev \
   libxkbcommon-dev libxkbcommon-x11-dev libwayland-dev libx11-dev \
   libxcb-shape0-dev libxcb-xfixes0-dev libxcb-randr0-dev libxcb-xinput-dev \
-  libegl1-mesa-dev libgles2-mesa-dev libglib2.0-dev libgtk-4-dev qt6-base-dev
+  libegl1-mesa-dev libgles2-mesa-dev libglib2.0-dev libgtk-4-dev qt6-base-dev libasound2-dev
 ```
 
 `libfontconfig-dev` supplies the native fontconfig dependency; a distro-packaged Rust fontconfig crate is not required. To run this checkout with [devenv](https://devenv.sh/) installed:

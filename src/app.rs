@@ -560,6 +560,7 @@ struct Workspace {
     terminals: HashMap<u64, terminal::SessionTerminal>,
     draft_images: HashMap<u64, Vec<ChatImage>>,
     draft_files: HashMap<u64, Vec<ChatFile>>,
+    voice_recording: Option<crate::audio::Recording>,
     conversation: ConversationState,
     next_agent_id: u64,
     events_tx: Sender<Event>,
@@ -1163,6 +1164,7 @@ impl Workspace {
             terminals: HashMap::new(),
             draft_images: HashMap::new(),
             draft_files: HashMap::new(),
+            voice_recording: None,
             conversation: ConversationState::new(
                 composer,
                 window,

@@ -46,6 +46,16 @@ pub(super) fn accepts_images(protocol: ProtocolVersion, initialize: &Value) -> b
     }
 }
 
+pub(super) fn accepts_audio(protocol: ProtocolVersion, initialize: &Value) -> bool {
+    match protocol {
+        ProtocolVersion::V2 => initialize["capabilities"]["session"]["prompt"]["audio"].is_object(),
+        ProtocolVersion::V1 => {
+            initialize["agentCapabilities"]["promptCapabilities"]["audio"].as_bool() == Some(true)
+        }
+        _ => false,
+    }
+}
+
 pub(super) fn accepts_embedded_context(protocol: ProtocolVersion, initialize: &Value) -> bool {
     match protocol {
         ProtocolVersion::V2 => {

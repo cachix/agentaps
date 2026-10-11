@@ -1,10 +1,6 @@
 use super::*;
 use crate::diff_view;
 use gpui_kit::ExternalPaths;
-#[cfg(all(
-    feature = "ghostty-terminal",
-    any(target_os = "linux", target_os = "macos")
-))]
 use gpui_kit::base::Selectable;
 use gpui_kit::component::attachment::{
     Attachment, AttachmentContent, AttachmentGroup, AttachmentMedia, AttachmentTitle,
@@ -564,16 +560,98 @@ impl Workspace {
             .get(&agent_id)
             .map(Vec::as_slice)
             .unwrap_or_default();
+        let recording = self
+            .voice_recording
+            .as_ref()
+            .filter(|recording| recording.agent_id == agent_id);
+        let is_recording = recording.is_some();
+        let stopping_recording = recording.is_some_and(|recording| recording.stopping);
+        let voice_label = if stopping_recording {
+            "Finishing recording…".to_string()
+        } else if let Some(recording) = recording {
+            format!("Stop ({}s)", recording.displayed_seconds)
+        } else {
+            "Record".to_string()
+        };
+        let voice_control = Button::new(("record-voice", agent_id))
+            .ghost()
+            .xsmall()
+            .label(voice_label)
+            .icon(Icon::empty().path(if is_recording {
+                "icons/circle-stop.svg"
+            } else {
+                "icons/mic.svg"
+            }))
+            .selected(is_recording)
+            .disabled(
+                stopping_recording
+                    || (!is_recording
+                        && (!agent.accepts_audio
+                            || agent.protocol.is_none()
+                            || agent.status == Status::Error
+                            || self.voice_recording.is_some())),
+            )
+            .on_click(self.pane_listener(cx, |this, _, _, cx| this.toggle_voice_recording(cx)));
+        let audio_support_link = if agent.accepts_audio {
+            None
+        } else {
+            match known_agent(&agent.config.command) {
+                Some(KnownAgent::Codex) => Some((
+                    "Codex ACP PR #339",
+                    "https://github.com/agentclientprotocol/codex-acp/pull/339",
+                )),
+                Some(KnownAgent::Claude) => Some((
+                    "Claude ACP issue #547",
+                    "https://github.com/agentclientprotocol/claude-agent-acp/issues/547",
+                )),
+                _ => None,
+            }
+        };
+        let accepts_audio = agent.accepts_audio;
+        let voice_control = div()
+            .id(("record-voice-hover", agent_id))
+            .child(voice_control)
+            .map(|control| {
+                if let Some((label, url)) = audio_support_link {
+                    control.hoverable_tooltip(move |window, cx| {
+                        Tooltip::element(move |_, _| {
+                            div()
+                                .flex()
+                                .flex_col()
+                                .gap_1()
+                                .child("This agent does not advertise audio support")
+                                .child(
+                                    Button::new("audio-support-link")
+                                        .ghost()
+                                        .xsmall()
+                                        .label(label)
+                                        .on_click(move |_, _, cx| cx.open_url(url)),
+                                )
+                        })
+                        .build(window, cx)
+                    })
+                } else {
+                    control.tooltip(move |window, cx| {
+                        Tooltip::new(if accepts_audio {
+                            "Record a voice message for the agent"
+                        } else {
+                            "This agent does not advertise audio support"
+                        })
+                        .build(window, cx)
+                    })
+                }
+            });
         let send_tooltip = format!("Send ({})", self.shortcut_label(Shortcut::Send));
-        let can_send = !draft_images.is_empty()
-            || !draft_files.is_empty()
-            || !self
-                .conversation
-                .composer
-                .read(cx)
-                .value()
-                .trim()
-                .is_empty();
+        let can_send = !is_recording
+            && (!draft_images.is_empty()
+                || !draft_files.is_empty()
+                || !self
+                    .conversation
+                    .composer
+                    .read(cx)
+                    .value()
+                    .trim()
+                    .is_empty());
         let focused = self
             .conversation
             .composer
@@ -650,8 +728,17 @@ impl Workspace {
                 .children(draft_files.iter().enumerate().map(|(index, file)| {
                     Attachment::new()
                         .id(("composer-file", index))
-                        .tooltip(file.uri.clone())
-                        .media(AttachmentMedia::new().child(Icon::new(IconName::File)))
+                        .tooltip(
+                            file.audio
+                                .as_ref()
+                                .map(|audio| audio.mime_type.clone())
+                                .unwrap_or_else(|| file.uri.clone()),
+                        )
+                        .media(AttachmentMedia::new().child(if file.audio.is_some() {
+                            Icon::empty().path("icons/mic.svg")
+                        } else {
+                            Icon::new(IconName::File)
+                        }))
                         .content(
                             AttachmentContent::new().title(AttachmentTitle::new(file.name.clone())),
                         )
@@ -815,6 +902,7 @@ impl Workspace {
                             .text_xs()
                             .text_color(palette.color(MUTED))
                             .child(self.render_attach_menu(project_index, agent_index, cx))
+                            .child(voice_control)
                             .children(self.render_mode_select(
                                 project_index,
                                 agent_index,

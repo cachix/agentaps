@@ -1,6 +1,7 @@
 mod acp;
 mod app;
 mod appearance;
+mod audio;
 mod config;
 mod diff_view;
 mod diff_watch;

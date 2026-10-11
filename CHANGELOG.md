@@ -4,6 +4,10 @@ Notable changes to Agentaps are recorded here.
 
 ## [Unreleased]
 
+### Added
+
+- Record voice messages or attach audio files in the desktop composer and send the recording directly to audio-capable ACP agents for transcription and a response. Queued recordings survive restarts.
+
 ### Fixed
 
 - Session replies use the full conversation width, align text and actions with activity labels, and give paragraphs and turns more breathing room.
@@ -13,6 +17,8 @@ Notable changes to Agentaps are recorded here.
 - Keep composer controls on one row and the terminal toggle clear of context usage by shortening labels and compacting indicators in narrow panes.
 
 ### Changed
+
+- When audio support is unavailable, hovering Record shows a clickable link to the Codex ACP audio pull request or Claude ACP voice input issue.
 
 - Contributor instructions describe the release trigger, protocol versioning, and trusted publishing configuration checks.
 
