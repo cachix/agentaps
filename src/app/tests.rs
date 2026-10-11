@@ -1273,6 +1273,7 @@ fn verify_settings_apply_and_persist(
                     sha256: "queued-image".into(),
                 }],
                 files: vec![ChatFile {
+                    audio: None,
                     name: "notes.txt".into(),
                     uri: "file:///notes.txt".into(),
                     text: Some("notes".into()),

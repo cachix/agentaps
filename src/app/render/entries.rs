@@ -315,7 +315,7 @@ impl Workspace {
 
     fn chat_text_style(&self, cx: &Context<Self>) -> TextViewStyle {
         TextViewStyle {
-            paragraph_gap: rems(0.25),
+            paragraph_gap: rems(0.5),
             highlight_theme: cx.theme().highlight_theme.clone(),
             is_dark: cx.theme().mode.is_dark(),
             ..Default::default()
@@ -358,9 +358,10 @@ impl Workspace {
             let entry = &agent.messages[index];
             row = row.child(
                 div()
-                    .ml(px(22.))
+                    .ml(px(CHAT_CONTENT_INSET))
                     .mt_1()
-                    .p_2()
+                    .py_2()
+                    .pr_2()
                     .rounded_md()
                     .bg(palette.color(SURFACE))
                     .children(self.render_images(
@@ -418,28 +419,34 @@ impl Workspace {
                 let from_user = entry.role == Role::User;
                 let reply_text = entry.text.clone();
                 if from_user {
-                    return div().w_full().min_w(px(0.)).flex().justify_end().child(
-                        div()
-                            .max_w(relative(0.85))
-                            .min_w(px(0.))
-                            .px_3()
-                            .py_2()
-                            .rounded_lg()
-                            .bg(palette.color(USER_BUBBLE))
-                            .text_sm()
-                            .text_color(palette.color(TEXT))
-                            .whitespace_normal()
-                            .when(shell.is_some(), |element| {
-                                element.child(
-                                    div()
-                                        .text_xs()
-                                        .text_color(palette.color(ACCENT))
-                                        .child("Shell command"),
-                                )
-                            })
-                            .children(images)
-                            .when(!entry.text.is_empty(), |bubble| bubble.child(content)),
-                    );
+                    return div()
+                        .w_full()
+                        .min_w(px(0.))
+                        .mt_2()
+                        .flex()
+                        .justify_end()
+                        .child(
+                            div()
+                                .max_w(relative(0.85))
+                                .min_w(px(0.))
+                                .px_3()
+                                .py_2()
+                                .rounded_lg()
+                                .bg(palette.color(USER_BUBBLE))
+                                .text_sm()
+                                .text_color(palette.color(TEXT))
+                                .whitespace_normal()
+                                .when(shell.is_some(), |element| {
+                                    element.child(
+                                        div()
+                                            .text_xs()
+                                            .text_color(palette.color(ACCENT))
+                                            .child("Shell command"),
+                                    )
+                                })
+                                .children(images)
+                                .when(!entry.text.is_empty(), |bubble| bubble.child(content)),
+                        );
                 }
                 let copy_state = window.use_keyed_state(
                     format!("copy-state-{}-{index}", agent.config.id),
@@ -448,21 +455,22 @@ impl Workspace {
                 );
                 let copied = copy_state.read(cx).copied;
                 let group = format!("reply-{}-{index}", agent.config.id);
-                // Agent replies mirror the user's bubbles on the left; their
-                // actions appear under the reply on hover.
+                // Reply text and actions share the activity labels' left edge.
                 div()
                     .group(group.clone())
                     .w_full()
                     .min_w(px(0.))
+                    .mb_2()
                     .flex()
                     .flex_col()
                     .items_start()
                     .gap_1()
                     .child(
                         div()
-                            .max_w(relative(0.85))
+                            .w_full()
                             .min_w(px(0.))
-                            .px_3()
+                            .pl(px(CHAT_CONTENT_INSET))
+                            .pr_3()
                             .py_2()
                             .rounded_lg()
                             .bg(palette.color(AGENT_BUBBLE))
@@ -475,6 +483,7 @@ impl Workspace {
                     .child(
                         div()
                             .flex()
+                            .pl(px(CHAT_CONTENT_INSET))
                             .items_center()
                             .gap_1()
                             .when(!copied, |actions| {

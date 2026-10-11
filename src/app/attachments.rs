@@ -25,7 +25,12 @@ fn read_file(path: &Path) -> Result<ChatFile, String> {
     } else {
         None
     };
-    Ok(ChatFile { name, uri, text })
+    Ok(ChatFile {
+        name,
+        uri,
+        text,
+        audio: None,
+    })
 }
 
 fn image_files(paths: &ExternalPaths) -> Vec<ImageBytes> {
@@ -124,7 +129,8 @@ impl Workspace {
         for path in paths {
             match read_image_file(path) {
                 Some(image) => images.push(image),
-                None => files.push(read_file(path)),
+                None => files
+                    .push(crate::audio::read_audio_file(path).unwrap_or_else(|| read_file(path))),
             }
         }
         if !images.is_empty() {
@@ -152,6 +158,10 @@ impl Workspace {
             let agent_id = agent.config.id;
             for file in files {
                 match file {
+                    Ok(file) if file.audio.is_some() && !agent.accepts_audio => {
+                        self.notice =
+                            Some(Notice::Error("This agent does not accept audio.".into()));
+                    }
                     Ok(file) => self.draft_files.entry(agent_id).or_default().push(file),
                     Err(error) => self.notice = Some(Notice::Error(error)),
                 }
@@ -213,6 +223,48 @@ impl Workspace {
             }
         }
         cx.notify();
+    }
+}
+
+impl Workspace {
+    pub(super) fn toggle_voice_recording(&mut self, cx: &mut Context<Self>) {
+        let Some(location) = self.view.displayed_session() else {
+            return;
+        };
+        let agent = &self.projects[location.project_index].agents[location.agent_index];
+        if let Some(recording) = &mut self.voice_recording {
+            if recording.agent_id == agent.config.id {
+                recording.stop();
+            }
+        } else if agent.accepts_audio && agent.protocol.is_some() && agent.status != Status::Error {
+            self.voice_recording = Some(crate::audio::Recording::start(agent.config.id));
+            self.notice = None;
+        }
+        cx.notify();
+    }
+
+    pub(super) fn poll_voice_recording(&mut self, cx: &mut Context<Self>) {
+        let Some(recording) = &mut self.voice_recording else {
+            return;
+        };
+        let agent_id = recording.agent_id;
+        let result = recording.poll();
+        let elapsed = recording.started.elapsed().as_secs();
+        let updated = elapsed != recording.displayed_seconds;
+        recording.displayed_seconds = elapsed;
+        if let Some(result) = result {
+            self.voice_recording = None;
+            // Keep a completed recording with its originating session, even if another pane is active.
+            if self.agent_mut(agent_id).is_some() {
+                match result {
+                    Ok(file) => self.draft_files.entry(agent_id).or_default().push(file),
+                    Err(error) => self.notice = Some(Notice::Error(error)),
+                }
+            }
+            cx.notify();
+        } else if updated {
+            cx.notify();
+        }
     }
 }
 

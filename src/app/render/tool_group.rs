@@ -101,7 +101,12 @@ impl Workspace {
                 })),
         );
         if expanded {
-            let mut details = div().pl_4().flex().flex_col().gap_1();
+            let mut details = div()
+                .pl(px(CHAT_CONTENT_INSET))
+                .mt_1()
+                .flex()
+                .flex_col()
+                .gap_1();
             if completed_count > 1 {
                 let history_id: gpui_kit::ElementId = ("tool-history", agent.config.id).into();
                 details = details.child(
@@ -188,9 +193,10 @@ impl Workspace {
                     let text_id: gpui_kit::ElementId = ("tool-detail", agent.config.id).into();
                     action = action.child(
                         div()
-                            .ml(px(22.))
+                            .ml(px(CHAT_CONTENT_INSET))
                             .mt_1()
-                            .p_2()
+                            .py_2()
+                            .pr_2()
                             .rounded_md()
                             .bg(palette.color(SURFACE))
                             .child(

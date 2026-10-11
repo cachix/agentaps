@@ -19,11 +19,12 @@ license-file = "LICENSE"
 icons = ["assets/packaging/icon.png"]
 
 [package.metadata.packager.deb]
-depends = ["libgtk-4-1 (>= 4.10)", "libqt6widgets6t64 (>= 6.2) | libqt6widgets6 (>= 6.2)", "qt6-qpa-plugins", "libc++1 (>= 1:21) | libc++1-21", "libc++abi1 (>= 1:21) | libc++abi1-21", "libxml2"]
+depends = ["libgtk-4-1 (>= 4.10)", "libqt6widgets6t64 (>= 6.2) | libqt6widgets6 (>= 6.2)", "qt6-qpa-plugins", "libc++1 (>= 1:21) | libc++1-21", "libc++abi1 (>= 1:21) | libc++abi1-21", "libxml2", "libasound2t64 | libasound2"]
 files = { "LICENSE" = "usr/share/doc/agentaps/copyright" }
 
 [package.metadata.packager.macos]
 signing-identity = "-"
+info-plist-path = "assets/packaging/Info.plist"
 
 [package.metadata.packager.nsis]
 installer-icon = "assets/packaging/icon.ico"
@@ -34,6 +35,7 @@ native-theme-gpui = { version = "=0.6.0", default-features = false }
 agentaps-control-protocol = { version = "0.1.0", path = "crates/control-protocol" }
 agent-client-protocol-schema = { version = "1.9.1", default-features = false, features = ["unstable_protocol_v2"] }
 base64 = "0.22"
+cpal = "0.17"
 etcetera = "0.11"
 gix = { version = "0.88", default-features = false, features = ["status", "parallel", "sha1"] }
 gix-imara-diff = "0.2.3"

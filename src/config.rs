@@ -49,13 +49,23 @@ impl ChatEntry {
 }
 
 /// A file attached to a prompt. `text` holds the contents of a UTF-8 file
-/// read when it was attached; other files are sent as a link to `uri`.
+/// read when it was attached; audio holds an inline recording, and other files
+/// are sent as a link to `uri`.
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 pub struct ChatFile {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub audio: Option<ChatAudio>,
     pub name: String,
     pub uri: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub text: Option<String>,
+}
+
+/// Audio is retained with queued prompts so recordings survive a restart.
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+pub struct ChatAudio {
+    pub mime_type: String,
+    pub data: String,
 }
 
 pub fn file_placeholder(name: &str) -> String {

@@ -4,17 +4,25 @@ Notable changes to Agentaps are recorded here.
 
 ## [Unreleased]
 
+### Added
+
+- Record voice messages or attach audio files in the desktop composer and send the recording directly to audio-capable ACP agents for transcription and a response. Queued recordings survive restarts.
+
 ### Fixed
 
 - Linux DEB packages accept LLVM's current libc++ runtime package names while retaining support for the older versioned names. CI verifies the documented Ubuntu 24.04 prerequisites and corrected package dependencies in a clean container without Zig.
 
 - Installation guidance lists Zig and terminal build dependencies before Cargo commands, provides terminal-free installs, and explains LLVM runtime setup for Ubuntu 24.04 DEB packages.
 
+- Session replies use the full conversation width, align text and actions with activity labels, and give paragraphs and turns more breathing room.
+
 - Hide the sidebar New button label when the sidebar is narrow so its bottom controls fit.
 
 - Keep composer controls on one row and the terminal toggle clear of context usage by shortening labels and compacting indicators in narrow panes.
 
 ### Changed
+
+- When audio support is unavailable, hovering Record shows a clickable link to the Codex ACP audio pull request or Claude ACP voice input issue.
 
 - Contributor instructions describe the release trigger, protocol versioning, and trusted publishing configuration checks.
 

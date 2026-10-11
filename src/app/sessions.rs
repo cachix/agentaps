@@ -373,6 +373,20 @@ impl Workspace {
     }
 
     pub(super) fn send_prompt(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if self.voice_recording.as_ref().is_some_and(|recording| {
+            self.view.displayed_session().is_some_and(|location| {
+                self.projects[location.project_index].agents[location.agent_index]
+                    .config
+                    .id
+                    == recording.agent_id
+            })
+        }) {
+            self.notice = Some(Notice::Error(
+                "Stop the voice recording before sending.".into(),
+            ));
+            cx.notify();
+            return;
+        }
         let Some(SessionLocation {
             project_index,
             agent_index,
@@ -751,6 +765,7 @@ impl Workspace {
         }
         self.refresh_pending_sync_counts(cx);
         self.poll_mobile(cx);
+        self.poll_voice_recording(cx);
         if let Some(error) = self.persistence.poll() {
             self.notice = Some(Notice::Error(format!("Could not save config: {error}")));
             cx.notify();

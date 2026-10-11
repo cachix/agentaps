@@ -14,6 +14,8 @@ mod tool_group;
 
 /// Maximum width of the conversation and composer, for comfortable line length.
 const CHAT_COLUMN_WIDTH: f32 = 760.;
+/// Align reply text with labels following a 14px activity icon and 8px gap.
+const CHAT_CONTENT_INSET: f32 = 22.;
 const MESSAGE_IMAGE_HEIGHT: f32 = 240.;
 
 fn status_dot(color: u32, palette: theme::Palette) -> Div {

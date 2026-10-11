@@ -7,6 +7,7 @@
     python312
     zig_0_16
   ] ++ lib.optionals stdenv.hostPlatform.isLinux [
+    alsa-lib
     gtk4
     qt6.qtbase
     fontconfig

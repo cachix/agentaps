@@ -22,7 +22,10 @@ use prompt::fork_prompt;
 pub(crate) use prompt::prompt_for_agent;
 pub(crate) use prompt::{file_context_preview, shell_command, shell_command_in_message};
 pub(crate) use protocol::initialize_params;
-use protocol::{ImageData, SessionUpdate, accepts_embedded_context, accepts_images, decode_update};
+use protocol::{
+    ImageData, SessionUpdate, accepts_audio, accepts_embedded_context, accepts_images,
+    decode_update,
+};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum Status {
@@ -142,6 +145,7 @@ pub(crate) struct SessionController {
     pub(crate) status: Status,
     pub(crate) protocol: Option<ProtocolVersion>,
     pub(crate) accepts_images: bool,
+    pub(crate) accepts_audio: bool,
     pub(crate) accepts_embedded_context: bool,
     pub(crate) images: ImageStore,
     pub(crate) active_work: bool,
@@ -589,6 +593,7 @@ impl SessionController {
             status: Status::Connecting,
             protocol: None,
             accepts_images: false,
+            accepts_audio: false,
             accepts_embedded_context: false,
             images,
             active_work: false,
@@ -783,8 +788,19 @@ impl SessionController {
         if !prompt.images.is_empty() && !self.accepts_images {
             return Err("This agent does not accept images.".into());
         }
+        let has_audio = prompt.files.iter().any(|file| file.audio.is_some());
+        if has_audio && !self.accepts_audio {
+            return Err("This agent does not accept audio.".into());
+        }
         let id = self.next_request_id;
         let agent_prompt = prompt_for_agent(&prompt.text);
+        let agent_prompt = if has_audio {
+            format!(
+                "Transcribe the attached voice recording and respond to the spoken request.\n\n{agent_prompt}"
+            )
+        } else {
+            agent_prompt
+        };
         let agent_prompt = if self.config.fork_pending {
             fork_prompt(&self.messages, &agent_prompt)
         } else {
@@ -1003,6 +1019,9 @@ impl SessionController {
 /// Text files are embedded when the agent accepts embedded context. Every
 /// ACP agent accepts resource links, so other files are sent as links.
 fn file_block(file: &ChatFile, embed: bool) -> Value {
+    if let Some(audio) = &file.audio {
+        return json!({"type":"audio","mimeType":audio.mime_type,"data":audio.data});
+    }
     match &file.text {
         Some(text) if embed => json!({"type":"resource","resource":{
             "uri":file.uri,"mimeType":"text/plain","text":text
@@ -1318,6 +1337,7 @@ impl SessionController {
                 if let Some(protocol) = protocol {
                     agent.protocol = Some(protocol);
                     agent.accepts_images = accepts_images(protocol, &value["result"]);
+                    agent.accepts_audio = accepts_audio(protocol, &value["result"]);
                     agent.accepts_embedded_context =
                         accepts_embedded_context(protocol, &value["result"]);
                     if agent.config.fork_pending && agent.messages.is_empty() {
