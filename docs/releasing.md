@@ -11,7 +11,8 @@ release assets replace the preview links when available. Pushing a version tag
 runs the same builds, verifies their checksums, and attaches them to a draft
 GitHub release. Drafts do not appear on the website.
 
-The current candidates are a Linux DEB and AppImage, a Windows NSIS installer,
+The current candidates are an Ubuntu 24.04 DEB and AppImage, a separate Ubuntu
+26.04 DEB, a Windows NSIS installer,
 and a macOS DMG containing an app bundle. The macOS app has an ad hoc signature
 for local testing. It is not Developer ID signed or notarized. The Windows
 installer is unsigned. Test installation, launch, agent discovery, pairing, and SSH sessions
@@ -126,6 +127,15 @@ Standard Linux and macOS builds include the session terminal. CI installs Zig
 require libc++ 21 and libxml2; Ubuntu 24.04 needs the [LLVM APT repository](https://apt.llvm.org/)
 for the libc++ runtime packages. Include terminal launch, theme switching, and
 Ctrl+D exit in platform smoke tests.
+
+Ubuntu 26.04 builds run in an Ubuntu 26.04 container and link against native
+`libxml2.so.16`. Their DEB dependency list uses `libxml2-16`, and filenames end
+in `_ubuntu26.04_amd64.deb` to distinguish them from the Ubuntu 24.04 packages
+that require `libxml2.so.2`. The workflow installs the exact new DEB in a fresh
+Ubuntu 26.04 container, checks shared-library resolution and `agentaps --version`,
+and confirms that Zig and Cargo are absent. Tag builds wait for this installation
+check before creating the draft release. GUI launch and terminal rendering still
+need a desktop smoke test on both Ubuntu versions.
 
 The local package is written to `dist/desktop/`. On a standard Linux host,
 replace `deb` with `deb,appimage` to build both Linux formats. AppImage packaging

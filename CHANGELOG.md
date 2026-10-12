@@ -6,9 +6,17 @@ Notable changes to Agentaps are recorded here.
 
 ### Added
 
+- Desktop builds provide a separate Ubuntu 26.04 DEB linked against its native libxml2 ABI, with a clean-container installation check and distinct download labels.
+
 - Record voice messages or attach audio files in the desktop composer and send the recording directly to audio-capable ACP agents for transcription and a response. Queued recordings survive restarts.
 
 ### Fixed
+
+- Terminal dependency setup locates its Zig installer inside container-based builds.
+
+- Linux DEB packages accept LLVM's current libc++ runtime package names while retaining support for the older versioned names. CI verifies the documented Ubuntu 24.04 prerequisites and corrected package dependencies in a clean container without Zig.
+
+- Installation guidance lists Zig and terminal build dependencies before Cargo commands, provides terminal-free installs, and explains LLVM runtime setup for Ubuntu 24.04 DEB packages.
 
 - Session replies use the full conversation width, align text and actions with activity labels, and give paragraphs and turns more breathing room.
 
