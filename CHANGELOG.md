@@ -12,6 +12,8 @@ Notable changes to Agentaps are recorded here.
 
 ### Fixed
 
+- Keep both columns visible in Split diffs by wrapping long lines, and retain global keyboard shortcuts after switching to an empty workspace.
+
 - Terminal dependency setup locates its Zig installer inside container-based builds.
 
 - Linux DEB packages accept LLVM's current libc++ runtime package names while retaining support for the older versioned names. CI verifies the documented Ubuntu 24.04 prerequisites and corrected package dependencies in a clean container without Zig.
@@ -25,6 +27,10 @@ Notable changes to Agentaps are recorded here.
 - Keep composer controls on one row and the terminal toggle clear of context usage by shortening labels and compacting indicators in narrow panes.
 
 ### Changed
+
+- Desktop checkout review uses GPUI Kit 0.7.3 with native-theme-gpui 0.6.1 for selectable diff text, horizontal scrolling in Unified, and inline change highlighting.
+
+- Diff files start collapsed, expand or collapse when their header is clicked, and show colored addition and removal counts after the filename. Expansion choices survive refreshes.
 
 - When audio support is unavailable, hovering Record shows a clickable link to the Codex ACP audio pull request or Claude ACP voice input issue.
 

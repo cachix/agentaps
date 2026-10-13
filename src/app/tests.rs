@@ -2,52 +2,6 @@ use super::*;
 use crate::session::test_agent;
 
 #[test]
-fn diff_file_expands_beneath_its_row_without_hiding_other_files() {
-    use crate::diff_view::{Hunk, Line, Mark, Side};
-
-    let files = [
-        DiffFile {
-            path: "first.txt".into(),
-            hunks: vec![Hunk {
-                header: "@@ -0,0 +1 @@".into(),
-                lines: vec![Line {
-                    old: None,
-                    new: Some(Side {
-                        number: 1,
-                        text: "added line".into(),
-                        mark: Mark::Added,
-                    }),
-                }],
-            }],
-            note: None,
-        },
-        DiffFile {
-            path: "second.txt".into(),
-            hunks: Vec::new(),
-            note: Some("Second file note".into()),
-        },
-    ];
-    let stats = [(1, 0), (0, 0)];
-    let rows = diff_list_rows(&files, &stats, Some("first.txt"), DiffPresentation::Unified);
-    assert!(
-        matches!(&rows[0], DiffListRow::File { path, expanded: true, .. } if path == "first.txt")
-    );
-    assert!(
-        matches!(&rows[1], DiffListRow::Content(DiffRow::Hunk(header)) if header == "@@ -0,0 +1 @@")
-    );
-    assert!(
-        matches!(&rows[2], DiffListRow::Content(DiffRow::Unified { side, .. }) if side.text == "added line")
-    );
-    assert!(
-        matches!(&rows[3], DiffListRow::File { path, expanded: false, .. } if path == "second.txt")
-    );
-    assert_eq!(rows.len(), 4);
-
-    let collapsed = diff_list_rows(&files, &stats, None, DiffPresentation::Unified);
-    assert_eq!(collapsed.len(), 2);
-}
-
-#[test]
 fn branch_labels_unborn_and_detached_heads_without_git() {
     use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -2050,7 +2004,7 @@ fn verify_split_panes(
                 agent_index: 1,
             };
             // Sessions in the same checkout share the loaded diff, including
-            // its rows and selected file, without needing a filesystem event.
+            // its viewer state, without needing a filesystem event.
             this.diff.visible = true;
             this.diff.loading = false;
             this.diff.files = vec![DiffFile {
@@ -2059,21 +2013,46 @@ fn verify_split_panes(
                 note: None,
             }];
             this.diff.file_stats = vec![(1, 0)];
-            this.diff.selected_file = Some("changed.txt".into());
-            this.diff.rows = Arc::new(diff_list_rows(
-                &this.diff.files,
-                &this.diff.file_stats,
-                this.diff.selected_file.as_deref(),
-                this.diff.presentation,
-            ));
-            this.diff.list.reset(this.diff.rows.len());
-            let rows = this.diff.rows.clone();
+            let documents = crate::diff_view::component_files(&this.diff.files).unwrap();
+            this.diff
+                .viewer
+                .update(cx, |state, cx| state.set_files(documents, cx));
+            this.diff.viewer.update(cx, |state, cx| {
+                state.set_file_collapsed("changed.txt", false, cx);
+                state.set_mode(DiffPresentation::Split.mode(), cx);
+            });
+            let mut files = this.diff.files.clone();
+            files[0].note = Some("Binary file changed".into());
+            files.push(DiffFile {
+                path: "new.txt".into(),
+                hunks: Vec::new(),
+                note: None,
+            });
+            let documents = crate::diff_view::component_files(&files).unwrap();
+            this.diff
+                .tx
+                .send((
+                    this.diff.request_id,
+                    Ok(DiffData::Full(files, vec![(0, 0), (0, 0)], documents)),
+                ))
+                .unwrap();
+            assert!(this.diff.poll_results(cx));
+            assert!(!this.diff.viewer.read(cx).is_file_collapsed("changed.txt"));
+            assert!(this.diff.viewer.read(cx).is_file_collapsed("new.txt"));
+            assert_eq!(
+                this.diff.viewer.read(cx).mode(),
+                DiffPresentation::Split.mode()
+            );
+            let viewer = this.diff.viewer.entity_id();
             let request = this.diff.request_id;
             this.set_view(WorkspaceView::Conversation(second), window, cx);
             assert!(this.diff.visible);
-            assert!(Arc::ptr_eq(&this.diff.rows, &rows));
+            assert_eq!(this.diff.viewer.entity_id(), viewer);
             assert_eq!(this.diff.request_id, request);
-            assert_eq!(this.diff.selected_file.as_deref(), Some("changed.txt"));
+            assert_eq!(
+                this.diff.viewer.read(cx).files()[0].path().as_ref(),
+                "changed.txt"
+            );
             this.set_view(WorkspaceView::Conversation(first), window, cx);
 
             // A picker reserves its previous session. Selecting that session

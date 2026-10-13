@@ -3,7 +3,7 @@ use crate::config::{
     AgentConfig, ChatEntry, ChatFile, ChatImage, Config, KnownAgent, ProjectConfig, Prompt, Role,
     SavedAgent, SendKey, SlashCommand, ThemeSource,
 };
-use crate::diff_view::{File as DiffFile, Presentation as DiffPresentation, Row as DiffRow};
+use crate::diff_view::{File as DiffFile, Presentation as DiffPresentation};
 use crate::discovery::{AgentChoice, installed_agents, known_agent, score};
 use crate::file_search::{FileSearch, scan_project};
 use crate::folder_search::FolderSearch;
@@ -20,7 +20,6 @@ use gpui_kit::component::{
         Textarea, TextareaState,
     },
     menu::{DropdownMenu, PopupMenuItem},
-    scroll::ScrollableElement,
     text::{TextView, TextViewStyle},
     theme::Theme,
     tooltip::Tooltip,
@@ -35,10 +34,7 @@ use serde_json::{Value, json};
 use std::{
     collections::{BTreeMap, HashMap, HashSet},
     path::{Path, PathBuf},
-    sync::{
-        Arc,
-        mpsc::{self, Receiver, Sender},
-    },
+    sync::mpsc::{self, Receiver, Sender},
     time::{Duration, Instant},
 };
 
@@ -88,28 +84,12 @@ enum DiffData {
     Full(
         Vec<DiffFile>,
         Vec<(usize, usize)>,
-        DiffPresentation,
-        Option<String>,
-        Arc<Vec<DiffListRow>>,
+        Vec<gpui_kit::component::diff::DiffFile>,
     ),
     Counts(Option<(usize, usize)>),
 }
 
 type DiffLoadResult = Result<DiffData, String>;
-
-#[derive(Clone)]
-enum DiffListRow {
-    File {
-        path: String,
-        note: Option<String>,
-        added: usize,
-        removed: usize,
-        bar_width: f32,
-        added_width: f32,
-        expanded: bool,
-    },
-    Content(DiffRow),
-}
 
 enum SyncUpdate {
     Counts(PathBuf, Option<String>, Option<(usize, usize)>),
@@ -580,53 +560,6 @@ struct Workspace {
     _subscriptions: Vec<Subscription>,
 }
 
-fn diff_list_rows(
-    files: &[DiffFile],
-    stats: &[(usize, usize)],
-    path: Option<&str>,
-    presentation: DiffPresentation,
-) -> Vec<DiffListRow> {
-    let max_changed = stats
-        .iter()
-        .map(|(added, removed)| added + removed)
-        .max()
-        .unwrap_or(1)
-        .max(1);
-    let mut rows = Vec::new();
-    for (file, &(added, removed)) in files.iter().zip(stats) {
-        let changed = added + removed;
-        let bar_width = if changed == 0 {
-            0.0
-        } else {
-            (changed as f32 / max_changed as f32 * 96.0).max(4.0)
-        };
-        let added_width = if changed == 0 {
-            0.0
-        } else {
-            bar_width * added as f32 / changed as f32
-        };
-        let expanded = path == Some(file.path.as_str());
-        rows.push(DiffListRow::File {
-            path: file.path.clone(),
-            note: file.note.clone(),
-            added,
-            removed,
-            bar_width,
-            added_width,
-            expanded,
-        });
-        if expanded {
-            rows.extend(
-                crate::diff_view::flatten(std::slice::from_ref(file), presentation)
-                    .into_iter()
-                    .skip(1)
-                    .map(DiffListRow::Content),
-            );
-        }
-    }
-    rows
-}
-
 fn branch(path: &Path) -> String {
     if let Ok(repo) = gix::discover(path) {
         if let Ok(Some(name)) = repo.head_name() {
@@ -850,10 +783,10 @@ impl Workspace {
             self.diff.counts = None;
             self.diff.files.clear();
             self.diff.file_stats.clear();
-            self.diff.selected_file = None;
             self.diff.error = None;
-            self.diff.rows = Arc::new(Vec::new());
-            self.diff.list = ListState::new(0, ListAlignment::Top, px(28.));
+            self.diff
+                .viewer
+                .update(cx, |state, cx| state.set_files([], cx));
         }
         if self.conversation.file_search_project != project_index {
             self.conversation.file_search_project = project_index;
@@ -888,6 +821,9 @@ impl Workspace {
         self.pane_layout.root = self.saved_pane_layout().root;
         self.persistence.dirty = true;
         if self.pane_id == self.pane_layout.focused {
+            if self.view == WorkspaceView::Empty {
+                window.focus(&self.workspace_focus, cx);
+            }
             self.mark_displayed_agent_viewed();
         }
     }
@@ -901,40 +837,32 @@ impl Workspace {
             return;
         }
         self.diff.visible = true;
-        self.diff.selected_file = None;
         self.diff.files.clear();
         self.diff.file_stats.clear();
-        self.diff.rows = Arc::new(Vec::new());
-        self.diff.list = ListState::new(0, ListAlignment::Top, px(28.));
+        self.diff
+            .viewer
+            .update(cx, |state, cx| state.set_files([], cx));
         self.refresh_diff(project_index, cx);
     }
 
     fn close_diff(&mut self) {
         self.diff.visible = false;
-        self.diff.selected_file = None;
     }
 
     fn refresh_diff(&mut self, project_index: usize, cx: &mut Context<Self>) {
         self.diff.request_id += 1;
         let request_id = self.diff.request_id;
         let path = self.projects[project_index].path.clone();
-        let presentation = self.diff.presentation;
-        let selected_file = self.diff.selected_file.clone();
         let visible = self.diff.visible;
         let tx = self.diff.tx.clone();
         self.diff.loading = true;
         self.diff.error = None;
         std::thread::spawn(move || {
             let result = if visible {
-                crate::git_diff::load(&path).map(|files| {
-                    let stats: Vec<_> = files.iter().map(crate::diff_view::stats).collect();
-                    let rows = Arc::new(diff_list_rows(
-                        &files,
-                        &stats,
-                        selected_file.as_deref(),
-                        presentation,
-                    ));
-                    DiffData::Full(files, stats, presentation, selected_file, rows)
+                crate::git_diff::load(&path).and_then(|files| {
+                    let stats = files.iter().map(crate::diff_view::stats).collect();
+                    let documents = crate::diff_view::component_files(&files)?;
+                    Ok(DiffData::Full(files, stats, documents))
                 })
             } else {
                 crate::git_diff::line_counts(&path).map(DiffData::Counts)
@@ -949,39 +877,11 @@ impl Workspace {
         presentation: crate::diff_view::Presentation,
         cx: &mut Context<Self>,
     ) {
-        let scroll_top = self.diff.list.logical_scroll_top();
         self.diff.presentation = presentation;
-        self.diff.rows = Arc::new(diff_list_rows(
-            &self.diff.files,
-            &self.diff.file_stats,
-            self.diff.selected_file.as_deref(),
-            presentation,
-        ));
-        self.diff.list = ListState::new(self.diff.rows.len(), ListAlignment::Top, px(28.));
-        self.diff.list.scroll_to(scroll_top);
+        self.diff
+            .viewer
+            .update(cx, |state, cx| state.set_mode(presentation.mode(), cx));
         cx.notify();
-    }
-
-    fn select_diff_file(&mut self, path: String, cx: &mut Context<Self>) {
-        let clicked_path = path.clone();
-        let old_scroll_top = self.diff.list.logical_scroll_top();
-        let old_file_index = self.diff.rows.iter().position(|row| {
-            matches!(row, DiffListRow::File { path: row_path, .. } if row_path == &clicked_path)
-        });
-        self.diff.selected_file =
-            (self.diff.selected_file.as_deref() != Some(path.as_str())).then_some(path);
-        self.set_diff_presentation(self.diff.presentation, cx);
-        if let Some(old_file_index) = old_file_index
-            && let Some(new_file_index) = self.diff.rows.iter().position(|row| {
-                matches!(row, DiffListRow::File { path: row_path, .. } if row_path == &clicked_path)
-            })
-        {
-            let distance = old_file_index.saturating_sub(old_scroll_top.item_ix);
-            self.diff.list.scroll_to(gpui_kit::ListOffset {
-                item_ix: new_file_index.saturating_sub(distance),
-                offset_in_item: old_scroll_top.offset_in_item,
-            });
-        }
     }
 
     fn mark_displayed_agent_viewed(&mut self) {
@@ -1203,10 +1103,11 @@ impl Workspace {
             diff: DiffState {
                 pane_counts: Default::default(),
                 visible: false,
-                selected_file: None,
                 presentation: config.diff_layout,
-                rows: Arc::new(Vec::new()),
-                list: ListState::new(0, ListAlignment::Top, px(28.)),
+                viewer: cx.new(|cx| {
+                    gpui_kit::component::diff::DiffState::new([], cx)
+                        .with_mode(config.diff_layout.mode())
+                }),
                 tx: diff_tx,
                 rx: diff_rx,
                 request_id: 0,
@@ -1248,6 +1149,8 @@ impl Workspace {
                 crate::theming::set_input_background(Theme::global(cx).input_background(), cx);
                 crate::appearance::system_changed(cx);
             }));
+        this._subscriptions
+            .push(cx.observe(&this.diff.viewer, |_, _, cx| cx.notify()));
         this.sync_composer_send_key(cx);
         let shortcut_workspace = cx.entity().downgrade();
         let shortcut_window = window.window_handle();

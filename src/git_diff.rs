@@ -309,13 +309,14 @@ fn context(old: usize, new: usize, text: &str) -> Line {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use gpui_kit::AppContext;
     use std::{
         process::Command,
         time::{SystemTime, UNIX_EPOCH},
     };
 
     #[test]
-    fn replacement_has_one_split_row_and_two_unified_rows() {
+    fn replacement_preserves_both_sides_and_change_counts() {
         let hunks = text_hunks("first\nbefore\nlast\n", "first\nafter\nlast\n");
         assert_eq!(hunks.len(), 1);
         assert_eq!(
@@ -330,6 +331,53 @@ mod tests {
             line.old.as_ref().is_some_and(|side| side.text == "before")
                 && line.new.as_ref().is_some_and(|side| side.text == "after")
         }));
+    }
+
+    #[gpui_kit::test]
+    fn component_adapter_preserves_paths_sources_and_hunk_line_numbers(
+        cx: &mut gpui_kit::TestAppContext,
+    ) {
+        use gpui_kit::component::diff::{DiffLineRange, DiffSide, DiffState};
+        let before = (1..=20).map(|n| format!("line {n}\n")).collect::<String>();
+        let after = before
+            .replace("line 2\nline 3\n", "new 2\nnew 3\nnew 4\n")
+            .replace("line 18\n", "new 18\n");
+        let path = "dir/sp ace\t\"\\é.rs";
+        let files = [
+            File {
+                path: path.into(),
+                hunks: text_hunks(&before, &after),
+                note: None,
+            },
+            File {
+                path: "binary.bin".into(),
+                hunks: Vec::new(),
+                note: Some("Binary file changed".into()),
+            },
+            File {
+                path: "empty.txt".into(),
+                hunks: Vec::new(),
+                note: Some("Empty file added".into()),
+            },
+        ];
+        assert_eq!(files[0].hunks.len(), 2);
+        let documents = crate::diff_view::component_files(&files).unwrap();
+        assert_eq!(documents.len(), 3);
+        assert_eq!(documents[0].path().as_ref(), path);
+        assert_eq!((documents[0].additions(), documents[0].deletions()), (4, 3));
+        assert_eq!(documents[1].path().as_ref(), "binary.bin");
+        assert_eq!(documents[2].additions(), 0);
+        let state = cx.new(|cx| DiffState::new(documents, cx));
+        state.update(cx, |state, cx| {
+            for (side, start, end, expected) in [
+                (DiffSide::Original, 2, 3, "line 2\nline 3\n"),
+                (DiffSide::Modified, 2, 4, "new 2\nnew 3\nnew 4\n"),
+                (DiffSide::Modified, 19, 19, "new 18\n"),
+            ] {
+                state.set_selected_lines(Some(DiffLineRange::new(path, side, start, end)), cx);
+                assert_eq!(state.selected_text(cx), expected);
+            }
+        });
     }
 
     #[test]
