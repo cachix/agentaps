@@ -1,11 +1,6 @@
-//! Read-only GPUI Kit adaptation of GPUI Box Kit's MIT-licensed DiffView.
-//! Source: https://github.com/fran0220/gpui-box/blob/24afaaf1b2f34827342b5ad04a4efba95e705c45/crates/gpui-kit/src/content/diff_view.rs
-//! Original license: licenses/GPUI-Box-Kit-MIT.txt.
-//! Diff production and filesystem access belong to the caller.
+//! Checkout diff data and adaptation to GPUI Kit’s patch viewer.
 
-use crate::theme::Palette;
-use crate::theme::{ACCENT, BG, BORDER, MUTED, SURFACE, TEXT};
-use gpui_kit::{AnyElement, IntoElement, div, prelude::*, px};
+use gpui_kit::component::diff::{DiffFile, DiffMode};
 
 pub(crate) const ADDED_BG: u32 = 0x19382e;
 pub(crate) const REMOVED_BG: u32 = 0x422a31;
@@ -27,26 +22,26 @@ pub enum Mark {
     Removed,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Side {
     pub number: usize,
     pub text: String,
     pub mark: Mark,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Line {
     pub old: Option<Side>,
     pub new: Option<Side>,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Hunk {
     pub header: String,
     pub lines: Vec<Line>,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct File {
     pub path: String,
     pub hunks: Vec<Hunk>,
@@ -75,192 +70,67 @@ pub fn stats(file: &File) -> (usize, usize) {
     (added, removed)
 }
 
-#[derive(Clone)]
-pub enum Row {
-    File(String),
-    Hunk(String),
-    Unified {
-        side: Side,
-        old_number: Option<usize>,
-        new_number: Option<usize>,
-    },
-    Split {
-        old: Option<Side>,
-        new: Option<Side>,
-    },
-    Note(String),
+impl Presentation {
+    pub(crate) fn mode(self) -> DiffMode {
+        match self {
+            Self::Unified => DiffMode::Unified,
+            Self::Split => DiffMode::Split,
+        }
+    }
 }
 
-pub fn flatten(files: &[File], presentation: Presentation) -> Vec<Row> {
-    let mut rows = Vec::new();
+/// Keep patch parsing off the UI thread along with checkout loading.
+pub(crate) fn component_files(files: &[File]) -> Result<Vec<DiffFile>, String> {
+    let mut patch = String::new();
     for file in files {
-        rows.push(Row::File(file.path.clone()));
-        if let Some(note) = &file.note {
-            rows.push(Row::Note(note.clone()));
-        }
-        for hunk in &file.hunks {
-            rows.push(Row::Hunk(hunk.header.clone()));
-            for line in &hunk.lines {
-                match presentation {
-                    Presentation::Split => rows.push(Row::Split {
-                        old: line.old.clone(),
-                        new: line.new.clone(),
-                    }),
-                    Presentation::Unified => match (&line.old, &line.new) {
-                        (Some(old), Some(new)) if old.mark == Mark::Context => {
-                            rows.push(Row::Unified {
-                                side: old.clone(),
-                                old_number: Some(old.number),
-                                new_number: Some(new.number),
-                            });
-                        }
-                        (Some(old), Some(new)) => {
-                            rows.push(Row::Unified {
-                                side: old.clone(),
-                                old_number: Some(old.number),
-                                new_number: None,
-                            });
-                            rows.push(Row::Unified {
-                                side: new.clone(),
-                                old_number: None,
-                                new_number: Some(new.number),
-                            });
-                        }
-                        (Some(old), None) => rows.push(Row::Unified {
-                            side: old.clone(),
-                            old_number: Some(old.number),
-                            new_number: None,
-                        }),
-                        (None, Some(new)) => rows.push(Row::Unified {
-                            side: new.clone(),
-                            old_number: None,
-                            new_number: Some(new.number),
-                        }),
-                        (None, None) => {}
-                    },
+        // Git uses C-quoted paths, including octal escapes for UTF-8 bytes.
+        let path = |prefix: &str| {
+            let mut quoted = String::from("\"");
+            for byte in format!("{prefix}{}", file.path).bytes() {
+                match byte {
+                    b'"' => quoted.push_str("\\\""),
+                    b'\\' => quoted.push_str("\\\\"),
+                    32..=126 => quoted.push(char::from(byte)),
+                    _ => quoted.push_str(&format!("\\{byte:03o}")),
                 }
             }
+            quoted.push('"');
+            quoted
+        };
+        let old = path("a/");
+        let new = path("b/");
+        patch.push_str(&format!("diff --git {old} {new}\n--- {old}\n+++ {new}\n"));
+        for hunk in &file.hunks {
+            patch.push_str(&hunk.header);
+            patch.push('\n');
+            let mut removed = Vec::new();
+            let mut added = Vec::new();
+            for line in &hunk.lines {
+                if let Some(side) = &line.old
+                    && side.mark == Mark::Context
+                {
+                    flush_changes(&mut patch, &mut removed, &mut added);
+                    patch.push(' ');
+                    patch.push_str(&side.text);
+                    patch.push('\n');
+                } else {
+                    removed.extend(line.old.as_ref());
+                    added.extend(line.new.as_ref());
+                }
+            }
+            flush_changes(&mut patch, &mut removed, &mut added);
         }
     }
-    rows
+    DiffFile::parse(&patch).map_err(|error| error.to_string())
 }
 
-pub(crate) fn render_row(row: &Row, palette: Palette) -> AnyElement {
-    match row {
-        Row::File(path) => div()
-            .h(px(32.))
-            .px_3()
-            .flex()
-            .items_center()
-            .bg(palette.color(SURFACE))
-            .text_sm()
-            .font_weight(gpui_kit::FontWeight::SEMIBOLD)
-            .text_color(palette.color(TEXT))
-            .child(path.clone())
-            .into_any_element(),
-        Row::Hunk(header) => div()
-            .h(px(28.))
-            .px_3()
-            .flex()
-            .items_center()
-            .bg(palette.color(BORDER))
-            .text_xs()
-            .font_family("monospace")
-            .text_color(palette.color(ACCENT))
-            .child(header.clone())
-            .into_any_element(),
-        Row::Note(note) => div()
-            .h(px(30.))
-            .px_3()
-            .flex()
-            .items_center()
-            .text_sm()
-            .text_color(palette.color(MUTED))
-            .child(note.clone())
-            .into_any_element(),
-        Row::Unified {
-            side,
-            old_number,
-            new_number,
-        } => div()
-            .h(px(24.))
-            .flex()
-            .items_center()
-            .bg(palette.color(mark_bg(side.mark)))
-            .font_family("monospace")
-            .text_xs()
-            .child(number(*old_number, palette))
-            .child(number(*new_number, palette))
-            .child(prefix(side.mark, palette))
-            .child(code(&side.text, palette))
-            .into_any_element(),
-        Row::Split { old, new } => div()
-            .w_full()
-            .h(px(24.))
-            .flex()
-            .items_center()
-            .font_family("monospace")
-            .text_xs()
-            .child(split_side(old.as_ref(), true, palette))
-            .child(split_side(new.as_ref(), false, palette))
-            .into_any_element(),
-    }
-}
-
-fn split_side(side: Option<&Side>, divider: bool, palette: Palette) -> impl IntoElement {
-    let mark = side.map_or(Mark::Context, |side| side.mark);
-    div()
-        .flex()
-        .flex_1()
-        .min_w(px(0.))
-        .h_full()
-        .items_center()
-        .bg(palette.color(mark_bg(mark)))
-        .when(divider, |side| {
-            side.border_r_1().border_color(palette.color(BORDER))
-        })
-        .child(number(side.map(|side| side.number), palette))
-        .child(prefix(mark, palette))
-        .child(code(side.map_or("", |side| side.text.as_str()), palette))
-}
-
-fn number(value: Option<usize>, palette: Palette) -> impl IntoElement {
-    div()
-        .flex_shrink_0()
-        .w(px(42.))
-        .pr_2()
-        .text_right()
-        .text_color(palette.color(MUTED))
-        .child(value.map_or_else(String::new, |number| number.to_string()))
-}
-
-fn prefix(mark: Mark, palette: Palette) -> impl IntoElement {
-    let (symbol, color) = match mark {
-        Mark::Context => (" ", MUTED),
-        Mark::Added => ("+", ADDED_TEXT),
-        Mark::Removed => ("-", REMOVED_TEXT),
-    };
-    div()
-        .flex_shrink_0()
-        .w(px(18.))
-        .text_color(palette.color(color))
-        .child(symbol)
-}
-
-fn code(value: &str, palette: Palette) -> impl IntoElement {
-    div()
-        .flex_1()
-        .min_w(px(0.))
-        .overflow_hidden()
-        .whitespace_nowrap()
-        .text_color(palette.color(TEXT))
-        .child(value.to_owned())
-}
-
-fn mark_bg(mark: Mark) -> u32 {
-    match mark {
-        Mark::Context => BG,
-        Mark::Added => ADDED_BG,
-        Mark::Removed => REMOVED_BG,
+fn flush_changes<'a>(patch: &mut String, removed: &mut Vec<&'a Side>, added: &mut Vec<&'a Side>) {
+    for (prefix, sides) in [('-', removed), ('+', added)] {
+        for side in sides.drain(..) {
+            debug_assert!(side.number > 0);
+            patch.push(prefix);
+            patch.push_str(&side.text);
+            patch.push('\n');
+        }
     }
 }

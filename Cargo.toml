@@ -31,7 +31,7 @@ installer-icon = "assets/packaging/icon.ico"
 
 [dependencies]
 anyhow = "1"
-native-theme-gpui = { version = "=0.6.0", default-features = false }
+native-theme-gpui = { version = "=0.6.1", default-features = false }
 agentaps-control-protocol = { version = "0.1.0", path = "crates/control-protocol" }
 agent-client-protocol-schema = { version = "1.9.1", default-features = false, features = ["unstable_protocol_v2"] }
 base64 = "0.22"
@@ -39,7 +39,7 @@ cpal = "0.17"
 etcetera = "0.11"
 gix = { version = "0.88", default-features = false, features = ["status", "parallel", "sha1"] }
 gix-imara-diff = "0.2.3"
-gpui-kit = "=0.7.0"
+gpui-kit = "=0.7.3"
 hex = "0.4"
 iroh = { version = "1.1", default-features = false, features = ["tls-ring"] }
 nucleo = "0.5.0"
@@ -65,7 +65,7 @@ ghostty-terminal = ["dep:gpui-libghostty"]
 gpui-libghostty = { version = "=0.3.1", optional = true }
 
 [dev-dependencies]
-gpui-kit = { version = "=0.7.0", features = ["test-support"] }
+gpui-kit = { version = "=0.7.3", features = ["test-support"] }
 tempfile = "3"
 
 [workspace]

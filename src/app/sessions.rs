@@ -664,7 +664,7 @@ impl Workspace {
         {
             cx.notify();
         }
-        if self.diff.poll_results() {
+        if self.diff.poll_results(cx) {
             if let Some(path) = watched_path {
                 self.diff.pane_counts.remember(path, self.diff.counts);
             }

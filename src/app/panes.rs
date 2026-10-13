@@ -98,9 +98,9 @@ impl Workspace {
                 self.diff.files.clear();
                 self.diff.file_stats.clear();
                 self.diff.error = None;
-                self.diff.selected_file = None;
-                self.diff.rows = Arc::new(Vec::new());
-                self.diff.list = ListState::new(0, ListAlignment::Top, px(28.));
+                self.diff
+                    .viewer
+                    .update(cx, |state, cx| state.set_files([], cx));
                 if let Some(session) = self.view.displayed_session() {
                     self.refresh_diff(session.project_index, cx);
                 }

@@ -68,10 +68,8 @@ impl PaneDiffCounts {
 pub(super) struct DiffState {
     pub(super) pane_counts: PaneDiffCounts,
     pub(super) visible: bool,
-    pub(super) selected_file: Option<String>,
     pub(super) presentation: DiffPresentation,
-    pub(super) rows: Arc<Vec<DiffListRow>>,
-    pub(super) list: ListState,
+    pub(super) viewer: Entity<gpui_kit::component::diff::DiffState>,
     pub(super) tx: Sender<(u64, DiffLoadResult)>,
     pub(super) rx: Receiver<(u64, DiffLoadResult)>,
     pub(super) request_id: u64,
@@ -160,7 +158,7 @@ pub(super) struct MobileState {
 }
 
 impl DiffState {
-    pub(super) fn poll_results(&mut self) -> bool {
+    pub(super) fn poll_results(&mut self, cx: &mut App) -> bool {
         let mut changed = false;
         while let Ok((request_id, result)) = self.rx.try_recv() {
             if request_id != self.request_id {
@@ -168,29 +166,25 @@ impl DiffState {
             }
             self.loading = false;
             match result {
-                Ok(DiffData::Full(files, stats, presentation, selected_file, rows)) => {
-                    let scroll_top = self.list.logical_scroll_top();
-                    if self
-                        .selected_file
-                        .as_ref()
-                        .is_some_and(|selected| !files.iter().any(|file| &file.path == selected))
-                    {
-                        self.selected_file = None;
+                Ok(DiffData::Full(files, stats, documents)) => {
+                    if files != self.files {
+                        self.viewer.update(cx, |state, cx| {
+                            let existing: HashSet<_> = state
+                                .files()
+                                .iter()
+                                .map(|file| file.path().clone())
+                                .collect();
+                            let new_paths: Vec<_> = documents
+                                .iter()
+                                .filter(|file| !existing.contains(file.path()))
+                                .map(|file| file.path().clone())
+                                .collect();
+                            state.set_files(documents, cx);
+                            for path in new_paths {
+                                state.set_file_collapsed(&path, true, cx);
+                            }
+                        });
                     }
-                    self.rows = if presentation == self.presentation
-                        && selected_file == self.selected_file
-                    {
-                        rows
-                    } else {
-                        Arc::new(diff_list_rows(
-                            &files,
-                            &stats,
-                            self.selected_file.as_deref(),
-                            self.presentation,
-                        ))
-                    };
-                    self.list = ListState::new(self.rows.len(), ListAlignment::Top, px(28.));
-                    self.list.scroll_to(scroll_top);
                     self.counts = (!stats.is_empty()).then(|| {
                         stats.iter().copied().fold((0, 0), |total, count| {
                             (total.0 + count.0, total.1 + count.1)

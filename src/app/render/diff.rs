@@ -111,131 +111,19 @@ impl Workspace {
                 .child("No changes in this checkout")
                 .into_any_element()
         } else {
-            let view = cx.entity().clone();
-            let rows = self.diff.rows.clone();
-            div()
-                .flex_1()
-                .min_h(px(0.))
-                .relative()
-                .child(
-                    div().id("diff-scroll").size_full().child(
-                        gpui_kit::list(self.diff.list.clone(), move |index, _, cx| {
-                            view.update(cx, |this, cx| this.render_diff_list_row(&rows[index], cx))
-                        })
-                        .w_full()
-                        .h_full(),
-                    ),
-                )
-                .vertical_scrollbar(&self.diff.list)
-                .into_any_element()
+            let notes: HashMap<_, _> = self
+                .diff
+                .files
+                .iter()
+                .filter_map(|file| {
+                    file.note
+                        .as_ref()
+                        .map(|note| (file.path.clone(), note.clone()))
+                })
+                .collect();
+            checkout_diff(&self.diff.viewer, self.diff.presentation, notes).into_any_element()
         };
         panel.child(body)
-    }
-
-    fn render_diff_list_row(
-        &self,
-        row: &DiffListRow,
-        cx: &mut Context<Self>,
-    ) -> gpui_kit::AnyElement {
-        let palette = theme::palette(cx);
-        match row {
-            DiffListRow::File {
-                path,
-                note,
-                added,
-                removed,
-                bar_width,
-                added_width,
-                expanded,
-            } => {
-                let selected_path = path.clone();
-                let visible_note = if *expanded { None } else { note.as_ref() };
-                div()
-                    .id(format!("diff-file-{path}"))
-                    .min_h(px(44.))
-                    .px_4()
-                    .py_2()
-                    .flex()
-                    .items_center()
-                    .gap_3()
-                    .border_b_1()
-                    .border_color(palette.color(BORDER))
-                    .cursor_pointer()
-                    .hover(|style| style.bg(palette.color(HOVER)))
-                    .on_click(cx.listener(move |this, _, _, cx| {
-                        this.select_diff_file(selected_path.clone(), cx);
-                    }))
-                    .child(
-                        div()
-                            .flex_shrink_0()
-                            .text_color(palette.color(MUTED))
-                            .child(if *expanded { "▾" } else { "▸" }),
-                    )
-                    .child(
-                        div()
-                            .flex_1()
-                            .min_w(px(0.))
-                            .flex()
-                            .flex_col()
-                            .child(
-                                div()
-                                    .truncate()
-                                    .font_family("monospace")
-                                    .text_sm()
-                                    .text_color(palette.color(TEXT))
-                                    .child(path.clone()),
-                            )
-                            .when_some(visible_note, |element, note| {
-                                element.child(
-                                    div()
-                                        .truncate()
-                                        .text_xs()
-                                        .text_color(palette.color(MUTED))
-                                        .child(note.clone()),
-                                )
-                            }),
-                    )
-                    .child(
-                        div()
-                            .flex_shrink_0()
-                            .font_family("monospace")
-                            .text_xs()
-                            .text_color(palette.color(diff_view::ADDED_TEXT))
-                            .child(format!("+{added}")),
-                    )
-                    .child(
-                        div()
-                            .flex_shrink_0()
-                            .font_family("monospace")
-                            .text_xs()
-                            .text_color(palette.color(diff_view::REMOVED_TEXT))
-                            .child(format!("-{removed}")),
-                    )
-                    .child(
-                        div()
-                            .flex_shrink_0()
-                            .w(px(96.))
-                            .h(px(8.))
-                            .flex()
-                            .rounded_sm()
-                            .overflow_hidden()
-                            .child(
-                                div()
-                                    .w(px(*added_width))
-                                    .h_full()
-                                    .bg(palette.color(diff_view::ADDED_TEXT)),
-                            )
-                            .child(
-                                div()
-                                    .w(px(*bar_width - *added_width))
-                                    .h_full()
-                                    .bg(palette.color(diff_view::REMOVED_TEXT)),
-                            ),
-                    )
-                    .into_any_element()
-            }
-            DiffListRow::Content(row) => diff_view::render_row(row, palette),
-        }
     }
 
     fn presentation_button(
@@ -258,5 +146,206 @@ impl Workspace {
             .on_click(cx.listener(move |this, _, _, cx| {
                 this.set_diff_presentation(presentation, cx);
             }))
+    }
+}
+
+fn checkout_diff(
+    viewer: &Entity<gpui_kit::component::diff::DiffState>,
+    presentation: Presentation,
+    notes: HashMap<String, String>,
+) -> gpui_kit::component::diff::Diff {
+    use gpui_kit::base::TestSupportExt;
+    let header_viewer = viewer.clone();
+    gpui_kit::component::diff::Diff::new(viewer)
+        .soft_wrap(presentation == Presentation::Split)
+        .size_full()
+        .flex_1()
+        .min_h(px(0.))
+        .render_header(move |file, _, cx| {
+            let palette = theme::palette(cx);
+            let viewer = header_viewer.clone();
+            let path = file.path().clone();
+            div()
+                .id("diff-file-header-content")
+                .test_support()
+                .role(gpui_kit::accesskit::Role::Button)
+                .aria_label(format!("Toggle diff for {path}"))
+                .w_full()
+                .cursor_pointer()
+                .hover(|style| style.bg(palette.color(HOVER)))
+                .on_click(move |_, _, cx| {
+                    cx.stop_propagation();
+                    viewer.update(cx, |state, cx| {
+                        let collapsed = state.is_file_collapsed(&path);
+                        state.set_file_collapsed(&path, !collapsed, cx);
+                    });
+                })
+                .flex()
+                .items_center()
+                .gap_3()
+                .min_w(px(0.))
+                .child(
+                    div()
+                        .flex()
+                        .flex_col()
+                        .min_w(px(0.))
+                        .max_w(px(240.))
+                        .child(
+                            div()
+                                .truncate()
+                                .font_weight(gpui_kit::FontWeight::MEDIUM)
+                                .child(file.path().clone()),
+                        )
+                        .when_some(notes.get(file.path().as_ref()), |this, note| {
+                            this.child(
+                                div()
+                                    .text_xs()
+                                    .text_color(palette.color(MUTED))
+                                    .child(note.clone()),
+                            )
+                        }),
+                )
+                .child(
+                    div()
+                        .id("diff-file-counts")
+                        .test_support()
+                        .role(gpui_kit::accesskit::Role::Label)
+                        .aria_label(format!(
+                            "{} added lines, {} removed lines",
+                            file.additions(),
+                            file.deletions()
+                        ))
+                        .flex()
+                        .flex_shrink_0()
+                        .gap_2()
+                        .font_family("monospace")
+                        .text_xs()
+                        .child(
+                            div()
+                                .text_color(palette.color(diff_view::ADDED_TEXT))
+                                .child(format!("+{}", file.additions())),
+                        )
+                        .child(
+                            div()
+                                .text_color(palette.color(diff_view::REMOVED_TEXT))
+                                .child(format!("-{}", file.deletions())),
+                        ),
+                )
+        })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use gpui_kit::component::diff::{DiffFile, DiffState};
+
+    struct Preview {
+        state: Entity<DiffState>,
+        presentation: Presentation,
+        _subscription: Subscription,
+    }
+
+    impl Render for Preview {
+        fn render(&mut self, _: &mut Window, _: &mut Context<Self>) -> impl IntoElement {
+            checkout_diff(&self.state, self.presentation, HashMap::new())
+        }
+    }
+
+    #[gpui_kit::test]
+    fn split_keeps_both_sources_and_file_counts_in_view(cx: &mut gpui_kit::TestAppContext) {
+        cx.update(|cx| {
+            gpui_kit::init(cx);
+            theme::apply(cx);
+        });
+        let long = "long source ".repeat(100);
+        let patch = format!(
+            "--- a/file.rs\n+++ b/file.rs\n@@ -1,2 +1,2 @@\n-before\n-{long}\n+after\n+new {long}\n"
+        );
+        let files = DiffFile::parse(&patch).unwrap();
+        let state = cx.new(|cx| DiffState::new(files, cx).with_mode(Presentation::Unified.mode()));
+        let (preview, cx) = cx.add_window_view(|_, cx| Preview {
+            _subscription: cx.observe(&state, |_, _, cx| cx.notify()),
+            state: state.clone(),
+            presentation: Presentation::Unified,
+        });
+        cx.simulate_resize(size(px(500.), px(600.)));
+        for presentation in [Presentation::Unified, Presentation::Split] {
+            cx.update(|_, cx| {
+                preview.update(cx, |view, cx| {
+                    view.presentation = presentation;
+                    view.state.update(cx, |state, cx| {
+                        state.set_mode(presentation.mode(), cx);
+                        state.scroll_to_file("file.rs", cx);
+                    });
+                    cx.notify();
+                });
+            });
+            for _ in 0..3 {
+                cx.update(|window, cx| {
+                    window.draw(cx).clear(cx);
+                });
+            }
+            cx.update(|window, _| {
+                let snapshots = gpui_kit::base::test_support::snapshots(window);
+                let source = |label: &str| {
+                    snapshots
+                        .iter()
+                        .find(|element| element.label() == Some(label))
+                        .unwrap_or_else(|| {
+                            panic!("missing {label} in {presentation:?}: {snapshots:?}")
+                        })
+                };
+                let old = source("before").bounds();
+                let new = source("after").bounds();
+                let counts = source("2 added lines, 2 removed lines");
+                assert!(counts.visible());
+                assert!(counts.bounds().right() <= window.viewport_size().width);
+                if presentation == Presentation::Split {
+                    assert_eq!(old.top(), new.top());
+                    assert!(old.left() < new.left());
+                    assert!(
+                        new.right() <= window.viewport_size().width,
+                        "modified source must stay inside the split viewport: {new:?}"
+                    );
+                } else {
+                    assert!(old.top() < new.top());
+                }
+            });
+            let row_point = cx.update(|window, _| {
+                let header = gpui_kit::base::test_support::snapshots(window)
+                    .into_iter()
+                    .find(|element| element.label() == Some("Toggle diff for file.rs"))
+                    .unwrap();
+                gpui_kit::point(
+                    window.viewport_size().width - px(24.),
+                    header.bounds().center().y,
+                )
+            });
+            // Blank space after the filename and counts must also toggle the file.
+            cx.simulate_click(row_point, Default::default());
+            cx.update(|_, cx| assert!(state.read(cx).is_file_collapsed("file.rs")));
+            for _ in 0..3 {
+                cx.update(|window, cx| {
+                    window.draw(cx).clear(cx);
+                });
+            }
+            let chevron_point = cx.update(|window, _| {
+                gpui_kit::base::test_support::snapshots(window)
+                    .into_iter()
+                    .find(|element| {
+                        element.path().last() == Some(&gpui_kit::ElementId::from("collapse-file"))
+                    })
+                    .unwrap()
+                    .bounds()
+                    .center()
+            });
+            cx.simulate_click(chevron_point, Default::default());
+            cx.update(|_, cx| {
+                assert!(
+                    !state.read(cx).is_file_collapsed("file.rs"),
+                    "the chevron must toggle exactly once"
+                )
+            });
+        }
     }
 }
