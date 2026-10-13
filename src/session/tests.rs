@@ -264,6 +264,30 @@ fn v1_prompt_response_still_completes_turn() {
 }
 
 #[test]
+fn v1_prompt_error_releases_turn_and_unlocks_input() {
+    let mut agent = agent(ProtocolVersion::V1);
+    agent.awaiting_response = true;
+    agent.config.active_prompt = Some("Do the thing".into());
+
+    agent.handle_message(
+        Path::new("/"),
+        &json!({"jsonrpc":"2.0","id":3,"error":{"code":-32603,"message":"Authentication required"}}),
+    );
+
+    assert_eq!(agent.status, Status::Error);
+    assert!(!agent.active_work);
+    assert!(!agent.awaiting_response);
+    assert!(agent.config.active_prompt.is_none());
+    assert!(!agent.snapshot().was_working);
+    assert!(
+        agent
+            .messages
+            .iter()
+            .any(|entry| entry.text == "ACP error: Authentication required")
+    );
+}
+
+#[test]
 fn resetting_context_reuses_agent_settings_without_reusing_session_state() {
     let mut previous = agent(ProtocolVersion::V2);
     previous.config.display_name = Some("Example agent".into());
