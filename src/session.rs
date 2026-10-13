@@ -1280,6 +1280,12 @@ impl SessionController {
                 agent.cancel_requested = false;
                 agent.config.active_prompt = None;
                 agent.status = Status::Idle;
+            } else if id >= 3 {
+                agent.active_work = false;
+                agent.awaiting_response = false;
+                agent.cancel_requested = false;
+                agent.config.active_prompt = None;
+                agent.status = Status::Error;
             } else {
                 agent.status = Status::Error;
             }
