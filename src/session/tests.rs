@@ -924,6 +924,58 @@ fn next_request(rx: &mpsc::Receiver<Event>) -> Value {
 
 #[cfg(unix)]
 #[test]
+fn local_session_skill_uses_negotiated_context_and_stays_out_of_user_messages() {
+    for version in [ProtocolVersion::V1, ProtocolVersion::V2] {
+        for embed in [false, true] {
+            let mut agent = agent(version);
+            agent.accepts_embedded_context = embed;
+            let incoming = echo_requests(&mut agent);
+            for prompt in ["Open a new session", "What can you do?"] {
+                agent.start_prompt(prompt.into()).unwrap();
+                let request = next_request(&incoming);
+                let blocks = request["params"]["prompt"].as_array().unwrap();
+                assert_eq!(blocks.len(), 2);
+                assert_eq!(blocks[0], json!({"type":"text","text":prompt}));
+                let skill = &blocks[1];
+                let instructions = if embed {
+                    assert_eq!(skill["type"], "resource");
+                    assert_eq!(skill["resource"]["mimeType"], "text/markdown");
+                    skill["resource"]["text"].as_str().unwrap()
+                } else {
+                    assert_eq!(skill["type"], "text");
+                    skill["text"].as_str().unwrap()
+                };
+                assert!(instructions.contains("agentaps new-session"));
+                match version {
+                    ProtocolVersion::V1 => {
+                        serde_json::from_value::<agent_client_protocol_schema::v1::PromptRequest>(
+                            request["params"].clone(),
+                        )
+                        .unwrap();
+                    }
+                    _ => {
+                        serde_json::from_value::<v2::PromptRequest>(request["params"].clone())
+                            .unwrap();
+                    }
+                }
+                let (visible, images) = protocol::message_content(&request["params"]["prompt"]);
+                assert_eq!(visible, prompt);
+                assert!(images.is_empty());
+                assert_eq!(agent.config.active_prompt.as_deref(), Some(prompt));
+                assert!(
+                    agent
+                        .messages
+                        .iter()
+                        .all(|message| !message.text.contains("SKILL.md"))
+                );
+                agent.handle_prompt_response(&json!({"stopReason":"end_turn"}));
+            }
+        }
+    }
+}
+
+#[cfg(unix)]
+#[test]
 fn context_reset_keeps_live_agent_and_restores_settings_before_prompts() {
     for protocol in [ProtocolVersion::V1, ProtocolVersion::V2] {
         let mut session = agent(protocol);
@@ -1293,6 +1345,9 @@ fn harness_history_reloads_after_restart() {
                 crate::acp::Event::Disconnected { reason, .. } => {
                     panic!("Harness disconnected: {reason}")
                 }
+                crate::acp::Event::NewSession { .. } => {
+                    panic!("Unexpected new session request from harness")
+                }
             }
             assert_ne!(
                 session.status,
@@ -1420,7 +1475,8 @@ fn prompts_send_saved_images_to_agents_that_accept_them() {
         value["params"]["prompt"],
         json!([
             {"type":"text","text":"What is this?"},
-            {"type":"image","mimeType":"image/png","data":"cGl4ZWxz"}
+            {"type":"image","mimeType":"image/png","data":"cGl4ZWxz"},
+            crate::cli::skill_context(false)
         ])
     );
     let sent = agent.messages.last().unwrap();
@@ -1442,7 +1498,10 @@ fn prompts_send_saved_images_to_agents_that_accept_them() {
     };
     assert_eq!(
         value["params"]["prompt"],
-        json!([{"type":"image","mimeType":"image/jpeg","data":"cGhvdG8="}])
+        json!([
+            {"type":"image","mimeType":"image/jpeg","data":"cGhvdG8="},
+            crate::cli::skill_context(false)
+        ])
     );
 }
 
@@ -1548,7 +1607,10 @@ fn prompts_embed_text_files_and_link_the_rest() {
     agent.start_prompt(prompt.clone()).unwrap();
     assert_eq!(
         sent(),
-        json!([{"type":"text","text":"Read these"}, link(&notes), link(&archive)])
+        json!([
+            {"type":"text","text":"Read these"}, link(&notes), link(&archive),
+            crate::cli::skill_context(false)
+        ])
     );
     assert_eq!(
         agent.messages.last().unwrap().text,
@@ -1569,7 +1631,8 @@ fn prompts_embed_text_files_and_link_the_rest() {
             {"type":"resource","resource":{
                 "uri":"file:///project/notes.md","mimeType":"text/plain","text":"# Notes"
             }},
-            link(&archive)
+            link(&archive),
+            crate::cli::skill_context(true)
         ])
     );
     assert_eq!(

@@ -31,6 +31,8 @@ Use **Record** beside the attachment menu, then **Stop** and Send, to have an au
 
 Keyboard shortcuts use Cmd on macOS and Ctrl elsewhere: **N** starts a new session with the current agent, **Shift+N** picks a folder for a new session, **,** opens settings, **B** toggles the sidebar, **Shift+D** toggles the diff, and **K** searches sessions. **Ctrl+Tab** and **Ctrl+Shift+Tab** move between sessions. **1** to **9** jump to the first nine sessions in the sidebar. **=**, **-**, and **0** zoom in, out, and reset.
 
+Agents running locally in Agentaps can invoke `agentaps new-session` from their shell tools to open and select a fresh session with the same project and agent command. The calling session keeps its context and continues running. Agentaps includes its bundled `agentaps` skill in each local ACP prompt so the agent knows how to use the command, using embedded context when supported and text otherwise. This command requires the session environment provided to the agent by Agentaps; SSH agents and standalone terminal sessions are not supported.
+
 ## Web Connect
 
 1. In the desktop sidebar, select the phone icon. Agentaps shows a pairing QR code.

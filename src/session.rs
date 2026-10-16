@@ -833,6 +833,11 @@ impl SessionController {
         .into_iter()
         .chain(images)
         .chain(files)
+        .chain(
+            self.connection
+                .as_ref()
+                .and_then(|connection| connection.session_skill(self.accepts_embedded_context)),
+        )
         .collect();
         let request = json!({"jsonrpc":"2.0","id":id,"method":"session/prompt","params":{
             "sessionId":session_id,"prompt":blocks
