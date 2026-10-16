@@ -1,6 +1,13 @@
 # Session terminal
 
-The terminal is enabled by default on macOS and Linux Wayland. Open it with
+The terminal is enabled by default on macOS and Linux Wayland. Click a project's
+**+** button and select **Terminal** to start a standalone shell in that project.
+Terminal sessions fill their pane and appear with a terminal icon in the sidebar;
+coding sessions show their agent's icon before the status indicator. Terminal
+session entries survive app restarts, but their shells do not. Select **Open
+terminal** to start a fresh shell.
+
+You can also open a terminal drawer with
 the terminal icon at the bottom-right corner beneath the composer in a local session. The panel runs
 your `$SHELL` (or `/bin/sh`) in the session's project directory. Hiding the panel,
 switching sessions, or closing a pane keeps the shell running. **Stop** closes
@@ -15,7 +22,7 @@ can be changed in Settings > Key bindings.
 Drag the divider above the terminal to resize it. Each session remembers its
 height while hidden or restarting its shell; smaller panes temporarily limit
 the height to keep room for the composer.
-Terminals end when the app exits and are not restored on restart.
+Shell processes end when the app exits and are not restored on restart.
 
 ## Build requirements
 

@@ -2354,6 +2354,27 @@ fn verify_project_agent_dialog(
             this.open_picker(PickerStep::ProjectAgents { project_index: 1 }, window, cx);
             assert_eq!(this.view.displayed_session(), Some(previous));
             assert_eq!(this.view.highlighted_session(), Some(previous));
+            let ssh_host = this.projects[1].ssh_host.take();
+            let terminal_supported = cfg!(all(
+                feature = "ghostty-terminal",
+                any(target_os = "linux", target_os = "macos")
+            ));
+            assert_eq!(this.terminal_picker_available(cx), terminal_supported);
+            this.picker
+                .input
+                .update(cx, |input, cx| input.set_value("terminal", window, cx));
+            assert_eq!(this.terminal_picker_available(cx), terminal_supported);
+            assert!(this.agent_results(cx).is_empty());
+            this.picker
+                .input
+                .update(cx, |input, cx| input.set_value("test agent", window, cx));
+            assert!(!this.terminal_picker_available(cx));
+            this.picker
+                .input
+                .update(cx, |input, cx| input.set_value("", window, cx));
+            this.projects[1].ssh_host = Some("test-host".into());
+            assert!(!this.terminal_picker_available(cx));
+            this.projects[1].ssh_host = ssh_host;
             available
         })
     });

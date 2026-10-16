@@ -370,6 +370,7 @@ impl SessionController {
         }
         AgentConfig {
             id,
+            terminal: self.config.terminal,
             command: self.config.command.clone(),
             archived: self.config.archived,
             display_name: self.config.display_name.clone(),
@@ -491,6 +492,7 @@ impl SessionController {
         }
         Some(AgentConfig {
             id,
+            terminal: self.config.terminal,
             command: self.config.command.clone(),
             archived: false,
             display_name: self.config.display_name.clone(),
@@ -574,6 +576,11 @@ impl SessionController {
         }
         let model = config.model.clone();
         let context = config.context;
+        let status = if config.terminal {
+            Status::Idle
+        } else {
+            Status::Connecting
+        };
         Self {
             config,
             name,
@@ -590,7 +597,7 @@ impl SessionController {
             reset_settings: Vec::new(),
             resetting_context: false,
             context,
-            status: Status::Connecting,
+            status,
             protocol: None,
             accepts_images: false,
             accepts_audio: false,
@@ -613,6 +620,7 @@ impl SessionController {
     pub(crate) fn snapshot(&self) -> AgentConfig {
         AgentConfig {
             id: self.config.id,
+            terminal: self.config.terminal,
             command: self.config.command.clone(),
             archived: self.config.archived,
             display_name: self.config.display_name.clone(),

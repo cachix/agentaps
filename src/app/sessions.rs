@@ -288,6 +288,10 @@ impl Workspace {
         self.deferred_connections.retain(|id| *id != agent_id);
         let project = &mut self.projects[project_index];
         let agent = &mut project.agents[agent_index];
+        if agent.config.terminal {
+            agent.status = Status::Idle;
+            return;
+        }
         match Connection::spawn(
             agent.config.id,
             &agent.config.command,

@@ -1624,6 +1624,16 @@ impl Workspace {
         }
     }
 
+    fn terminal_picker_available(&self, cx: &Context<Self>) -> bool {
+        cfg!(all(
+            feature = "ghostty-terminal",
+            any(target_os = "linux", target_os = "macos")
+        )) && matches!(self.view, WorkspaceView::NewSession {
+                step: PickerStep::Agents { project_index } | PickerStep::ProjectAgents { project_index }, ..
+            } if self.projects[project_index].ssh_host.is_none())
+            && score(self.picker.input.read(cx).value().trim(), "Terminal").is_some()
+    }
+
     fn agent_results(&self, cx: &Context<Self>) -> Vec<AgentChoice> {
         let query = self.picker.input.read(cx).value().to_string();
         let mut agents = self
@@ -1762,9 +1772,21 @@ impl Workspace {
         name: Option<String>,
         cx: &mut Context<Self>,
     ) -> (u64, usize) {
+        self.create_session_for_project(project_index, command, name, false, cx)
+    }
+
+    fn create_session_for_project(
+        &mut self,
+        project_index: usize,
+        command: Vec<String>,
+        name: Option<String>,
+        terminal: bool,
+        cx: &mut Context<Self>,
+    ) -> (u64, usize) {
         let id = self.next_agent_id;
         let config = AgentConfig {
             id,
+            terminal,
             command,
             archived: false,
             display_name: name,
@@ -1925,6 +1947,14 @@ impl Workspace {
             } => {
                 if let Some(agent) = self.agent_results(cx).get(self.picker.selection).cloned() {
                     self.start_agent(agent.command, Some(agent.name), window, cx);
+                } else if self.terminal_picker_available(cx)
+                    && self.picker.selection == self.agent_results(cx).len()
+                {
+                    #[cfg(all(
+                        feature = "ghostty-terminal",
+                        any(target_os = "linux", target_os = "macos")
+                    ))]
+                    self.start_project_terminal(window, cx);
                 } else {
                     self.start_custom_agent(window, cx);
                 }
@@ -2047,6 +2077,26 @@ impl Workspace {
         }
     }
 
+    fn focus_session_input(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if let Some(session) = self.view.displayed_session() {
+            let config = &self.projects[session.project_index].agents[session.agent_index].config;
+            if config.terminal {
+                #[cfg(all(
+                    feature = "ghostty-terminal",
+                    any(target_os = "linux", target_os = "macos")
+                ))]
+                if self.focus_terminal(config.id, window, cx) {
+                    return;
+                }
+                self.pane_focus.focus(window, cx);
+                return;
+            }
+        }
+        self.conversation
+            .composer
+            .update(cx, |input, cx| input.focus(window, cx));
+    }
+
     fn show_session(
         &mut self,
         location: SessionLocation,
@@ -2057,9 +2107,7 @@ impl Workspace {
             self.close_settings(window, cx);
         }
         self.set_view(WorkspaceView::Conversation(location), window, cx);
-        self.conversation
-            .composer
-            .update(cx, |input, cx| input.focus(window, cx));
+        self.focus_session_input(window, cx);
         cx.notify();
     }
 
@@ -2237,6 +2285,7 @@ impl Workspace {
             }
             PickerStep::Agents { .. } | PickerStep::ProjectAgents { .. } => {
                 self.agent_results(cx).len()
+                    + usize::from(self.terminal_picker_available(cx))
                     + usize::from(!self.picker.input.read(cx).value().trim().is_empty())
             }
         };

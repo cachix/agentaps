@@ -23,6 +23,38 @@ impl Workspace {
         let compact_footer = pane_width < 600. * self.font_scale;
         let project = &self.projects[project_index];
         let agent = &project.agents[agent_index];
+        if agent.config.terminal {
+            #[cfg(all(
+                feature = "ghostty-terminal",
+                any(target_os = "linux", target_os = "macos")
+            ))]
+            if let Some(terminal) = self.render_terminal(agent.config.id, cx) {
+                return chat.child(terminal);
+            }
+            return chat.child(
+                div().flex_1().flex().items_center().justify_center().child(
+                    Button::new(("start-terminal-session", agent.config.id))
+                        .icon(IconName::SquareTerminal)
+                        .label("Open terminal")
+                        .disabled(!cfg!(all(
+                            feature = "ghostty-terminal",
+                            any(target_os = "linux", target_os = "macos")
+                        )))
+                        .on_click(self.pane_listener(cx, move |this, _, window, cx| {
+                            #[cfg(all(
+                                feature = "ghostty-terminal",
+                                any(target_os = "linux", target_os = "macos")
+                            ))]
+                            this.toggle_active_terminal(window, cx);
+                            #[cfg(not(all(
+                                feature = "ghostty-terminal",
+                                any(target_os = "linux", target_os = "macos")
+                            )))]
+                            let _ = (this, window, cx);
+                        })),
+                ),
+            );
+        }
         let diff_counts = self.pane_diff_counts(project_index);
         let diff_shown = self.diff.visible
             && self

@@ -67,6 +67,54 @@ fn terminal_theme(cx: &App) -> TerminalTheme {
 }
 
 impl Workspace {
+    pub(super) fn focus_terminal(
+        &mut self,
+        agent_id: u64,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> bool {
+        let Some(terminal) = self
+            .terminals
+            .get(&agent_id)
+            .filter(|terminal| terminal.open)
+        else {
+            return false;
+        };
+        terminal
+            .entity
+            .update(cx, |terminal, cx| terminal.focus(window, cx));
+        true
+    }
+
+    pub(super) fn start_project_terminal(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let WorkspaceView::NewSession {
+            step: PickerStep::Agents { project_index } | PickerStep::ProjectAgents { project_index },
+            ..
+        } = self.view
+        else {
+            return;
+        };
+        if !self.terminal_picker_available(cx) {
+            return;
+        }
+        let (id, agent_index) = self.create_session_for_project(
+            project_index,
+            Vec::new(),
+            Some("Terminal".into()),
+            true,
+            cx,
+        );
+        self.set_view(
+            WorkspaceView::Conversation(SessionLocation {
+                project_index,
+                agent_index,
+            }),
+            window,
+            cx,
+        );
+        self.start_terminal(id, window, cx);
+    }
+
     pub(super) fn resize_terminal(
         &mut self,
         event: &DragMoveEvent<TerminalResize>,
@@ -154,11 +202,7 @@ impl Workspace {
                 if let Some(pane) = pane
                     && self.activate_pane(pane, cx)
                 {
-                    self.conversation
-                        .composer
-                        .read(cx)
-                        .focus_handle(cx)
-                        .focus(window, cx);
+                    self.focus_session_input(window, cx);
                 }
             }
             cx.notify();
@@ -189,11 +233,7 @@ impl Workspace {
                 }
             });
             if !open {
-                self.conversation
-                    .composer
-                    .read(cx)
-                    .focus_handle(cx)
-                    .focus(window, cx);
+                self.focus_session_input(window, cx);
             }
             cx.notify();
             return;
@@ -223,6 +263,7 @@ impl Workspace {
             .and_then(|terminal| terminal.height);
         match Terminal::spawn(options, window, cx) {
             Ok(entity) => {
+                entity.update(cx, |terminal, cx| terminal.focus(window, cx));
                 self.terminals.insert(
                     agent_id,
                     SessionTerminal {
@@ -301,6 +342,11 @@ impl Workspace {
             .filter(|terminal| terminal.open)?;
         let palette = theme::palette(cx);
         let alive = terminal.entity.read(cx).is_alive();
+        let standalone = self.session_location(agent_id).is_some_and(|session| {
+            self.projects[session.project_index].agents[session.agent_index]
+                .config
+                .terminal
+        });
         Some(
             div()
                 .flex()
@@ -312,9 +358,11 @@ impl Workspace {
                     self.conversation.viewport_height,
                     self.font_scale,
                 )))
+                .when(standalone, |panel| panel.flex_1().h_full())
                 .child(
                     div()
                         .id(("terminal-divider", agent_id))
+                        .when(standalone, |divider| divider.hidden())
                         .h(px(6.))
                         .w_full()
                         .flex_shrink_0()
@@ -375,11 +423,7 @@ impl Workspace {
                                 .tooltip("Stop this terminal and its shell")
                                 .on_click(self.pane_listener(cx, move |this, _, window, cx| {
                                     this.terminals.remove(&agent_id);
-                                    this.conversation
-                                        .composer
-                                        .read(cx)
-                                        .focus_handle(cx)
-                                        .focus(window, cx);
+                                    this.focus_session_input(window, cx);
                                     cx.notify();
                                 })),
                         )

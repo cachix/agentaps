@@ -5,6 +5,34 @@ use crate::acp::Event;
 use std::sync::mpsc;
 
 #[test]
+fn terminal_sessions_keep_their_kind_when_saved_and_reset() {
+    let mut config = agent(ProtocolVersion::V2).snapshot();
+    config.terminal = true;
+    config.command.clear();
+    config.display_name = Some("Terminal".into());
+    let session = SessionController::new(config, ImageStore::for_tests());
+    assert_eq!(session.status, Status::Idle);
+    assert!(session.connection.is_none());
+    let saved = serde_json::to_vec(&session.snapshot()).unwrap();
+    let restored = SessionController::new(
+        serde_json::from_slice(&saved).unwrap(),
+        ImageStore::for_tests(),
+    );
+    assert!(restored.config.terminal);
+    assert_eq!(restored.name, "Terminal");
+    assert_eq!(restored.status, Status::Idle);
+    assert!(restored.reset_config(2, Vec::new()).terminal);
+}
+
+#[test]
+fn older_sessions_default_to_coding_agents() {
+    let mut saved = serde_json::to_value(agent(ProtocolVersion::V2).snapshot()).unwrap();
+    saved.as_object_mut().unwrap().remove("terminal");
+    let config: AgentConfig = serde_json::from_value(saved).unwrap();
+    assert!(!config.terminal);
+}
+
+#[test]
 fn old_sessions_seed_prompt_history_from_messages_and_queue() {
     let mut config = agent(ProtocolVersion::V2).snapshot();
     config.prompt_history.clear();
@@ -118,6 +146,7 @@ pub(crate) fn agent(protocol: ProtocolVersion) -> SessionController {
     let mut agent = SessionController::new(
         AgentConfig {
             id: 1,
+            terminal: false,
             command: vec!["fixture".into()],
             archived: false,
             display_name: None,

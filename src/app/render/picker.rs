@@ -86,7 +86,7 @@ impl Workspace {
         } else {
             let matches = self.agent_results(cx);
             let match_count = matches.len();
-            if matches.is_empty() {
+            if matches.is_empty() && !self.terminal_picker_available(cx) {
                 results = results.child(
                     div()
                         .p_5()
@@ -152,8 +152,48 @@ impl Workspace {
                         })),
                 );
             }
+            if self.terminal_picker_available(cx) {
+                results = results.child(
+                    div()
+                        .id("terminal-result")
+                        .cursor_pointer()
+                        .rounded_lg()
+                        .px_4()
+                        .py_3()
+                        .flex()
+                        .items_center()
+                        .gap_3()
+                        .bg(palette.color(if self.picker.selection == match_count {
+                            SELECTED
+                        } else {
+                            SURFACE
+                        }))
+                        .hover(|style| style.bg(palette.color(HOVER)))
+                        .child(Icon::new(IconName::SquareTerminal).size(px(18.)))
+                        .child(div().flex_1().text_sm().child("Terminal"))
+                        .child(
+                            div()
+                                .text_xs()
+                                .text_color(palette.color(MUTED))
+                                .child("Shell in project folder"),
+                        )
+                        .on_click(self.pane_listener(cx, |this, _, window, cx| {
+                            #[cfg(all(
+                                feature = "ghostty-terminal",
+                                any(target_os = "linux", target_os = "macos")
+                            ))]
+                            this.start_project_terminal(window, cx);
+                            #[cfg(not(all(
+                                feature = "ghostty-terminal",
+                                any(target_os = "linux", target_os = "macos")
+                            )))]
+                            let _ = (this, window, cx);
+                        })),
+                );
+            }
             if !query.trim().is_empty() {
-                let custom_selected = self.picker.selection == match_count;
+                let custom_selected = self.picker.selection
+                    == match_count + usize::from(self.terminal_picker_available(cx));
                 results = results.child(
                     div()
                         .id("custom-agent")
@@ -234,7 +274,7 @@ impl Workspace {
                                         div()
                                             .text_lg()
                                             .text_color(palette.color(TEXT))
-                                            .child("Choose an agent"),
+                                            .child("Start a session"),
                                     )
                                     .child(
                                         Button::new("close-project-agent-dialog")

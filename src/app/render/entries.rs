@@ -866,6 +866,7 @@ mod tests {
         AgentView::new(
             AgentConfig {
                 id: 1,
+                terminal: false,
                 command: vec!["agent".into()],
                 archived: false,
                 display_name: None,

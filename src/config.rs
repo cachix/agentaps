@@ -144,6 +144,8 @@ impl SlashCommand {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct AgentConfig {
     pub id: u64,
+    #[serde(default)]
+    pub terminal: bool,
     pub command: Vec<String>,
     #[serde(default)]
     pub archived: bool,

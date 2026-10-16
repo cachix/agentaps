@@ -6,7 +6,9 @@ fn sidebar_row() -> Div {
         .flex()
         .items_center()
         .gap_1()
-        .px_1()
+        .ml(rems(-0.5))
+        .pl_0()
+        .pr_1()
         .py(rems(0.125))
         .min_h(rems(1.5))
         .line_height(rems(1.125))
@@ -210,8 +212,6 @@ impl Workspace {
             let row = sidebar_row()
                 .id(("agent", agent_id))
                 .group(row_group.clone())
-                // Keep sessions indented beneath their project header.
-                .when(nested_sidebar, |row| row.pl(rems(1.0625)))
                 .pr(rems(if nested_sidebar { 1.875 } else { 0.25 }))
                 .cursor_pointer()
                 .when(!archived, |element| element.cursor_move())
@@ -238,9 +238,7 @@ impl Workspace {
                         window,
                         cx,
                     );
-                    this.conversation
-                        .composer
-                        .update(cx, |input, cx| input.focus(window, cx));
+                    this.focus_session_input(window, cx);
                     cx.notify();
                 }))
                 .when_some(agent.config.session_title(), |row, title| {
@@ -273,6 +271,16 @@ impl Workspace {
                             this.move_agent(drag.id, agent_id, cx)
                         }))
                 })
+                .child(
+                    if agent.config.terminal {
+                        Icon::new(IconName::SquareTerminal)
+                    } else {
+                        known_agent(&agent.config.command)
+                            .map_or_else(|| Icon::new(IconName::Bot), agent_icon)
+                    }
+                    .size(px(14.))
+                    .text_color(palette.color(MUTED)),
+                )
                 .when(
                     show_agent_status || (!nested_sidebar && sync_counts.is_some()),
                     |row| {
@@ -448,8 +456,6 @@ impl Workspace {
                 .contains(&(project.path.clone(), project.ssh_host.clone()));
             let header = sidebar_row()
                 .id(("project", project_index))
-                .ml(rems(-0.5))
-                .pl_0()
                 .when(nested_sidebar, |header| {
                     header.cursor_move().on_drag(
                         ProjectDrag {

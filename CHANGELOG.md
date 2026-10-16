@@ -6,6 +6,8 @@ Notable changes to Agentaps are recorded here.
 
 ### Added
 
+- Start standalone local terminal sessions from the project plus menu. Session rows show a coding agent logo or terminal icon before their status.
+
 - Desktop builds provide a separate Ubuntu 26.04 DEB linked against its native libxml2 ABI, with a clean-container installation check and distinct download labels.
 
 - Record voice messages or attach audio files in the desktop composer and send the recording directly to audio-capable ACP agents for transcription and a response. Queued recordings survive restarts.
@@ -27,6 +29,8 @@ Notable changes to Agentaps are recorded here.
 - Keep composer controls on one row and the terminal toggle clear of context usage by shortening labels and compacting indicators in narrow panes.
 
 ### Changed
+
+- Align session icons with project folder icons using the same left margin and padding for both rows.
 
 - New split panes show the new-session chooser inline immediately, with project search ready to type.
 
