@@ -4,19 +4,59 @@ use std::{
     io::{BufRead, BufReader, Write},
     path::Path,
     process::{Child, Command, Stdio},
-    sync::mpsc::{self, Receiver, Sender},
+    sync::{
+        atomic::{AtomicU64, Ordering},
+        mpsc::{self, Receiver, Sender},
+    },
     thread,
 };
 
 #[derive(Debug)]
 pub enum Event {
-    Message { agent_id: u64, value: Value },
-    Disconnected { agent_id: u64, reason: String },
+    NewSession {
+        agent_id: u64,
+        connection_id: u64,
+        reply: Sender<Result<u64, String>>,
+    },
+    Message {
+        agent_id: u64,
+        connection_id: u64,
+        value: Value,
+    },
+    Disconnected {
+        agent_id: u64,
+        connection_id: u64,
+        reason: String,
+    },
+}
+
+impl Event {
+    pub fn source(&self) -> (u64, u64) {
+        match self {
+            Self::Message {
+                agent_id,
+                connection_id,
+                ..
+            }
+            | Self::Disconnected {
+                agent_id,
+                connection_id,
+                ..
+            }
+            | Self::NewSession {
+                agent_id,
+                connection_id,
+                ..
+            } => (*agent_id, *connection_id),
+        }
+    }
 }
 
 pub struct Connection {
+    pub id: u64,
     child: Child,
     outgoing: Sender<Value>,
+    _cli_server: Option<crate::cli::Server>,
 }
 
 impl Connection {
@@ -28,6 +68,8 @@ impl Connection {
         claude_executable: Option<&Path>,
         events: Sender<Event>,
     ) -> Result<Self, String> {
+        static NEXT_CONNECTION_ID: AtomicU64 = AtomicU64::new(1);
+        let connection_id = NEXT_CONNECTION_ID.fetch_add(1, Ordering::Relaxed);
         let (program, args) = command.split_first().ok_or("Agent command is empty")?;
         let mut process = if let Some(host) = ssh_host {
             let remote_command = crate::remote::agent_command(command, cwd)?;
@@ -53,6 +95,14 @@ impl Connection {
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .stderr(Stdio::inherit());
+        let cli_server = if ssh_host.is_none() {
+            let server = crate::cli::Server::start(agent_id, connection_id, events.clone())
+                .map_err(|error| format!("Could not start session control: {error}"))?;
+            server.configure(&mut process);
+            Some(server)
+        } else {
+            None
+        };
         if ssh_host.is_none() && uses_claude_agent_acp(command) {
             let claude = std::env::var_os("CLAUDE_CODE_EXECUTABLE")
                 .map(std::path::PathBuf::from)
@@ -81,6 +131,7 @@ impl Connection {
                 {
                     let _ = writer_events.send(Event::Disconnected {
                         agent_id,
+                        connection_id,
                         reason: "Could not write to agent".into(),
                     });
                     break;
@@ -92,13 +143,21 @@ impl Connection {
                 match line {
                     Ok(line) => match serde_json::from_str(&line) {
                         Ok(value) => {
-                            if events.send(Event::Message { agent_id, value }).is_err() {
+                            if events
+                                .send(Event::Message {
+                                    agent_id,
+                                    connection_id,
+                                    value,
+                                })
+                                .is_err()
+                            {
                                 return;
                             }
                         }
                         Err(error) => {
                             let _ = events.send(Event::Disconnected {
                                 agent_id,
+                                connection_id,
                                 reason: format!("Invalid ACP message: {error}"),
                             });
                             return;
@@ -107,6 +166,7 @@ impl Connection {
                     Err(error) => {
                         let _ = events.send(Event::Disconnected {
                             agent_id,
+                            connection_id,
                             reason: format!("Agent stream failed: {error}"),
                         });
                         return;
@@ -115,16 +175,28 @@ impl Connection {
             }
             let _ = events.send(Event::Disconnected {
                 agent_id,
+                connection_id,
                 reason: "Agent disconnected".into(),
             });
         });
-        Ok(Self { child, outgoing })
+        Ok(Self {
+            id: connection_id,
+            child,
+            outgoing,
+            _cli_server: cli_server,
+        })
     }
 
     pub fn send(&self, value: Value) -> Result<(), String> {
         self.outgoing
             .send(value)
             .map_err(|_| "Agent disconnected".into())
+    }
+
+    pub fn session_skill(&self, embed: bool) -> Option<Value> {
+        self._cli_server
+            .as_ref()
+            .map(|_| crate::cli::skill_context(embed))
     }
 }
 
@@ -165,11 +237,14 @@ mod tests {
             .unwrap();
         let event = rx.recv_timeout(Duration::from_secs(2)).unwrap();
         match event {
-            Event::Message { agent_id, value } => {
+            Event::Message {
+                agent_id, value, ..
+            } => {
                 assert_eq!(agent_id, 7);
                 assert_eq!(value["result"]["protocolVersion"], 1);
             }
             Event::Disconnected { reason, .. } => panic!("Disconnected before reply: {reason}"),
+            Event::NewSession { .. } => panic!("Unexpected new session request"),
         }
     }
 

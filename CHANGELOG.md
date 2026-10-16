@@ -6,6 +6,8 @@ Notable changes to Agentaps are recorded here.
 
 ### Added
 
+- Local agents can open a fresh session with `agentaps new-session` and receive a bundled `agentaps` skill through ACP prompt context to discover available commands.
+
 - Start standalone local terminal sessions from the project plus menu. Session rows show a coding agent logo or terminal icon before their status.
 
 - Desktop builds provide a separate Ubuntu 26.04 DEB linked against its native libxml2 ABI, with a clean-container installation check and distinct download labels.

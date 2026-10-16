@@ -81,6 +81,9 @@ pub(super) fn message_content(content: &Value) -> (String, Vec<ImageData>) {
     let mut text = Vec::new();
     let mut images = Vec::new();
     for block in blocks {
+        if crate::cli::is_skill_context(block) {
+            continue;
+        }
         match (
             block["type"].as_str(),
             block["mimeType"].as_str(),
