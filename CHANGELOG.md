@@ -28,6 +28,8 @@ Notable changes to Agentaps are recorded here.
 
 ### Changed
 
+- New split panes show the new-session chooser inline immediately, with project search ready to type.
+
 - Desktop checkout review uses GPUI Kit 0.7.3 with native-theme-gpui 0.6.1 for selectable diff text, horizontal scrolling in Unified, and inline change highlighting.
 
 - Diff files start collapsed, expand or collapse when their header is clicked, and show colored addition and removal counts after the filename. Expansion choices survive refreshes.

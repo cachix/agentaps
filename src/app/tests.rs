@@ -1752,7 +1752,20 @@ fn verify_split_panes(
             );
             this.split_pane(Direction::Right, window, cx);
             assert_eq!(this.pane_id, 3);
-            assert_eq!(this.view, WorkspaceView::Empty);
+            assert_eq!(
+                this.view,
+                WorkspaceView::NewSession {
+                    step: PickerStep::Folders,
+                    return_to: None,
+                }
+            );
+            assert!(
+                this.picker
+                    .input
+                    .read(cx)
+                    .focus_handle(cx)
+                    .is_focused(window)
+            );
             this.set_thoughts_expanded(true, cx);
             this.set_tool_activity_expanded(false, cx);
             this.with_pane(1, cx, |this, _| {

@@ -305,7 +305,7 @@ impl Workspace {
         // activate_pane must observe the focus change to refresh the shared diff.
         self.pane_layout.focused = self.pane_id;
         self.activate_pane(pane_id, cx);
-        window.focus(&self.workspace_focus, cx);
+        self.open_picker(PickerStep::Folders, window, cx);
         self.persist();
         cx.notify();
     }
