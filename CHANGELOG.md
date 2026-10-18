@@ -32,6 +32,8 @@ Notable changes to Agentaps are recorded here.
 
 ### Changed
 
+- Filter sidebar search to Current, Active, or Archived sessions from a filter icon beside search. Active sessions include visible statuses and pending questions.
+
 - Align session icons with project folder icons using the same left margin and padding for both rows.
 
 - New split panes show the new-session chooser inline immediately, with project search ready to type.

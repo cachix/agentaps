@@ -6,7 +6,10 @@ use std::borrow::Cow;
 
 pub(super) struct AppAssets;
 
-gpui_kit::assets::icon_assets!(SettingsAssets, [Keyboard, SquareTerminal, Mic, CircleStop]);
+gpui_kit::assets::icon_assets!(
+    SettingsAssets,
+    [Keyboard, SquareTerminal, Mic, CircleStop, ListFilter]
+);
 
 const APP_ASSETS: [(&str, &[u8]); 6] = [
     ("icons/brain.svg", include_bytes!("../../assets/brain.svg")),

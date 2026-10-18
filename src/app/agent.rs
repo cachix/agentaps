@@ -15,6 +15,10 @@ impl AgentView {
         }
     }
 
+    pub(super) fn has_sidebar_status(&self) -> bool {
+        self.status != Status::Idle || !self.elicitations.is_empty()
+    }
+
     pub(super) fn snapshot(&self) -> AgentConfig {
         self.controller.snapshot()
     }

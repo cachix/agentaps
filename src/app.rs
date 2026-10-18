@@ -549,6 +549,7 @@ struct Workspace {
     deferred_connections_deadline: Option<Instant>,
     picker: PickerState,
     sidebar_selection: usize,
+    sidebar_active_only: bool,
     sidebar_search: Entity<InputState>,
     mobile_access: MobileState,
     diff: DiffState,
@@ -1086,6 +1087,7 @@ impl Workspace {
                 input: picker_input,
             },
             sidebar_selection: 0,
+            sidebar_active_only: false,
             sidebar_search,
             mobile_access: MobileState {
                 provider_input: mobile_provider_input,
@@ -1508,6 +1510,14 @@ impl Workspace {
     fn sidebar_results(&self, query: &str) -> Vec<SessionLocation> {
         let archive_view = matches!(self.view, WorkspaceView::Archive { .. });
         self.ordered_sessions(query, archive_view)
+            .into_iter()
+            .filter(|location| {
+                archive_view
+                    || !self.sidebar_active_only
+                    || self.projects[location.project_index].agents[location.agent_index]
+                        .has_sidebar_status()
+            })
+            .collect()
     }
 
     /// Sessions matching `query` in the order the sidebar lists them.

@@ -2405,8 +2405,44 @@ fn verify_project_session_sidebar(
                 this.collapsed_projects.is_empty(),
                 "selecting a session reveals its project"
             );
+            for project in &mut this.projects {
+                for agent in &mut project.agents {
+                    agent.status = Status::Idle;
+                }
+            }
+            this.sidebar_active_only = true;
+            assert!(ids(this, "").is_empty(), "idle sessions have no status");
+            for status in [
+                Status::Connecting,
+                Status::Working,
+                Status::Done,
+                Status::Error,
+            ] {
+                this.projects[0].agents[0].status = status;
+                this.projects[0].agents[2].status = status;
+                assert_eq!(ids(this, ""), vec![401], "status: {status:?}");
+                assert_eq!(ids(this, "first"), vec![401]);
+                assert!(ids(this, "second").is_empty());
+            }
+            this.projects[0].agents[0].status = Status::Idle;
+            this.projects[1].agents[0].elicitations.push(Elicitation {
+                request_id: json!(1),
+                message: "Needs attention".into(),
+                fields: Vec::new(),
+                error: None,
+            });
+            assert_eq!(ids(this, ""), vec![404], "pending questions show a status");
+            this.projects[1].agents[0].elicitations.clear();
+            assert!(
+                ids(this, "").is_empty(),
+                "resolved status leaves active results"
+            );
+            this.sidebar_active_only = false;
+            assert_eq!(ids(this, ""), vec![401, 402, 404]);
+            this.sidebar_active_only = true;
             this.set_view(WorkspaceView::Archive { return_to: None }, window, cx);
             assert_eq!(ids(this, ""), vec![403, 405]);
+            this.sidebar_active_only = false;
             assert!(ids(this, "missing").is_empty());
         });
     });

@@ -142,6 +142,7 @@ impl Workspace {
         let nested_sidebar = self.nested_sidebar;
         let session_query = self.sidebar_search.read(cx).value().trim().to_owned();
         let archive_view = matches!(self.view, WorkspaceView::Archive { .. });
+        let active_only = !archive_view && self.sidebar_active_only;
         let new_session_view = matches!(
             self.view,
             WorkspaceView::NewSession {
@@ -198,7 +199,7 @@ impl Workspace {
                 .position(|id| *id == agent_id)
                 .unwrap_or(usize::MAX);
             let row_group = format!("agent-row-{agent_id}");
-            let show_agent_status = agent.status != Status::Idle || !agent.elicitations.is_empty();
+            let show_agent_status = agent.has_sidebar_status();
             let sync_counts = project
                 .sync_counts
                 .filter(|(ahead, behind)| *ahead > 0 || *behind > 0);
@@ -424,7 +425,7 @@ impl Workspace {
                 continue;
             }
             let collapsed = self.collapsed_projects.contains(&project_index);
-            if !has_sessions && (archive_view || !project.agents.is_empty()) {
+            if !has_sessions && (archive_view || active_only || !project.agents.is_empty()) {
                 continue;
             }
             let name = project
@@ -650,6 +651,15 @@ impl Workspace {
                     .text_color(palette.color(MUTED))
                     .child("No matching sessions"),
             );
+        } else if active_only && visible_sessions == 0 {
+            project_list = project_list.child(
+                div()
+                    .px_3()
+                    .py_3()
+                    .text_xs()
+                    .text_color(palette.color(MUTED))
+                    .child("No active sessions"),
+            );
         } else if archive_view && archived_count == 0 {
             project_list = project_list.child(
                 div()
@@ -663,11 +673,7 @@ impl Workspace {
         let viewport_width = f32::from(window.viewport_size().width);
         let sidebar_width = (viewport_width * self.sidebar_fraction).max(180.);
         let show_new_label = sidebar_width >= f32::from(window.rem_size()) * 14.;
-        let archive_tooltip = if archive_view {
-            "Show active sessions"
-        } else {
-            "Show archived sessions"
-        };
+        let filter_view = cx.entity().clone();
         div()
             .w(px(sidebar_width))
             .min_w(px(180.))
@@ -679,7 +685,78 @@ impl Workspace {
             .child(
                 div()
                     .p_2()
-                    .child(Input::new(&self.sidebar_search).cleanable(true)),
+                    .flex()
+                    .items_center()
+                    .gap_1()
+                    .child(
+                        div()
+                            .flex_1()
+                            .min_w_0()
+                            .child(Input::new(&self.sidebar_search).cleanable(true)),
+                    )
+                    .child(
+                        Button::new("session-filter")
+                            .ghost()
+                            .compact()
+                            .size(rems(1.75))
+                            .flex_shrink_0()
+                            .when(archive_view || active_only, |button| {
+                                button.bg(palette.color(SELECTED))
+                            })
+                            .icon(Icon::empty().path("icons/list-filter.svg").size(px(14.)))
+                            .tooltip(if archive_view {
+                                "Filter sessions: Archived"
+                            } else if active_only {
+                                "Filter sessions: Active"
+                            } else {
+                                "Filter sessions: Current"
+                            })
+                            .dropdown_menu_with_anchor(Anchor::TopRight, move |mut menu, _, cx| {
+                                let archived = matches!(
+                                    filter_view.read(cx).view,
+                                    WorkspaceView::Archive { .. }
+                                );
+                                let active_only =
+                                    !archived && filter_view.read(cx).sidebar_active_only;
+                                menu = menu.check_side(gpui_kit::component::Side::Right);
+                                for (label, show_archived, show_active) in [
+                                    ("Current sessions", false, false),
+                                    ("Active sessions", false, true),
+                                    ("Archived sessions", true, false),
+                                ] {
+                                    let view = filter_view.clone();
+                                    menu = menu.item(
+                                        PopupMenuItem::new(label)
+                                            .checked(
+                                                archived == show_archived
+                                                    && active_only == show_active,
+                                            )
+                                            .on_click(move |_, window, cx| {
+                                                view.update(cx, |this, cx| {
+                                                    this.sidebar_active_only = show_active;
+                                                    this.sidebar_selection = 0;
+                                                    if matches!(
+                                                        this.view,
+                                                        WorkspaceView::Archive { .. }
+                                                    ) != show_archived
+                                                    {
+                                                        this.set_view(
+                                                            this.view.toggle_archive(),
+                                                            window,
+                                                            cx,
+                                                        );
+                                                    }
+                                                    this.sidebar_search.update(cx, |input, cx| {
+                                                        input.focus(window, cx)
+                                                    });
+                                                    cx.notify();
+                                                });
+                                            }),
+                                    );
+                                }
+                                menu
+                            }),
+                    ),
             )
             .child(
                 div()
@@ -723,27 +800,6 @@ impl Workspace {
                             .on_click(
                                 cx.listener(|this, _, window, cx| this.open_settings(window, cx)),
                             ),
-                    )
-                    .child(
-                        sidebar_action(palette, archive_view)
-                            .id("archived-toggle")
-                            .size(rems(1.75))
-                            .child(Icon::new(IconName::Inbox).size(px(14.)))
-                            .tooltip(move |window, cx| {
-                                Tooltip::new(archive_tooltip).build(window, cx)
-                            })
-                            .on_click(cx.listener(|this, _, window, cx| {
-                                this.set_view(this.view.toggle_archive(), window, cx);
-                                if this.view.displayed_session().is_some() {
-                                    this.conversation
-                                        .composer
-                                        .update(cx, |input, cx| input.focus(window, cx));
-                                } else {
-                                    this.sidebar_search
-                                        .update(cx, |input, cx| input.focus(window, cx));
-                                }
-                                cx.notify();
-                            })),
                     )
                     .child(
                         sidebar_action(palette, false)
