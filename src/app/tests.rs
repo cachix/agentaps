@@ -599,6 +599,7 @@ fn zoom_shortcuts_and_menu_actions_change_the_font_scale(cx: &mut gpui_kit::Test
     );
     cx.update(|_, cx| restored.update(cx, |this, _| this.persistence.wait().unwrap()));
     mobile::verify_session_switching_and_mobile_routing(&restored, temp.path(), cx);
+    verify_cli_new_session(&restored, temp.path(), cx);
     verify_resets_and_folder_moves_preserve_harness_references(&restored, temp.path(), cx);
     verify_project_session_sidebar(&restored, cx);
     verify_project_agent_dialog(&restored, cx);
@@ -648,6 +649,89 @@ fn v1_tool_updates_replace_the_same_call_and_keep_approval_status() {
         tool.messages[0].text,
         "cat README.md · completed\noutput text"
     );
+}
+
+fn verify_cli_new_session(
+    workspace: &Entity<Workspace>,
+    path: &Path,
+    cx: &mut gpui_kit::VisualTestContext,
+) {
+    cx.update(|window, cx| {
+        workspace.update(cx, |this, cx| {
+            let command = if cfg!(windows) {
+                vec!["cmd".into(), "/c".into(), "pause > nul".into()]
+            } else {
+                vec!["/bin/sh".into(), "-c".into(), "cat > /dev/null".into()]
+            };
+            let mut source = test_agent(ProtocolVersion::V2);
+            source.config.session_id = Some("session-1".into());
+            source.config.command = command.clone();
+            source.config.display_name = Some("Calling agent".into());
+            source.connection = Some(
+                Connection::spawn(1, &command, path, None, None, this.events_tx.clone()).unwrap(),
+            );
+            let connection_id = source.connection.as_ref().unwrap().id;
+            this.projects = vec![ProjectView {
+                path: path.to_owned(),
+                ssh_host: None,
+                branch: "main".into(),
+                sync_counts: None,
+                agents: vec![AgentView {
+                    controller: source,
+                    elicitations: Vec::new(),
+                }],
+            }];
+            this.next_agent_id = 200;
+            this.sidebar_order = vec![1];
+            this.deferred_connections.clear();
+            this.set_view(
+                WorkspaceView::NewSession {
+                    step: PickerStep::Folders,
+                    return_to: None,
+                },
+                window,
+                cx,
+            );
+            let (reply, result) = mpsc::channel();
+            this.events_tx
+                .send(Event::NewSession {
+                    agent_id: 1,
+                    connection_id,
+                    reply,
+                })
+                .unwrap();
+            this.poll_events(window, cx);
+            assert_eq!(result.try_recv().unwrap(), Ok(200));
+            assert_eq!(this.projects[0].agents.len(), 2);
+            let created = &this.projects[0].agents[1].config;
+            assert_eq!(created.command, command);
+            assert_eq!(created.display_name.as_deref(), Some("Calling agent"));
+            assert_eq!(created.session_id, None);
+            assert_eq!(
+                this.projects[0].agents[0].config.session_id.as_deref(),
+                Some("session-1")
+            );
+            assert_eq!(
+                this.view.displayed_session(),
+                Some(SessionLocation {
+                    project_index: 0,
+                    agent_index: 1,
+                })
+            );
+
+            let (reply, result) = mpsc::channel();
+            this.events_tx
+                .send(Event::NewSession {
+                    agent_id: 1,
+                    connection_id: connection_id + 1000,
+                    reply,
+                })
+                .unwrap();
+            this.poll_events(window, cx);
+            assert!(result.try_recv().is_err());
+            assert_eq!(this.projects[0].agents.len(), 2);
+        });
+    });
 }
 
 fn verify_resets_and_folder_moves_preserve_harness_references(

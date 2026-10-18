@@ -2,6 +2,7 @@ mod acp;
 mod app;
 mod appearance;
 mod audio;
+mod cli;
 mod config;
 mod diff_view;
 mod diff_watch;
@@ -23,6 +24,24 @@ mod theme;
 mod theming;
 
 fn main() {
+    if std::env::args_os()
+        .nth(1)
+        .is_some_and(|arg| arg == "new-session")
+    {
+        if std::env::args_os().nth(2).is_some() {
+            eprintln!("Usage: agentaps new-session");
+            std::process::exit(2);
+        }
+        match cli::new_session() {
+            Ok(message) => println!("{message}"),
+            Err(error) => {
+                eprintln!("{error}");
+                std::process::exit(1);
+            }
+        }
+        return;
+    }
+
     #[cfg(target_os = "linux")]
     match std::env::args().nth(1).as_deref() {
         Some("--gtk-theme-probe") => theming::exit_after_probe(theming::Backend::Gtk),

@@ -705,9 +705,50 @@ impl Workspace {
             }
         }
         while let Ok(event) = self.events_rx.try_recv() {
+            let (agent_id, connection_id) = event.source();
+            if !self.agent_mut(agent_id).is_some_and(|(agent, _)| {
+                agent
+                    .connection
+                    .as_ref()
+                    .is_some_and(|connection| connection.id == connection_id)
+            }) {
+                continue;
+            }
             changed = true;
             match event {
-                Event::Message { agent_id, value } => {
+                Event::NewSession {
+                    agent_id, reply, ..
+                } => {
+                    let source = self
+                        .projects
+                        .iter()
+                        .enumerate()
+                        .find_map(|(index, project)| {
+                            project
+                                .agents
+                                .iter()
+                                .find(|agent| agent.config.id == agent_id)
+                                .filter(|agent| !agent.config.archived)
+                                .map(|agent| {
+                                    (
+                                        index,
+                                        agent.config.command.clone(),
+                                        agent.config.display_name.clone(),
+                                    )
+                                })
+                        });
+                    if let Some((project_index, command, name)) = source {
+                        self.start_agent_for_project(project_index, command, name, window, cx);
+                        window.activate_window();
+                        let _ = reply.send(Ok(self.next_agent_id - 1));
+                    } else {
+                        let _ =
+                            reply.send(Err("Calling session is archived or unavailable".into()));
+                    }
+                }
+                Event::Message {
+                    agent_id, value, ..
+                } => {
                     let may_finish = value["params"]["update"]["sessionUpdate"] == "state_update"
                         && value["params"]["update"]["state"] == "idle"
                         || value["id"].as_u64().is_some_and(|id| id >= 3);
@@ -747,7 +788,9 @@ impl Workspace {
                         }
                     }
                 }
-                Event::Disconnected { agent_id, reason } => {
+                Event::Disconnected {
+                    agent_id, reason, ..
+                } => {
                     if let Some((agent, _)) = self.agent_mut(agent_id) {
                         agent.elicitations.clear();
                         agent.controller.disconnected(reason);
