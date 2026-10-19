@@ -4,6 +4,8 @@ Notable changes to Agentaps are recorded here.
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-10-19
+
 ### Added
 
 - Local agents can open a fresh session with `agentaps new-session` and receive a bundled `agentaps` skill through ACP prompt context to discover available commands.
@@ -15,6 +17,8 @@ Notable changes to Agentaps are recorded here.
 - Record voice messages or attach audio files in the desktop composer and send the recording directly to audio-capable ACP agents for transcription and a response. Queued recordings survive restarts.
 
 ### Fixed
+
+- Registry release validation includes the Linux audio dependencies required by voice recording.
 
 - Keep both columns visible in Split diffs by wrapping long lines, and retain global keyboard shortcuts after switching to an empty workspace.
 
@@ -412,7 +416,8 @@ Notable changes to Agentaps are recorded here.
 - Added chat controls for queued messages, stopping turns, resetting agent context, and completing agent slash commands.
 - Added ACP form questions with answer, decline, and cancel actions.
 
-[Unreleased]: https://github.com/domenkozar/agentaps/compare/v0.5.2...HEAD
+[Unreleased]: https://github.com/cachix/agentaps/compare/v0.6.0...HEAD
+[0.6.0]: https://github.com/cachix/agentaps/compare/v0.5.2...v0.6.0
 [0.5.2]: https://github.com/domenkozar/agentaps/compare/v0.5.1...v0.5.2
 [0.5.1]: https://github.com/domenkozar/agentaps/compare/v0.5.0...v0.5.1
 [0.5.0]: https://github.com/domenkozar/agentaps/compare/v0.4.0...v0.5.0
