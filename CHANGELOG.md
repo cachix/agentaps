@@ -4,6 +4,10 @@ Notable changes to Agentaps are recorded here.
 
 ## [Unreleased]
 
+### Changed
+
+- Website fallback downloads point to Agentaps 0.6.0, including separate Ubuntu 24.04 and 26.04 installers.
+
 ## [0.6.0] - 2026-10-19
 
 ### Added
