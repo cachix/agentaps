@@ -592,11 +592,7 @@ impl Workspace {
                         .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
                         .on_click(cx.listener(move |this, _, window, cx| {
                             cx.stop_propagation();
-                            this.open_picker(
-                                PickerStep::ProjectAgents { project_index },
-                                window,
-                                cx,
-                            );
+                            this.open_picker(PickerStep::Agents { project_index }, window, cx);
                         })),
                 )
                 .when(

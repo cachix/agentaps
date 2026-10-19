@@ -478,13 +478,6 @@ impl Render for Workspace {
         ))]
         self.sync_terminals(cx);
         let palette = theme::palette(cx);
-        let project_agent_dialog = matches!(
-            self.view,
-            WorkspaceView::NewSession {
-                step: PickerStep::ProjectAgents { .. },
-                ..
-            }
-        );
         let root = div()
             .track_focus(&self.workspace_focus)
             .relative()
@@ -612,9 +605,6 @@ impl Render for Workspace {
                             .left(rems(0.5))
                             .child(self.render_show_sidebar(cx)),
                     )
-                })
-                .when(project_agent_dialog, |workspace| {
-                    self.render_picker(workspace, cx)
                 }),
         )
     }

@@ -88,7 +88,7 @@ impl Workspace {
 
     pub(super) fn start_project_terminal(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let WorkspaceView::NewSession {
-            step: PickerStep::Agents { project_index } | PickerStep::ProjectAgents { project_index },
+            step: PickerStep::Agents { project_index },
             ..
         } = self.view
         else {
@@ -287,14 +287,7 @@ impl Workspace {
         let theme = terminal_theme(cx);
         let obscured = self.settings.is_some()
             || self.mobile_access.pairing_visible
-            || self.mobile_access.provider_prompt.is_some()
-            || matches!(
-                self.view,
-                WorkspaceView::NewSession {
-                    step: PickerStep::ProjectAgents { .. },
-                    ..
-                }
-            );
+            || self.mobile_access.provider_prompt.is_some();
         let visible: HashSet<u64> = if obscured {
             HashSet::new()
         } else {

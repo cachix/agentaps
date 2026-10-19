@@ -202,7 +202,6 @@ enum PickerStep {
     CloneRepository,
     ChangeFolder { session: SessionLocation },
     Agents { project_index: usize },
-    ProjectAgents { project_index: usize },
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -222,10 +221,6 @@ impl WorkspaceView {
     fn highlighted_session(self) -> Option<SessionLocation> {
         match self {
             Self::Conversation(session) => Some(session),
-            Self::NewSession {
-                step: PickerStep::ProjectAgents { .. },
-                return_to,
-            } => return_to,
             _ => None,
         }
     }
@@ -241,11 +236,7 @@ impl WorkspaceView {
     fn displayed_session(self) -> Option<SessionLocation> {
         match self {
             Self::Conversation(session) => Some(session),
-            Self::Archive { return_to }
-            | Self::NewSession {
-                step: PickerStep::ProjectAgents { .. },
-                return_to,
-            } => return_to,
+            Self::Archive { return_to } => return_to,
             Self::Empty | Self::NewSession { .. } => None,
         }
     }
@@ -1385,27 +1376,6 @@ impl Workspace {
     fn back_from_picker(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         match self.view {
             WorkspaceView::NewSession {
-                step: PickerStep::ProjectAgents { .. },
-                return_to,
-            } => {
-                self.set_view(
-                    return_to
-                        .map(WorkspaceView::Conversation)
-                        .unwrap_or(WorkspaceView::Empty),
-                    window,
-                    cx,
-                );
-                if return_to.is_some() {
-                    self.conversation
-                        .composer
-                        .update(cx, |input, cx| input.focus(window, cx));
-                } else {
-                    self.sidebar_search
-                        .update(cx, |input, cx| input.focus(window, cx));
-                }
-                cx.notify();
-            }
-            WorkspaceView::NewSession {
                 step: PickerStep::Agents { .. } | PickerStep::CloneRepository,
                 ..
             } => self.open_picker(PickerStep::Folders, window, cx),
@@ -1639,7 +1609,7 @@ impl Workspace {
             feature = "ghostty-terminal",
             any(target_os = "linux", target_os = "macos")
         )) && matches!(self.view, WorkspaceView::NewSession {
-                step: PickerStep::Agents { project_index } | PickerStep::ProjectAgents { project_index }, ..
+                step: PickerStep::Agents { project_index }, ..
             } if self.projects[project_index].ssh_host.is_none())
             && score(self.picker.input.read(cx).value().trim(), "Terminal").is_some()
     }
@@ -1741,7 +1711,7 @@ impl Workspace {
         cx: &mut Context<Self>,
     ) {
         let WorkspaceView::NewSession {
-            step: PickerStep::Agents { project_index } | PickerStep::ProjectAgents { project_index },
+            step: PickerStep::Agents { project_index },
             ..
         } = self.view
         else {
@@ -1952,7 +1922,7 @@ impl Workspace {
                 }
             }
             WorkspaceView::NewSession {
-                step: PickerStep::Agents { .. } | PickerStep::ProjectAgents { .. },
+                step: PickerStep::Agents { .. },
                 ..
             } => {
                 if let Some(agent) = self.agent_results(cx).get(self.picker.selection).cloned() {
@@ -2293,7 +2263,7 @@ impl Workspace {
             PickerStep::Folders | PickerStep::ChangeFolder { .. } => {
                 self.picker.folder_search.results().len()
             }
-            PickerStep::Agents { .. } | PickerStep::ProjectAgents { .. } => {
+            PickerStep::Agents { .. } => {
                 self.agent_results(cx).len()
                     + usize::from(self.terminal_picker_available(cx))
                     + usize::from(!self.picker.input.read(cx).value().trim().is_empty())
@@ -2311,9 +2281,7 @@ impl Workspace {
                 cx.notify();
             }
             "escape" => {
-                if matches!(step, PickerStep::ProjectAgents { .. })
-                    || self.picker.input.read(cx).value().is_empty()
-                {
+                if self.picker.input.read(cx).value().is_empty() {
                     self.back_from_picker(window, cx);
                 } else {
                     self.picker
@@ -2497,17 +2465,6 @@ impl Workspace {
             any(target_os = "linux", target_os = "macos")
         ))]
         if self.terminal_focused(window, cx) {
-            return;
-        }
-        if matches!(
-            self.view,
-            WorkspaceView::NewSession {
-                step: PickerStep::ProjectAgents { .. },
-                ..
-            }
-        ) {
-            self.back_from_picker(window, cx);
-            cx.stop_propagation();
             return;
         }
         if self.settings.is_some() {

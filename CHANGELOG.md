@@ -10,6 +10,8 @@ Notable changes to Agentaps are recorded here.
 
 ### Changed
 
+- Project sidebar + buttons open the shared inline session picker with that project selected instead of a modal dialog.
+
 - Website fallback downloads point to Agentaps 0.6.0, including separate Ubuntu 24.04 and 26.04 installers.
 
 ## [0.6.0] - 2026-10-19

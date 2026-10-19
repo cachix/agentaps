@@ -602,7 +602,7 @@ fn zoom_shortcuts_and_menu_actions_change_the_font_scale(cx: &mut gpui_kit::Test
     verify_cli_new_session(&restored, temp.path(), cx);
     verify_resets_and_folder_moves_preserve_harness_references(&restored, temp.path(), cx);
     verify_project_session_sidebar(&restored, cx);
-    verify_project_agent_dialog(&restored, cx);
+    verify_project_agent_picker(&restored, cx);
     verify_inline_session_renaming(&restored, cx);
     verify_workspace_shortcuts(&restored, cx);
     verify_settings_apply_and_persist(&restored, temp.path(), cx);
@@ -2448,7 +2448,7 @@ fn verify_project_session_sidebar(
     });
 }
 
-fn verify_project_agent_dialog(
+fn verify_project_agent_picker(
     workspace: &Entity<Workspace>,
     cx: &mut gpui_kit::VisualTestContext,
 ) {
@@ -2471,9 +2471,17 @@ fn verify_project_agent_dialog(
                 input.replace_all("Unsent draft", window, cx)
             });
             this.toggle_project(1, cx);
-            this.open_picker(PickerStep::ProjectAgents { project_index: 1 }, window, cx);
-            assert_eq!(this.view.displayed_session(), Some(previous));
-            assert_eq!(this.view.highlighted_session(), Some(previous));
+            this.open_picker(PickerStep::Agents { project_index: 1 }, window, cx);
+            assert_eq!(this.view.displayed_session(), None);
+            assert_eq!(this.view.highlighted_session(), None);
+            assert_eq!(this.view.return_to(), Some(previous));
+            assert!(
+                this.picker
+                    .input
+                    .read(cx)
+                    .focus_handle(cx)
+                    .is_focused(window)
+            );
             let ssh_host = this.projects[1].ssh_host.take();
             let terminal_supported = cfg!(all(
                 feature = "ghostty-terminal",
@@ -2500,6 +2508,16 @@ fn verify_project_agent_dialog(
     });
     cx.run_until_parked();
     cx.simulate_keystrokes("escape");
+    cx.update(|_, cx| {
+        assert_eq!(
+            workspace.read(cx).view,
+            WorkspaceView::NewSession {
+                step: PickerStep::Folders,
+                return_to: Some(previous),
+            }
+        );
+    });
+    cx.simulate_keystrokes("escape");
     cx.update(|window, cx| {
         workspace.update(cx, |this, cx| {
             assert_eq!(this.view, WorkspaceView::Conversation(previous));
@@ -2512,7 +2530,7 @@ fn verify_project_agent_dialog(
                 this.collapsed_projects.contains(&1),
                 "dismissing the chooser keeps its project collapsed"
             );
-            this.open_picker(PickerStep::ProjectAgents { project_index: 1 }, window, cx);
+            this.open_picker(PickerStep::Agents { project_index: 1 }, window, cx);
         })
     });
     cx.run_until_parked();
@@ -2535,9 +2553,16 @@ fn verify_project_agent_dialog(
                 "a new session expands its project"
             );
             this.set_view(WorkspaceView::Empty, window, cx);
-            this.open_picker(PickerStep::ProjectAgents { project_index: 0 }, window, cx);
+            this.open_picker(PickerStep::Agents { project_index: 0 }, window, cx);
             this.back_from_picker(window, cx);
-            assert_eq!(this.view, WorkspaceView::Empty);
+            assert_eq!(
+                this.view,
+                WorkspaceView::NewSession {
+                    step: PickerStep::Folders,
+                    return_to: None,
+                }
+            );
+            this.set_view(WorkspaceView::Empty, window, cx);
             this.picker.available_agents = available;
         })
     });
