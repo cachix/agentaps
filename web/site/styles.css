@@ -13,8 +13,9 @@ h1, h2, h3, p { margin-top: 0; }
 .site-header { position: sticky; top: 0; z-index: 10; background: #10151cf5; border-bottom: 1px solid var(--border); }
 .header-inner { height: 76px; display: flex; align-items: center; justify-content: space-between; gap: 24px; }
 .brand-group { display: flex; align-items: center; flex-wrap: wrap; gap: 16px; }
-.github-stars { display: inline-flex; align-items: center; min-height: 40px; }
-.github-stars img { display: block; height: 28px; max-width: 100%; }
+.github-badge { display: inline-flex; align-items: center; min-height: 40px; }
+.github-badge img { display: block; box-sizing: content-box; height: 20px; max-width: 100%; border: 1px solid #30363d; border-radius: 5px; }
+.github-badge:hover img { border-color: #8b949e; }
 .brand { display: inline-flex; align-items: center; gap: 10px; font-size: 24px; font-weight: 600; letter-spacing: -.055em; }
 .brand-mark { display: flex; flex-direction: column; justify-content: center; gap: 4px; width: 25px; height: 28px; }
 .brand-mark span { width: 24px; height: 4px; background: var(--accent); }

@@ -4,6 +4,10 @@ Notable changes to Agentaps are recorded here.
 
 ## [Unreleased]
 
+### Fixed
+
+- The website header shows the latest release and star count for `cachix/agentaps` in compact dark badges linking to the GitHub release and repository.
+
 ### Changed
 
 - Website fallback downloads point to Agentaps 0.6.0, including separate Ubuntu 24.04 and 26.04 installers.
