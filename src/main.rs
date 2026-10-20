@@ -23,6 +23,8 @@ mod remote;
 mod session;
 #[cfg(unix)]
 mod shell_env;
+#[cfg(target_os = "linux")]
+mod system_notifications;
 mod theme;
 mod theming;
 

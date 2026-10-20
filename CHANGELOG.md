@@ -6,6 +6,8 @@ Notable changes to Agentaps are recorded here.
 
 ### Fixed
 
+- Linux desktop notifications share a single connection and worker, replace repeated alerts for the same session, and release tracking when closed, activated, or dismissed.
+
 - Reduce Linux memory retained after temporary worker allocations by returning free heap tails to the operating system sooner.
 
 - Recover expired local Claude Code logins with browser sign-in and automatic session reconnection, while preserving remote-host guidance for SSH sessions.

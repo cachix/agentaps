@@ -517,6 +517,8 @@ struct Workspace {
     font: Option<String>,
     diff_layout: DiffPresentation,
     notifications: bool,
+    #[cfg(target_os = "linux")]
+    notification_service: crate::system_notifications::Service,
     claude_executable: Option<String>,
     agent_executables: BTreeMap<KnownAgent, String>,
     saved_agents: Vec<SavedAgent>,
@@ -1042,6 +1044,8 @@ impl Workspace {
             font: config.font.clone(),
             diff_layout: config.diff_layout,
             notifications: config.notifications,
+            #[cfg(target_os = "linux")]
+            notification_service: crate::system_notifications::Service::default(),
             claude_executable: config.claude_executable.clone(),
             agent_executables: config.agent_executables.clone(),
             saved_agents: config.saved_agents.clone(),

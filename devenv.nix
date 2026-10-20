@@ -7,6 +7,7 @@
     python312
     zig_0_16
   ] ++ lib.optionals stdenv.hostPlatform.isLinux [
+    dbus
     alsa-lib
     gtk4
     qt6.qtbase

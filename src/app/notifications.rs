@@ -70,12 +70,55 @@ impl Workspace {
             || project_name.clone(),
             |session_title| format!("{project_name}: {session_title}"),
         );
-        cx.show_system_notification(SystemNotification {
-            tag: agent_id.to_string().into(),
-            title: title.into(),
-            body: body.into(),
-            actions: Vec::new(),
-        });
+        self.show_notification(
+            SystemNotification {
+                tag: agent_id.to_string().into(),
+                title: title.into(),
+                body: body.into(),
+                actions: Vec::new(),
+            },
+            cx,
+        );
+    }
+
+    fn show_notification(&self, notification: SystemNotification, cx: &mut Context<Self>) {
+        #[cfg(target_os = "linux")]
+        if !cx.is_test() {
+            if let Err(error) =
+                self.notification_service
+                    .show(crate::system_notifications::Notification {
+                        tag: notification.tag.to_string(),
+                        title: notification.title.to_string(),
+                        body: notification.body.to_string(),
+                    })
+            {
+                eprintln!("Could not show desktop notification: {error}");
+            }
+            return;
+        }
+        cx.show_system_notification(notification);
+    }
+
+    pub(super) fn poll_notifications(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        #[cfg(target_os = "linux")]
+        if !cx.is_test() {
+            for tag in self.notification_service.take_actions() {
+                self.open_notified_session(&tag, window, cx);
+            }
+            if window.is_window_active()
+                && self.settings.is_none()
+                && let Some(session) = self.view.displayed_session()
+            {
+                self.notification_service.dismiss(
+                    &self.projects[session.project_index].agents[session.agent_index]
+                        .config
+                        .id
+                        .to_string(),
+                );
+            }
+        }
+        #[cfg(not(target_os = "linux"))]
+        let _ = (window, cx);
     }
 
     pub(super) fn open_notified_session(
@@ -103,6 +146,10 @@ impl Workspace {
             return;
         }
         self.notifications = enabled;
+        #[cfg(target_os = "linux")]
+        if !enabled {
+            self.notification_service.dismiss_all();
+        }
         self.persist();
         cx.notify();
     }

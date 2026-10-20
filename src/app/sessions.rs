@@ -669,6 +669,7 @@ impl Workspace {
     }
 
     pub(super) fn poll_events(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.poll_notifications(window, cx);
         let mut changed = false;
         if !self.deferred_connections.is_empty() {
             let visible_ready = self.view.displayed_session().is_some_and(|session| {
