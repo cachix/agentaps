@@ -719,6 +719,34 @@ fn claude_refresh_lock_does_not_retry_after_agent_output() {
 }
 
 #[test]
+fn claude_expired_login_stops_failed_turn_and_waits_for_sign_in() {
+    for protocol in [ProtocolVersion::V1, ProtocolVersion::V2] {
+        let mut agent = agent(protocol);
+        agent.config.command = vec!["claude-agent-acp".into()];
+        agent.active_work = true;
+        agent.awaiting_response = true;
+        agent.config.was_working = true;
+        agent.config.active_prompt = Some("Review this PR".into());
+        agent.config.pending_prompts.push("Next request".into());
+        agent.handle_message(Path::new("/"), &json!({"id":3,"error":{
+            "code":-32603,
+            "message":"Internal error: Failed to authenticate: OAuth session expired and could not be refreshed"
+        }}));
+        assert!(agent.auth_required);
+        assert!(!agent.active_work);
+        assert!(!agent.awaiting_response);
+        assert!(!agent.config.was_working);
+        assert!(agent.config.active_prompt.is_none());
+        assert!(!agent.start_next_queued_prompt());
+        assert_eq!(agent.config.pending_prompts.len(), 1);
+        assert!(agent.start_prompt("Try again".into()).is_err());
+        let text = &agent.messages.last().unwrap().text;
+        assert!(text.contains("Click Sign in to Claude"));
+        assert!(text.contains("Original error: ACP error:"));
+    }
+}
+
+#[test]
 fn claude_refresh_lock_does_not_replay_accepted_v2_message() {
     let mut agent = agent(ProtocolVersion::V2);
     agent.awaiting_response = true;

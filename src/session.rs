@@ -155,6 +155,8 @@ pub(crate) struct SessionController {
     pub(crate) restoring: Option<RestoreMode>,
     pub(crate) recovery_due: Option<Instant>,
     pub(crate) oauth_retry: Option<OAuthRetry>,
+    pub(crate) login: Option<crate::claude_auth::Login>,
+    pub(crate) auth_required: bool,
     pub(crate) next_request_id: u64,
     pub(crate) messages: Vec<ChatEntry>,
     pub(crate) permissions: Vec<Permission>,
@@ -610,6 +612,8 @@ impl SessionController {
             restoring: None,
             recovery_due: None,
             oauth_retry: None,
+            login: None,
+            auth_required: false,
             next_request_id: 3,
             messages,
             permissions: Vec::new(),
@@ -789,6 +793,9 @@ impl SessionController {
     }
 
     pub(crate) fn start_prompt(&mut self, prompt: Prompt) -> Result<(), String> {
+        if self.auth_required || self.login.is_some() {
+            return Err("Sign in to Claude before sending another request.".into());
+        }
         if self.resetting_context {
             return Err("Agent is still connecting".into());
         }
@@ -868,6 +875,8 @@ impl SessionController {
 
     pub(crate) fn start_next_queued_prompt(&mut self) -> bool {
         if self.active_work
+            || self.auth_required
+            || self.login.is_some()
             || self.resetting_context
             || self.restoring.is_some()
             || self.config.was_working
@@ -894,7 +903,28 @@ impl SessionController {
     }
 
     pub(crate) fn log(&mut self, role: Role, text: impl Into<String>) {
-        self.push_message(role, text.into(), Vec::new());
+        let text = text.into();
+        let text = if role == Role::System
+            && crate::discovery::known_agent(&self.config.command)
+                == Some(crate::config::KnownAgent::Claude)
+            && text.contains("OAuth session expired and could not be refreshed")
+        {
+            self.auth_required = true;
+            self.finish_turn(Status::Error);
+            self.config.was_working = false;
+            self.recovery_due = None;
+            self.oauth_retry = None;
+            format!(
+                "Claude Code's login expired and could not be renewed. \
+                 Click Sign in to Claude above the composer and complete the browser sign-in. \
+                 Agentaps will reconnect this session; then resend your request. \
+                 For SSH projects, sign in on the remote host with `claude auth login`.\n\n\
+                 Original error: {text}"
+            )
+        } else {
+            text
+        };
+        self.push_message(role, text, Vec::new());
     }
 
     fn push_message(&mut self, role: Role, text: String, images: Vec<ChatImage>) {
