@@ -1,6 +1,78 @@
 use super::*;
 
 impl Workspace {
+    pub(super) fn sign_in_to_claude(
+        &mut self,
+        project_index: usize,
+        agent_index: usize,
+        cx: &mut Context<Self>,
+    ) {
+        let project = &mut self.projects[project_index];
+        let agent = &mut project.agents[agent_index];
+        if project.ssh_host.is_some() || agent.login.is_some() || agent.active_work {
+            return;
+        }
+        if known_agent(&agent.config.command) != Some(KnownAgent::Claude) {
+            return;
+        }
+        let executable = std::env::var_os("CLAUDE_CODE_EXECUTABLE")
+            .map(PathBuf::from)
+            .or_else(|| self.claude_executable.as_ref().map(PathBuf::from))
+            .or_else(|| crate::discovery::find_executable("claude"));
+        match executable
+            .ok_or_else(|| {
+                "Claude Code was not found. Set its executable in Settings > Agents.".into()
+            })
+            .and_then(|executable| crate::claude_auth::Login::start(&executable, &project.path))
+        {
+            Ok(login) => agent.login = Some(login),
+            Err(error) => agent.log(Role::System, error),
+        }
+        cx.notify();
+    }
+
+    fn poll_claude_login(&mut self, cx: &mut Context<Self>) -> bool {
+        let mut changed = false;
+        let mut reconnect = Vec::new();
+        for (project_index, project) in self.projects.iter_mut().enumerate() {
+            for (agent_index, agent) in project.agents.iter_mut().enumerate() {
+                let Some(login) = agent.login.as_mut() else {
+                    continue;
+                };
+                let previous_url = login.url.clone();
+                let result = login.poll();
+                changed |= login.url != previous_url;
+                let Some(result) = result else { continue };
+                changed = true;
+                agent.login = None;
+                match result {
+                    Ok(()) => {
+                        agent.auth_required = false;
+                        agent.active_work = false;
+                        agent.awaiting_response = false;
+                        agent.config.was_working = false;
+                        agent.config.active_prompt = None;
+                        agent.oauth_retry = None;
+                        agent.status = Status::Connecting;
+                        agent.protocol = None;
+                        agent.elicitations.clear();
+                        agent.permissions.clear();
+                        agent.log(Role::System, "Signed in to Claude. Reconnecting this session; resend your request when it is ready.");
+                        reconnect.push((project_index, agent_index));
+                    }
+                    Err(error) => agent.log(Role::System, error),
+                }
+            }
+        }
+        for (project_index, agent_index) in reconnect {
+            self.connect(project_index, agent_index);
+        }
+        if changed {
+            cx.notify();
+        }
+        changed
+    }
+
     pub(super) fn open_rename_session(
         &mut self,
         agent_id: u64,
@@ -798,6 +870,7 @@ impl Workspace {
                 }
             }
         }
+        changed |= self.poll_claude_login(cx);
         self.mark_displayed_agent_viewed();
         for project in &mut self.projects {
             for agent in &mut project.agents {

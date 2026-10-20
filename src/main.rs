@@ -2,6 +2,7 @@ mod acp;
 mod app;
 mod appearance;
 mod audio;
+mod claude_auth;
 mod cli;
 mod config;
 mod diff_view;

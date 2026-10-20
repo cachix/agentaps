@@ -153,6 +153,9 @@ impl Workspace {
                 }),
         );
         let location = project.display_path();
+        let local_claude = project.ssh_host.is_none()
+            && known_agent(&agent.config.command) == Some(KnownAgent::Claude);
+        let can_sign_in = !agent.active_work && agent.login.is_none();
         let can_reset = agent
             .context
             .is_some_and(|(used, size)| used > 0 && size > 0)
@@ -227,7 +230,21 @@ impl Workspace {
                 let reset_view = menu_view.clone();
                 let agent_view = menu_view.clone();
                 let archive_view = menu_view.clone();
+                let sign_in_view = menu_view.clone();
                 let menu = menu
+                    .when(local_claude, |menu| {
+                        menu.item(
+                            PopupMenuItem::new("Sign in to Claude…")
+                                .disabled(!can_sign_in)
+                                .on_click(move |_, _, cx| {
+                                    sign_in_view.update(cx, |this, cx| {
+                                        if this.activate_session_pane(pane_id, agent_id, cx) {
+                                            this.sign_in_to_claude(project_index, agent_index, cx);
+                                        }
+                                    });
+                                }),
+                        )
+                    })
                     .item(
                         PopupMenuItem::new("Rename session…").on_click(move |_, window, cx| {
                             rename_view.update(cx, |this, cx| {
@@ -451,6 +468,56 @@ impl Workspace {
                     ),
                 ),
         );
+        if agent.auth_required || agent.login.is_some() {
+            let signing_in = agent.login.is_some();
+            let remote = project.ssh_host.is_some();
+            let login_url = agent.login.as_ref().and_then(|login| login.url.clone());
+            chat = chat.child(
+                div()
+                    .w_full()
+                    .px_4()
+                    .py_2()
+                    .flex()
+                    .items_center()
+                    .gap_2()
+                    .child(
+                        Button::new(("claude-sign-in", agent_id))
+                            .label(if signing_in {
+                                "Waiting for browser sign-in…"
+                            } else {
+                                "Sign in to Claude"
+                            })
+                            .disabled(signing_in || remote || agent.active_work)
+                            .tooltip(if remote {
+                                "Sign in on the SSH host with claude auth login"
+                            } else {
+                                "Sign in to your Claude subscription in the browser"
+                            })
+                            .on_click(self.pane_listener(cx, move |this, _, _, cx| {
+                                this.sign_in_to_claude(project_index, agent_index, cx);
+                            })),
+                    )
+                    .when_some(login_url, |row, url| {
+                        row.child(
+                            Button::new(("claude-open-login", agent_id))
+                                .ghost()
+                                .label("Open sign-in page")
+                                .on_click(move |_, _, cx| cx.open_url(&url)),
+                        )
+                    })
+                    .when(signing_in, |row| {
+                        row.child(
+                            Button::new(("claude-cancel-login", agent_id))
+                                .ghost()
+                                .label("Cancel")
+                                .on_click(self.pane_listener(cx, move |this, _, _, cx| {
+                                    this.projects[project_index].agents[agent_index].login = None;
+                                    cx.notify();
+                                })),
+                        )
+                    }),
+            );
+        }
         let file_results = self.file_results(cx);
         if self.file_mention_active(cx) {
             let mut menu = div()
@@ -675,6 +742,8 @@ impl Workspace {
             });
         let send_tooltip = format!("Send ({})", self.shortcut_label(Shortcut::Send));
         let can_send = !is_recording
+            && !agent.auth_required
+            && agent.login.is_none()
             && (!draft_images.is_empty()
                 || !draft_files.is_empty()
                 || !self

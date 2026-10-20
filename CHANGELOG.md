@@ -6,6 +6,8 @@ Notable changes to Agentaps are recorded here.
 
 ### Fixed
 
+- Recover expired local Claude Code logins with browser sign-in and automatic session reconnection, while preserving remote-host guidance for SSH sessions.
+
 - The website header shows the latest release and star count for `cachix/agentaps` in compact dark badges linking to the GitHub release and repository.
 
 ### Changed
