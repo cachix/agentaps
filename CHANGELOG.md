@@ -6,6 +6,8 @@ Notable changes to Agentaps are recorded here.
 
 ### Fixed
 
+- Reduce Linux memory retained after temporary worker allocations by returning free heap tails to the operating system sooner.
+
 - Recover expired local Claude Code logins with browser sign-in and automatic session reconnection, while preserving remote-host guidance for SSH sessions.
 
 - The website header shows the latest release and star count for `cachix/agentaps` in compact dark badges linking to the GitHub release and repository.

@@ -14,6 +14,8 @@ mod git_clone;
 mod git_diff;
 mod git_sync;
 mod images;
+#[cfg(all(target_os = "linux", target_env = "gnu"))]
+mod memory;
 mod mobile;
 mod panes;
 mod persistence;
@@ -25,6 +27,9 @@ mod theme;
 mod theming;
 
 fn main() {
+    #[cfg(all(target_os = "linux", target_env = "gnu"))]
+    memory::configure_allocator();
+
     if std::env::args_os()
         .nth(1)
         .is_some_and(|arg| arg == "new-session")
