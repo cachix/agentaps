@@ -161,7 +161,12 @@ impl Workspace {
             .iter()
             .flat_map(|project| &project.agents)
             .filter(|agent| agent.config.archived)
-            .count();
+            .count()
+            + self
+                .projects
+                .iter()
+                .filter(|project| project.archived)
+                .count();
         for (index, location) in self.sidebar_results(&session_query).into_iter().enumerate() {
             let SessionLocation {
                 project_index,
@@ -425,7 +430,10 @@ impl Workspace {
                 continue;
             }
             let collapsed = self.collapsed_projects.contains(&project_index);
-            if !has_sessions && (archive_view || active_only || !project.agents.is_empty()) {
+            if (!archive_view && project.archived)
+                || (!has_sessions && archive_view && !project.archived)
+                || (active_only && !has_sessions)
+            {
                 continue;
             }
             let name = project
@@ -519,18 +527,36 @@ impl Workspace {
                         })
                         .child(name),
                 )
-                .when(!archive_view && has_sessions, |header| {
+                .when(!archive_view || project.archived, |header| {
                     header.child(
                         sidebar_action(palette, false)
                             .id(("project-archive", project_index))
                             .invisible()
                             .group_hover(row_group.clone(), |style| style.visible())
-                            .child(Icon::new(IconName::Inbox).size(px(14.)))
-                            .tooltip(|window, cx| Tooltip::new("Archive project").build(window, cx))
+                            .child(
+                                Icon::new(if archive_view {
+                                    IconName::Undo2
+                                } else {
+                                    IconName::Inbox
+                                })
+                                .size(px(14.)),
+                            )
+                            .tooltip(move |window, cx| {
+                                Tooltip::new(if archive_view {
+                                    "Restore project"
+                                } else {
+                                    "Archive project"
+                                })
+                                .build(window, cx)
+                            })
                             .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
                             .on_click(cx.listener(move |this, _, window, cx| {
                                 cx.stop_propagation();
-                                this.archive_project(project_index, window, cx);
+                                if archive_view {
+                                    this.restore_project(project_index, cx);
+                                } else {
+                                    this.archive_project(project_index, window, cx);
+                                }
                             })),
                     )
                 })

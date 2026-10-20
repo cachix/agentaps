@@ -6,6 +6,8 @@ Notable changes to Agentaps are recorded here.
 
 ### Fixed
 
+- Keep folders visible after their last session is archived and allow projects, including empty folders, to be archived and restored independently.
+
 - The website header shows the latest release and star count for `cachix/agentaps` in compact dark badges linking to the GitHub release and repository.
 
 ### Changed

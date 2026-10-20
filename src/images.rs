@@ -176,6 +176,7 @@ mod tests {
         });
         let config = Config {
             projects: vec![ProjectConfig {
+                archived: false,
                 path: "/project".into(),
                 ssh_host: None,
                 agents: vec![agent],
