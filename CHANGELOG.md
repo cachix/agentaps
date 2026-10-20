@@ -6,6 +6,8 @@ Notable changes to Agentaps are recorded here.
 
 ### Fixed
 
+- Diff watching skips ignored and untracked dependency trees, preserves updates for tracked files, and avoids following directory symlinks to prevent runaway memory use.
+
 - Linux desktop notifications share a single connection and worker, replace repeated alerts for the same session, and release tracking when closed, activated, or dismissed.
 
 - Reduce Linux memory retained after temporary worker allocations by returning free heap tails to the operating system sooner.

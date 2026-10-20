@@ -756,9 +756,17 @@ impl Workspace {
             }
         }
         let mut watched_change = false;
-        while let Ok(generation) = self.diff.watch_rx.try_recv() {
-            watched_change |=
-                self.diff.watched_project.is_some() && generation == self.diff.watch_generation;
+        let mut rescan_watch = false;
+        while let Ok(change) = self.diff.watch_rx.try_recv() {
+            if self.diff.watched_project.is_some()
+                && change.generation == self.diff.watch_generation
+            {
+                watched_change = true;
+                rescan_watch |= change.rescan;
+            }
+        }
+        if rescan_watch {
+            self.diff.watched_project = None;
         }
         let now = Instant::now();
         if watched_change {
