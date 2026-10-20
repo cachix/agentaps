@@ -604,13 +604,13 @@ fn zoom_shortcuts_and_menu_actions_change_the_font_scale(cx: &mut gpui_kit::Test
     verify_project_session_sidebar(&restored, cx);
     verify_project_agent_picker(&restored, cx);
     verify_inline_session_renaming(&restored, cx);
+    verify_project_archiving(&restored, cx);
     verify_workspace_shortcuts(&restored, cx);
     verify_settings_apply_and_persist(&restored, temp.path(), cx);
     verify_key_bindings(&restored, cx);
     verify_notifications_for_background_sessions(&restored, temp.path(), cx);
     verify_repository_cloning(&restored, temp.path(), cx);
     verify_split_panes(&restored, temp.path(), cx);
-    verify_project_archiving(&restored, cx);
     verify_pane_resize_grab_areas(&restored, cx);
     // SAFETY: restore the process environment modified for this test.
     unsafe {
@@ -672,6 +672,7 @@ fn verify_cli_new_session(
             );
             let connection_id = source.connection.as_ref().unwrap().id;
             this.projects = vec![ProjectView {
+                archived: false,
                 path: path.to_owned(),
                 ssh_host: None,
                 branch: "main".into(),
@@ -765,6 +766,7 @@ fn verify_resets_and_folder_moves_preserve_harness_references(
             original.config.custom_title = Some("Keep my session name".into());
             original.log(Role::User, "Previous conversation");
             this.projects = vec![ProjectView {
+                archived: false,
                 path: path.to_owned(),
                 ssh_host: None,
                 branch: "main".into(),
@@ -800,6 +802,7 @@ fn verify_resets_and_folder_moves_preserve_harness_references(
             this.projects[0].agents[0].controller.session_id = Some("reset-session".into());
             this.projects[0].agents[0].config.session_has_activity = true;
             this.projects.push(ProjectView {
+                archived: false,
                 path: path.join("other"),
                 ssh_host: None,
                 branch: "main".into(),
@@ -875,6 +878,7 @@ fn verify_workspace_shortcuts(workspace: &Entity<Workspace>, cx: &mut gpui_kit::
                 }
             });
             this.projects = vec![ProjectView {
+                archived: false,
                 path: PathBuf::from("."),
                 ssh_host: None,
                 branch: String::new(),
@@ -1006,6 +1010,7 @@ fn verify_inline_session_renaming(
             agent.config.id = agent_id;
             agent.config.command.clear();
             this.projects = vec![ProjectView {
+                archived: false,
                 path: PathBuf::from("."),
                 ssh_host: None,
                 branch: String::new(),
@@ -1234,6 +1239,7 @@ fn verify_settings_apply_and_persist(
             agent.config.command.clear();
             agent.status = Status::Connecting;
             this.projects = vec![ProjectView {
+                archived: false,
                 path: path.to_owned(),
                 ssh_host: None,
                 branch: "main".into(),
@@ -1551,6 +1557,7 @@ fn verify_notifications_for_background_sessions(
                 }
             });
             this.projects = vec![ProjectView {
+                archived: false,
                 path: path.to_owned(),
                 ssh_host: None,
                 branch: "main".into(),
@@ -1807,6 +1814,7 @@ fn verify_split_panes(
                 });
             }
             this.projects = vec![ProjectView {
+                archived: false,
                 path: path.to_owned(),
                 ssh_host: None,
                 branch: "main".into(),
@@ -1991,6 +1999,7 @@ fn verify_split_panes(
             });
             let other_path = path.join("other-checkout");
             this.projects.push(ProjectView {
+                archived: false,
                 path: other_path.clone(),
                 ssh_host: None,
                 branch: "main".into(),
@@ -2205,6 +2214,7 @@ fn verify_project_archiving(workspace: &Entity<Workspace>, cx: &mut gpui_kit::Vi
             };
             this.projects = vec![
                 ProjectView {
+                    archived: false,
                     path: PathBuf::from("/projects/archive"),
                     ssh_host: None,
                     branch: "main".into(),
@@ -2212,6 +2222,7 @@ fn verify_project_archiving(workspace: &Entity<Workspace>, cx: &mut gpui_kit::Vi
                     agents: vec![agent(801, false), agent(802, false), agent(803, true)],
                 },
                 ProjectView {
+                    archived: false,
                     path: PathBuf::from("/projects/keep"),
                     ssh_host: None,
                     branch: "main".into(),
@@ -2229,7 +2240,21 @@ fn verify_project_archiving(workspace: &Entity<Workspace>, cx: &mut gpui_kit::Vi
                 agent_index: 0,
             };
             this.set_view(WorkspaceView::Conversation(first), window, cx);
+            this.set_archived(0, 0, true, window, cx);
+            assert!(!this.projects[0].archived);
+            this.set_archived(0, 1, true, window, cx);
+            assert!(
+                !this.projects[0].archived,
+                "archiving the last session keeps its folder active"
+            );
+            this.projects[0].agents[0].config.archived = false;
+            this.projects[0].agents[1].config.archived = false;
+            this.set_view(WorkspaceView::Conversation(first), window, cx);
             this.archive_project(0, window, cx);
+            assert!(
+                this.projects[0].archived,
+                "explicit project archiving hides its folder"
+            );
             assert!(
                 this.projects[0]
                     .agents
@@ -2242,6 +2267,7 @@ fn verify_project_archiving(workspace: &Entity<Workspace>, cx: &mut gpui_kit::Vi
             let saved: Config =
                 serde_json::from_slice(&serde_json::to_vec(&this.config()).unwrap()).unwrap();
             assert!(saved.projects[0].agents.iter().all(|agent| agent.archived));
+            assert!(saved.projects[0].archived);
             assert_eq!(saved.projects[0].agents.len(), 3);
 
             this.archive_project(0, window, cx);
@@ -2254,6 +2280,20 @@ fn verify_project_archiving(workspace: &Entity<Workspace>, cx: &mut gpui_kit::Vi
             this.set_view(this.view.toggle_archive(), window, cx);
             assert_eq!(this.view, WorkspaceView::Empty);
             assert!(this.sidebar_results("").is_empty());
+            this.restore_project(0, cx);
+            assert!(!this.projects[0].archived);
+            assert!(
+                this.projects[0]
+                    .agents
+                    .iter()
+                    .all(|agent| agent.config.archived)
+            );
+            this.projects[0].agents.clear();
+            this.archive_project(0, window, cx);
+            assert!(this.projects[0].archived, "empty folders can be archived");
+            assert!(this.config().projects[0].archived);
+            this.restore_project(0, cx);
+            assert!(!this.config().projects[0].archived);
         });
     });
 }
@@ -2277,6 +2317,7 @@ fn verify_project_session_sidebar(
             };
             this.projects = vec![
                 ProjectView {
+                    archived: false,
                     path: PathBuf::from("/projects/first"),
                     ssh_host: None,
                     branch: "main".into(),
@@ -2288,6 +2329,7 @@ fn verify_project_session_sidebar(
                     ],
                 },
                 ProjectView {
+                    archived: false,
                     path: PathBuf::from("/projects/second"),
                     ssh_host: Some("remote".into()),
                     branch: "topic".into(),

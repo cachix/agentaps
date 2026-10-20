@@ -204,6 +204,8 @@ pub struct ForkSource {
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct ProjectConfig {
+    #[serde(default)]
+    pub archived: bool,
     pub path: PathBuf,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub ssh_host: Option<String>,
@@ -497,6 +499,18 @@ pub(crate) fn save_to(path: &Path, config: &Config) -> Result<(), String> {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn project_archive_state_defaults_to_active_and_survives_saving() {
+        let mut project: super::ProjectConfig =
+            serde_json::from_str(r#"{"path":"/project","agents":[]}"#).unwrap();
+        assert!(!project.archived);
+        project.archived = true;
+        let saved = serde_json::to_string(&project).unwrap();
+        let restored: super::ProjectConfig = serde_json::from_str(&saved).unwrap();
+        assert!(restored.archived);
+        assert!(restored.agents.is_empty());
+    }
+
     use super::*;
 
     use std::time::{SystemTime, UNIX_EPOCH};

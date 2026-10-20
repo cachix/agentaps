@@ -1384,6 +1384,7 @@ fn harness_history_reloads_after_restart() {
     let session_id = session.session_id.clone().unwrap();
     let config = Config {
         projects: vec![ProjectConfig {
+            archived: false,
             path: temp.path().to_owned(),
             ssh_host: None,
             agents: vec![session.snapshot()],

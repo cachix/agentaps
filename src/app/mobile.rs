@@ -337,6 +337,7 @@ impl Workspace {
                         index
                     } else {
                         self.projects.push(ProjectView {
+                            archived: false,
                             sync_counts: None,
                             branch: ssh_host.clone().unwrap_or_else(|| branch(&path)),
                             path: path.clone(),
@@ -451,6 +452,7 @@ pub(super) fn verify_session_switching_and_mobile_routing(
             let mut second_agent = test_agent(ProtocolVersion::V2);
             second_agent.config.id = 102;
             this.projects = vec![ProjectView {
+                archived: false,
                 path: root.to_owned(),
                 ssh_host: None,
                 branch: String::new(),

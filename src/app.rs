@@ -358,6 +358,7 @@ fn completed_file_text(
 }
 
 struct ProjectView {
+    archived: bool,
     path: PathBuf,
     ssh_host: Option<String>,
     branch: String,
@@ -982,6 +983,7 @@ impl Workspace {
             .projects
             .into_iter()
             .map(|project| ProjectView {
+                archived: project.archived,
                 branch: project
                     .ssh_host
                     .clone()
@@ -1228,11 +1230,9 @@ impl Workspace {
                 .composer
                 .update(cx, |input, cx| input.focus(window, cx));
         } else {
-            let view = if this
-                .projects
-                .iter()
-                .any(|project| project.agents.iter().any(|agent| agent.config.archived))
-            {
+            let view = if this.projects.iter().any(|project| {
+                project.archived || project.agents.iter().any(|agent| agent.config.archived)
+            }) {
                 WorkspaceView::Empty
             } else if !this.projects.is_empty() {
                 WorkspaceView::NewSession {
@@ -1308,6 +1308,7 @@ impl Workspace {
                 .map(|index| {
                     let project = &self.projects[index];
                     ProjectConfig {
+                        archived: project.archived,
                         path: project.path.clone(),
                         ssh_host: project.ssh_host.clone(),
                         agents: project.agents.iter().map(AgentView::snapshot).collect(),
@@ -1678,6 +1679,7 @@ impl Workspace {
             index
         } else {
             self.projects.push(ProjectView {
+                archived: false,
                 branch: ssh_host.clone().unwrap_or_else(|| branch(&path)),
                 sync_counts: None,
                 path: path.clone(),
@@ -1763,6 +1765,7 @@ impl Workspace {
         terminal: bool,
         cx: &mut Context<Self>,
     ) -> (u64, usize) {
+        self.projects[project_index].archived = false;
         let id = self.next_agent_id;
         let config = AgentConfig {
             id,
@@ -1824,6 +1827,7 @@ impl Workspace {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
+        self.projects[project_index].archived = true;
         // Archive the displayed session last so its replacement is outside this project.
         let current = self
             .view
@@ -1838,6 +1842,14 @@ impl Workspace {
         if let Some(session) = current {
             self.set_archived(project_index, session.agent_index, true, window, cx);
         }
+        self.persist();
+        cx.notify();
+    }
+
+    fn restore_project(&mut self, project_index: usize, cx: &mut Context<Self>) {
+        self.projects[project_index].archived = false;
+        self.persist();
+        cx.notify();
     }
 
     fn set_archived(
@@ -1848,6 +1860,9 @@ impl Workspace {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
+        if !archived {
+            self.projects[project_index].archived = false;
+        }
         let agent = &mut self.projects[project_index].agents[agent_index];
         if agent.config.archived == archived {
             return;
