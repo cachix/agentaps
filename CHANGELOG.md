@@ -4,6 +4,8 @@ Notable changes to Agentaps are recorded here.
 
 ## [Unreleased]
 
+## [0.6.1] - 2026-10-21
+
 ### Fixed
 
 - Diff watching skips ignored and untracked dependency trees, preserves updates for tracked files, and avoids following directory symlinks to prevent runaway memory use.
