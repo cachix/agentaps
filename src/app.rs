@@ -1858,6 +1858,17 @@ impl Workspace {
         }
         agent.config.archived = archived;
         if archived {
+            let agent_id = agent.config.id;
+            agent.controller.archive();
+            agent.elicitations.clear();
+            self.deferred_connections.retain(|id| *id != agent_id);
+            #[cfg(all(
+                feature = "ghostty-terminal",
+                any(target_os = "linux", target_os = "macos")
+            ))]
+            self.terminals.remove(&agent_id);
+            #[cfg(target_os = "linux")]
+            self.notification_service.dismiss(&agent_id.to_string());
             let location = SessionLocation {
                 project_index,
                 agent_index,

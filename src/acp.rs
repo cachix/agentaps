@@ -95,6 +95,12 @@ impl Connection {
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .stderr(Stdio::inherit());
+        #[cfg(unix)]
+        {
+            use std::os::unix::process::CommandExt;
+            // Keep npm, the adapter, and its harness in an owned process group.
+            process.process_group(0);
+        }
         let cli_server = if ssh_host.is_none() {
             let server = crate::cli::Server::start(agent_id, connection_id, events.clone())
                 .map_err(|error| format!("Could not start session control: {error}"))?;
@@ -202,6 +208,24 @@ impl Connection {
 
 impl Drop for Connection {
     fn drop(&mut self) {
+        #[cfg(unix)]
+        // SAFETY: spawn created a group whose ID is the child's PID. Signal it
+        // before wait reaps that PID, so it cannot have been reused by another
+        // process. Descendants may still be alive after the wrapper exits.
+        unsafe {
+            libc::kill(-(self.child.id() as libc::pid_t), libc::SIGKILL);
+        }
+        #[cfg(windows)]
+        {
+            use std::os::windows::process::CommandExt;
+            // Child::kill only terminates the npm wrapper on Windows.
+            let _ = Command::new("taskkill.exe")
+                .args(["/F", "/T", "/PID", &self.child.id().to_string()])
+                .creation_flags(0x08000000) // CREATE_NO_WINDOW
+                .stdout(Stdio::null())
+                .stderr(Stdio::null())
+                .status();
+        }
         let _ = self.child.kill();
         let _ = self.child.wait();
     }
@@ -224,6 +248,93 @@ mod tests {
     use serde_json::json;
     #[cfg(unix)]
     use std::time::Duration;
+
+    #[cfg(unix)]
+    fn process_running(pid: libc::pid_t) -> bool {
+        #[cfg(target_os = "linux")]
+        if std::fs::read_to_string(format!("/proc/{pid}/stat")).is_ok_and(|stat| {
+            stat.rsplit_once(") ")
+                .is_some_and(|(_, tail)| tail.starts_with('Z'))
+        }) {
+            return false;
+        }
+        // SAFETY: signal zero only checks whether the process exists.
+        unsafe { libc::kill(pid, 0) == 0 }
+    }
+
+    #[cfg(unix)]
+    fn assert_process_stopped(pid: libc::pid_t) {
+        let deadline = std::time::Instant::now() + Duration::from_secs(3);
+        while process_running(pid) {
+            assert!(
+                std::time::Instant::now() < deadline,
+                "process {pid} survived connection shutdown"
+            );
+            thread::sleep(Duration::from_millis(10));
+        }
+    }
+
+    #[cfg(unix)]
+    fn tree_connection(exit_wrapper: bool) -> (Connection, Receiver<Event>, libc::pid_t) {
+        let script = format!(
+            "sleep 60 & child=$!; printf '{{\"child\":%s}}\\n' \"$child\"; {}",
+            if exit_wrapper { "exit 0" } else { "wait" }
+        );
+        let (tx, rx) = mpsc::channel();
+        let connection = Connection::spawn(
+            7,
+            &["/bin/sh".into(), "-c".into(), script],
+            Path::new("/"),
+            None,
+            None,
+            tx,
+        )
+        .unwrap();
+        let Event::Message { value, .. } = rx.recv_timeout(Duration::from_secs(3)).unwrap() else {
+            panic!("agent did not report its child");
+        };
+        (
+            connection,
+            rx,
+            value["child"].as_i64().unwrap() as libc::pid_t,
+        )
+    }
+
+    #[test]
+    #[cfg(unix)]
+    fn dropping_connection_stops_wrapper_and_children_without_stopping_other_agents() {
+        let (connection, events, child) = tree_connection(false);
+        let (other, _, other_child) = tree_connection(false);
+        let wrapper = connection.child.id() as libc::pid_t;
+        assert!(process_running(child));
+        drop(connection);
+        assert_process_stopped(wrapper);
+        assert_process_stopped(child);
+        assert!(matches!(
+            events.recv_timeout(Duration::from_secs(3)).unwrap(),
+            Event::Disconnected { .. }
+        ));
+        assert!(process_running(other.child.id() as libc::pid_t));
+        assert!(process_running(other_child));
+    }
+
+    #[test]
+    #[cfg(target_os = "linux")]
+    fn dropping_connection_stops_children_after_wrapper_exits() {
+        let (connection, events, child) = tree_connection(true);
+        let deadline = std::time::Instant::now() + Duration::from_secs(3);
+        while process_running(connection.child.id() as libc::pid_t) {
+            assert!(std::time::Instant::now() < deadline);
+            thread::sleep(Duration::from_millis(10));
+        }
+        assert!(process_running(child));
+        drop(connection);
+        assert_process_stopped(child);
+        assert!(matches!(
+            events.recv_timeout(Duration::from_secs(3)).unwrap(),
+            Event::Disconnected { .. }
+        ));
+    }
 
     #[test]
     #[cfg(unix)]

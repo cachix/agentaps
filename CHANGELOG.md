@@ -4,6 +4,10 @@ Notable changes to Agentaps are recorded here.
 
 ## [Unreleased]
 
+### Fixed
+
+- Archiving sessions releases their agent processes, wrapper subprocesses, terminals, and pending reconnects instead of retaining memory until Agentaps restarts. Reopening reconnects to the saved harness session.
+
 ### Changed
 
 - Website fallback downloads and release labels point to Agentaps 0.6.1 installers.

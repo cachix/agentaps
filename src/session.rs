@@ -309,6 +309,29 @@ pub(crate) fn set_config_option_request(
 }
 
 impl SessionController {
+    /// Archiving deliberately stops work, while keeping the harness reference,
+    /// conversation, settings, and queued prompts available when reopened.
+    pub(crate) fn archive(&mut self) {
+        self.config.session_has_activity |= self.active_work || self.config.was_working;
+        self.config.archived = true;
+        self.connection = None;
+        self.login = None;
+        self.oauth_retry = None;
+        self.recovery_due = None;
+        self.restoring = None;
+        self.active_work = false;
+        self.awaiting_response = false;
+        self.cancel_requested = false;
+        self.config.was_working = false;
+        self.config.active_prompt = None;
+        self.clear_pending_settings();
+        self.reset_settings.clear();
+        self.resetting_context = false;
+        self.permissions.clear();
+        self.protocol = None;
+        self.status = Status::Idle;
+    }
+
     /// A setting change is waiting for the agent's reply.
     pub(crate) fn setting_pending(&self) -> bool {
         self.resetting_context
@@ -664,7 +687,8 @@ impl SessionController {
     }
 
     pub(crate) fn auto_continue_interrupted_turn(&mut self) -> bool {
-        if !self.config.was_working
+        if self.config.archived
+            || !self.config.was_working
             || self.active_work
             || self.restoring.is_some()
             || !matches!(self.status, Status::Idle | Status::Done)
@@ -752,6 +776,9 @@ impl SessionController {
     }
 
     pub(crate) fn retry_oauth_request(&mut self) -> bool {
+        if self.config.archived {
+            return false;
+        }
         let Some(retry) = self.oauth_retry.as_ref() else {
             return false;
         };
@@ -874,7 +901,8 @@ impl SessionController {
     }
 
     pub(crate) fn start_next_queued_prompt(&mut self) -> bool {
-        if self.active_work
+        if self.config.archived
+            || self.active_work
             || self.auth_required
             || self.login.is_some()
             || self.resetting_context

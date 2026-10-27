@@ -163,6 +163,9 @@ impl Workspace {
             return;
         };
         let project = &self.projects[session.project_index];
+        if project.agents[session.agent_index].config.archived {
+            return;
+        }
         if project.ssh_host.is_some() {
             return;
         }
@@ -246,6 +249,9 @@ impl Workspace {
             return;
         };
         let project = &self.projects[session.project_index];
+        if project.agents[session.agent_index].config.archived {
+            return;
+        }
         if project.ssh_host.is_some() {
             self.notice = Some(Notice::Info("The terminal supports local projects.".into()));
             cx.notify();
