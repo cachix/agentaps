@@ -5,6 +5,46 @@ use crate::acp::Event;
 use std::sync::mpsc;
 
 #[test]
+fn archiving_preserves_session_and_queue_but_cancels_recovery_and_work() {
+    let mut session = agent(ProtocolVersion::V2);
+    session.session_id = Some("saved-harness-session".into());
+    session.model = Some("saved-model".into());
+    session.log(Role::User, "original request");
+    session.config.pending_prompts.push("queued request".into());
+    session.config.active_prompt = Some("original request".into());
+    session.config.was_working = true;
+    session.active_work = true;
+    session.awaiting_response = true;
+    session.restoring = Some(RestoreMode::Resume);
+    session.recovery_due = Some(Instant::now());
+    session.pending_model = Some((4, "new model".into()));
+    session.oauth_retry = Some(OAuthRetry {
+        request: json!({"id":3,"method":"session/prompt"}),
+        due: Some(Instant::now()),
+        attempted: false,
+        accepted: false,
+    });
+    session.archive();
+    let saved = session.snapshot();
+    assert!(saved.archived);
+    assert_eq!(saved.session_id.as_deref(), Some("saved-harness-session"));
+    assert_eq!(saved.model.as_deref(), Some("saved-model"));
+    assert!(saved.session_has_activity);
+    assert!(!saved.was_working);
+    assert!(saved.active_prompt.is_none());
+    assert_eq!(saved.pending_prompts, vec![Prompt::from("queued request")]);
+    assert_eq!(session.messages.len(), 1);
+    assert!(!session.active_work && !session.awaiting_response);
+    assert!(session.connection.is_none());
+    assert!(session.restoring.is_none() && session.recovery_due.is_none());
+    assert!(session.oauth_retry.is_none());
+    assert!(!session.setting_pending());
+    assert!(!session.start_next_queued_prompt());
+    assert_eq!(session.messages.len(), 1);
+    assert_eq!(session.config.pending_prompts.len(), 1);
+}
+
+#[test]
 fn terminal_sessions_keep_their_kind_when_saved_and_reset() {
     let mut config = agent(ProtocolVersion::V2).snapshot();
     config.terminal = true;

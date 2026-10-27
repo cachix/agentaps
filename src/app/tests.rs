@@ -610,6 +610,8 @@ fn zoom_shortcuts_and_menu_actions_change_the_font_scale(cx: &mut gpui_kit::Test
     verify_notifications_for_background_sessions(&restored, temp.path(), cx);
     verify_repository_cloning(&restored, temp.path(), cx);
     verify_split_panes(&restored, temp.path(), cx);
+    #[cfg(unix)]
+    verify_archiving_releases_and_reconnects_agents(&restored, temp.path(), cx);
     verify_project_archiving(&restored, cx);
     verify_pane_resize_grab_areas(&restored, cx);
     // SAFETY: restore the process environment modified for this test.
@@ -2186,6 +2188,78 @@ fn verify_split_panes(
             assert_eq!(this.view.displayed_session().unwrap().agent_index, 1);
             this.close_pane(window, cx);
             assert_eq!(this.view, WorkspaceView::Empty);
+        });
+    });
+}
+
+#[cfg(unix)]
+fn verify_archiving_releases_and_reconnects_agents(
+    workspace: &Entity<Workspace>,
+    path: &Path,
+    cx: &mut gpui_kit::VisualTestContext,
+) {
+    cx.update(|window, cx| {
+        workspace.update(cx, |this, cx| {
+            let mut first = test_agent(ProtocolVersion::V2);
+            first.config.id = 901;
+            first.config.command = vec!["/bin/sh".into(), "-c".into(), "while IFS= read -r request; do :; done".into()];
+            first.session_id = Some("archived-harness-session".into());
+            first.config.session_id = first.session_id.clone();
+            first.config.session_has_activity = true;
+            first.config.pending_prompts.push("queued request".into());
+            first.log(Role::User, "original request");
+            let mut second = test_agent(ProtocolVersion::V2);
+            second.config.id = 902;
+            second.config.command.clear();
+            this.projects = vec![ProjectView {
+                path: path.to_path_buf(), ssh_host: None, branch: "main".into(), sync_counts: None,
+                agents: vec![AgentView { controller: first, elicitations: Vec::new() }, AgentView { controller: second, elicitations: Vec::new() }],
+            }];
+            this.sidebar_order = vec![901, 902];
+            this.deferred_connections.clear();
+            this.connect(0, 0);
+            let previous = this.projects[0].agents[0].connection.as_ref().unwrap().id;
+            this.projects[0].agents[0].active_work = true;
+            this.projects[0].agents[0].awaiting_response = true;
+            this.deferred_connections.push(901);
+            this.set_view(WorkspaceView::Conversation(SessionLocation { project_index: 0, agent_index: 0 }), window, cx);
+            this.set_archived(0, 0, true, window, cx);
+            assert!(!this.deferred_connections.contains(&901));
+            let archived = &this.projects[0].agents[0];
+            assert!(archived.config.archived);
+            assert!(archived.connection.is_none());
+            assert!(!archived.active_work && !archived.awaiting_response);
+            assert_eq!(archived.messages.len(), 1);
+            assert_eq!(archived.snapshot().session_id.as_deref(), Some("archived-harness-session"));
+            assert_eq!(archived.config.pending_prompts.len(), 1);
+            #[cfg(all(
+                feature = "ghostty-terminal",
+                any(target_os = "linux", target_os = "macos")
+            ))]
+            {
+                this.notice = None;
+                this.toggle_terminal(901, window, cx);
+                assert!(this.notice.is_none(), "archived terminals must not be spawned");
+                assert!(!this.terminals.contains_key(&901));
+            }
+            this.connect(0, 0);
+            assert!(this.projects[0].agents[0].connection.is_none(), "archived agents must not reconnect");
+            this.events_tx.send(Event::Message {
+                agent_id: 901, connection_id: previous,
+                value: json!({"id":1,"result":{"protocolVersion":1}}),
+            }).unwrap();
+            this.poll_events(window, cx);
+            assert_eq!(this.projects[0].agents[0].status, Status::Idle);
+            assert_eq!(this.projects[0].agents[0].messages.len(), 1);
+            this.set_archived(0, 0, false, window, cx);
+            let reopened = &mut this.projects[0].agents[0];
+            assert_ne!(reopened.connection.as_ref().unwrap().id, previous);
+            assert_eq!(reopened.status, Status::Connecting);
+            reopened.controller.handle_message(path, &json!({"id":1,"result":{"protocolVersion":1,"agentCapabilities":{"loadSession":true}}}));
+            assert_eq!(reopened.restoring, Some(crate::session::RestoreMode::Load));
+            assert_eq!(reopened.session_id.as_deref(), Some("archived-harness-session"));
+            assert_eq!(reopened.config.pending_prompts.len(), 1);
+            this.set_archived(0, 0, true, window, cx);
         });
     });
 }

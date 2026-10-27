@@ -9,7 +9,11 @@ impl Workspace {
     ) {
         let project = &mut self.projects[project_index];
         let agent = &mut project.agents[agent_index];
-        if project.ssh_host.is_some() || agent.login.is_some() || agent.active_work {
+        if agent.config.archived
+            || project.ssh_host.is_some()
+            || agent.login.is_some()
+            || agent.active_work
+        {
             return;
         }
         if known_agent(&agent.config.command) != Some(KnownAgent::Claude) {
@@ -360,10 +364,15 @@ impl Workspace {
         self.deferred_connections.retain(|id| *id != agent_id);
         let project = &mut self.projects[project_index];
         let agent = &mut project.agents[agent_index];
+        if agent.config.archived {
+            return;
+        }
         if agent.config.terminal {
             agent.status = Status::Idle;
             return;
         }
+        agent.status = Status::Connecting;
+        agent.protocol = None;
         match Connection::spawn(
             agent.config.id,
             &agent.config.command,
@@ -883,6 +892,9 @@ impl Workspace {
         self.mark_displayed_agent_viewed();
         for project in &mut self.projects {
             for agent in &mut project.agents {
+                if agent.config.archived {
+                    continue;
+                }
                 changed |= agent.retry_oauth_request();
                 changed |= agent.auto_continue_interrupted_turn();
                 changed |= agent.start_next_queued_prompt();
