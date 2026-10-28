@@ -4,6 +4,10 @@ Notable changes to Agentaps are recorded here.
 
 ## [Unreleased]
 
+### Changed
+
+- Website fallback downloads and release labels point to Agentaps 0.6.2 installers.
+
 ## [0.6.2] - 2026-10-28
 
 ### Fixed
