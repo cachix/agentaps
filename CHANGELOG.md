@@ -4,6 +4,8 @@ Notable changes to Agentaps are recorded here.
 
 ## [Unreleased]
 
+## [0.6.2] - 2026-10-28
+
 ### Fixed
 
 - Archiving sessions releases their agent processes, wrapper subprocesses, terminals, and pending reconnects instead of retaining memory until Agentaps restarts. Reopening reconnects to the saved harness session.
