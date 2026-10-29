@@ -81,7 +81,7 @@ validates all three packages, then publishes missing versions in dependency orde
 It skips versions already in the registry, so unchanged dependency crates do
 not need a new version for every desktop release and partial uploads can be retried.
 
-To validate the workflow on a draft or published stable release without uploading:
+To validate a stable version tag before or after publishing its release without uploading:
 
 ```sh
 gh workflow run publish-crates.yml -f tag=vX.Y.Z -F dry_run=true
@@ -89,8 +89,9 @@ gh workflow run publish-crates.yml -f tag=vX.Y.Z -F dry_run=true
 
 After configuring all trusted publishers, also check the OIDC token exchange
 without uploading by adding `-F verify_auth=true` to that command. Use the new
-release draft to verify authentication before publication. Drafts are allowed
-only for dry runs; uploads still require a published stable release.
+release tag to verify authentication before publication. Dry runs validate the
+tag and package versions directly because the read-only workflow token cannot
+view draft releases. Uploads still require a published stable release.
 
 To retry an upload, rerun its failed workflow job, or dispatch it with
 `-F dry_run=false`. The workflow uses the supplied published tag rather than
