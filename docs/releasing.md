@@ -53,9 +53,10 @@ packages from the same tag. Drafts and prereleases do not publish to crates.io.
 ## Publish to crates.io
 
 The `Publish crates` workflow uses [crates.io trusted publishing](https://crates.io/docs/trusted-publishing).
-Configure a GitHub trusted publisher in the settings of both
-[`agentaps`](https://crates.io/crates/agentaps/settings) and
-[`agentaps-control-protocol`](https://crates.io/crates/agentaps-control-protocol/settings):
+Configure a GitHub trusted publisher in the settings of all three crates:
+[`agentaps`](https://crates.io/crates/agentaps/settings),
+[`agentaps-control-protocol`](https://crates.io/crates/agentaps-control-protocol/settings), and
+[`gpui-rio`](https://crates.io/crates/gpui-rio/settings).
 
 | Field | Value |
 | --- | --- |
@@ -64,14 +65,20 @@ Configure a GitHub trusted publisher in the settings of both
 | Workflow filename | `publish-crates.yml` |
 | Environment | Leave blank |
 
+Before the first desktop release containing `gpui-rio`, an owner must publish
+the initial crate version manually, then configure its trusted publisher with
+these same fields and verify authentication with the dry run below.
+[crates.io requires a manual first publication before trusted publishing can be configured](https://blog.rust-lang.org/2025/07/11/crates-io-development-update-2025-07/).
+Keep subsequent automated publication on trusted publishing.
+
 The workflow exchanges its GitHub OIDC identity for a short-lived publishing
 token after package validation. The authentication action revokes the token at
 the end of the job. No repository publishing secret is needed.
 
 Publishing a stable GitHub release starts the workflow automatically.
 The workflow checks the release tag against the desktop version,
-validates both packages, then publishes missing versions in dependency order.
-It skips versions already in the registry, so the unchanged protocol crate does
+validates all three packages, then publishes missing versions in dependency order.
+It skips versions already in the registry, so unchanged dependency crates do
 not need a new version for every desktop release and partial uploads can be retried.
 
 To validate the workflow on an existing published release without uploading:
@@ -80,7 +87,7 @@ To validate the workflow on an existing published release without uploading:
 gh workflow run publish-crates.yml -f tag=vX.Y.Z -F dry_run=true
 ```
 
-After configuring both trusted publishers, also check the OIDC token exchange
+After configuring all trusted publishers, also check the OIDC token exchange
 without uploading by adding `-F verify_auth=true` to that command.
 
 To retry an upload, rerun its failed workflow job, or dispatch it with
@@ -90,14 +97,14 @@ the current contents of `main`.
 For a local publication or recovery outside Actions:
 
 Use the same release commit and version as the GitHub release. With Cargo 1.97.1
-and the native build dependencies installed, validate both packages together:
+and the native build dependencies installed, validate all packages together:
 
 ```sh
 devenv shell cargo publish --workspace --dry-run --locked
 ```
 
 Cargo verifies workspace dependencies using a temporary registry, so this also
-works before the protocol crate's first publication. Linux CI runs this check
+works before the dependency crates' first publication. Linux CI runs this check
 after the workspace tests. After validation, publish
 the workspace with crates.io credentials configured:
 
@@ -106,10 +113,13 @@ devenv shell cargo publish --workspace --locked
 ```
 
 Cargo publishes dependencies before dependents. If `agentaps-control-protocol`
-0.1.0 is already published and unchanged, publish only `agentaps` with
+and `gpui-rio` are already published at the required versions and unchanged,
+publish only `agentaps` with
 `devenv shell cargo publish -p agentaps --locked`. Changes to the protocol crate
 require a new protocol version and an updated version requirement in the desktop
-manifest. Confirm that `cargo install agentaps --version X.Y.Z --locked` installs
+manifest. Changes to `gpui-rio` likewise require a new crate version and an
+updated desktop dependency requirement. Confirm that
+`cargo install agentaps --version X.Y.Z --locked` installs
 the release before updating the public install instructions.
 
 For a local Linux packaging check, install the pinned packager, build the

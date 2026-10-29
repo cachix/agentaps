@@ -11,11 +11,11 @@ from urllib.error import HTTPError
 from urllib.request import Request, urlopen
 
 
-PUBLISH_ORDER = ("agentaps-control-protocol", "agentaps")
+PUBLISH_ORDER = ("agentaps-control-protocol", "gpui-rio", "agentaps")
 
 
 def registry_has_version(name, version):
-    # Both workspace crate names use the four-character sparse index layout.
+    # All workspace crate names use the four-character sparse index layout.
     url = f"https://index.crates.io/{name[:2]}/{name[2:4]}/{name}"
     request = Request(url, headers={"User-Agent": "agentaps-release"})
     try:
@@ -61,6 +61,9 @@ def main(argv=None):
 
     pending = []
     for name in PUBLISH_ORDER:
+        # Releases predating the Rio extraction contain no terminal crate.
+        if name == "gpui-rio" and name not in packages:
+            continue
         package = packages[name]
         if package["publish"] is not None and "crates-io" not in package["publish"]:
             raise ValueError(f"{name} does not allow publishing to crates.io")
@@ -72,7 +75,7 @@ def main(argv=None):
             print(f"Pending {name} {version}", flush=True)
 
     if args.dry_run:
-        # Validate both archives even when the selected release already exists.
+        # Validate all archives even when the selected release already exists.
         command = [
             "cargo", "publish", "--workspace", "--dry-run", "--locked",
             "--registry", "crates-io",

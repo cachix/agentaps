@@ -34,6 +34,9 @@ For builds without devenv, install the dependencies below.
 
 The terminal uses [Rio's embeddable Rust core](https://docs.rs/rio-vt/0.5.28/rio_vt/)
 for VT parsing, scrollback, and PTY management, and GPUI for rendering.
+The reusable [gpui-rio workspace crate](../crates/gpui-rio/README.md) owns the
+terminal adapter. Agentaps supplies its colors, monospace font, and zoom while
+keeping session and drawer controls in the app.
 It needs no Zig, libc++, libxml2, or separate terminal application. macOS requires
 Xcode command-line tools. Linux requires the GPUI and theme development libraries
 listed in the [source build guide](../README.md#build-from-source).

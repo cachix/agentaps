@@ -1,0 +1,18 @@
+[package]
+name = "gpui-rio"
+version = "0.1.0"
+edition = "2024"
+description = "Embeddable Rio terminal component for GPUI"
+license = "Apache-2.0"
+repository = "https://github.com/cachix/agentaps"
+readme = "README.md"
+categories = ["gui", "command-line-interface"]
+
+[target.'cfg(any(target_os = "linux", target_os = "macos"))'.dependencies]
+anyhow = "1"
+rio-vt = "=0.5.28"
+
+[target.'cfg(any(target_os = "linux", target_os = "macos"))'.dev-dependencies]
+gpui-kit = { version = "=0.7.3", features = ["test-support"] }
+libc = "0.2"
+tempfile = "3"

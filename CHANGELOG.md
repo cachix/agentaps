@@ -12,6 +12,8 @@ Notable changes to Agentaps are recorded here.
 
 ### Changed
 
+- Make the Rio terminal reusable by other GPUI applications through the new `gpui-rio` crate, with host-supplied fonts and colors.
+
 - Replace the embedded Ghostty terminal with Rio’s Rust core and GPUI rendering on macOS and Linux, removing the Zig, libc++, and libxml2 terminal requirements and allowing Linux X11 terminals.
 
 - Website fallback downloads and release labels point to Agentaps 0.6.2 installers.

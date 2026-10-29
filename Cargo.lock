@@ -184,6 +184,7 @@ dependencies = [
  "gix",
  "gix-imara-diff 0.2.5",
  "gpui-kit",
+ "gpui-rio",
  "hex",
  "iroh",
  "libc",
@@ -194,7 +195,6 @@ dependencies = [
  "nucleo",
  "qrcode",
  "regex",
- "rio-vt",
  "secretspec",
  "serde",
  "serde_json",
@@ -5354,6 +5354,17 @@ name = "gpui-pre-ztracing-macro"
 version = "0.3.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4b0d73e1bc02eef886a5947f41b8512708792e9e5d3053d181843311a487f96f"
+
+[[package]]
+name = "gpui-rio"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "gpui-kit",
+ "libc",
+ "rio-vt",
+ "tempfile",
+]
 
 [[package]]
 name = "granit-parser"

@@ -1,13 +1,13 @@
 //! Session-owned Rio terminals. Hiding a view never drops its shell.
 use super::*;
 use gpui_kit::Div;
-mod rio;
-use rio::{Terminal, TerminalColor, TerminalTheme};
+gpui_rio::bind_gpui!(gpui_kit);
+use gpui_rio::{TerminalColor, TerminalOptions, TerminalStyle, TerminalTheme};
 
 pub(super) struct SessionTerminal {
     entity: Entity<Terminal>,
     focus: gpui_kit::FocusHandle,
-    theme: TerminalTheme,
+    style: TerminalStyle,
     height: Option<f32>,
     pub(super) open: bool,
 }
@@ -63,6 +63,15 @@ fn terminal_theme(cx: &App) -> TerminalTheme {
         _ => color(colors[index - 8].blend(foreground.opacity(0.15))),
     });
     TerminalTheme::new(color(palette.color(BG)), color(foreground), ansi)
+}
+
+fn terminal_style(cx: &App) -> TerminalStyle {
+    let theme = gpui_kit::component::theme::Theme::global(cx);
+    TerminalStyle {
+        theme: terminal_theme(cx),
+        font_family: theme.mono_font_family.to_string(),
+        font_size: f32::from(theme.mono_font_size),
+    }
 }
 
 impl Workspace {
@@ -257,12 +266,15 @@ impl Workspace {
             return;
         }
         let shell = std::env::var("SHELL").unwrap_or_else(|_| "/bin/sh".into());
-        let theme = terminal_theme(cx);
+        let style = terminal_style(cx);
         let height = self
             .terminals
             .get(&agent_id)
             .and_then(|terminal| terminal.height);
-        match Terminal::spawn(&shell, &project.path, theme, cx) {
+        match Terminal::spawn(
+            TerminalOptions::new(shell, &project.path, style.clone()),
+            cx,
+        ) {
             Ok(entity) => {
                 entity.update(cx, |terminal, cx| terminal.focus(window, cx));
                 self.terminals.insert(
@@ -270,7 +282,7 @@ impl Workspace {
                     SessionTerminal {
                         entity,
                         focus: cx.focus_handle(),
-                        theme,
+                        style,
                         height,
                         open: true,
                     },
@@ -285,7 +297,7 @@ impl Workspace {
 
     /// Keep hidden terminals alive and update their colors with the app theme.
     pub(super) fn sync_terminals(&mut self, cx: &mut Context<Self>) {
-        let theme = terminal_theme(cx);
+        let style = terminal_style(cx);
         let obscured = self.settings.is_some()
             || self.mobile_access.pairing_visible
             || self.mobile_access.provider_prompt.is_some();
@@ -308,9 +320,9 @@ impl Workspace {
         };
         for (&id, terminal) in &mut self.terminals {
             terminal.entity.update(cx, |entity, _| {
-                if terminal.theme != theme {
-                    entity.update_theme(theme);
-                    terminal.theme = theme;
+                if terminal.style != style {
+                    entity.update_style(style.clone());
+                    terminal.style = style.clone();
                 }
                 entity.set_visible(terminal.open && visible.contains(&id));
             });

@@ -59,17 +59,17 @@ url = "2"
 [features]
 # Embedded terminal on macOS and Linux; omit with --no-default-features.
 default = ["rio-terminal"]
-rio-terminal = ["dep:rio-vt"]
+rio-terminal = ["dep:gpui-rio"]
 
 [target.'cfg(any(target_os = "linux", target_os = "macos"))'.dependencies]
-rio-vt = { version = "=0.5.28", optional = true }
+gpui-rio = { version = "0.1.0", path = "crates/gpui-rio", optional = true }
 
 [dev-dependencies]
 gpui-kit = { version = "=0.7.3", features = ["test-support"] }
 tempfile = "3"
 
 [workspace]
-members = ["crates/control-protocol"]
+members = ["crates/control-protocol", "crates/gpui-rio"]
 exclude = ["web", "crates/gpui-kit-reqwest-compat"]
 
 [target.'cfg(unix)'.dependencies]
