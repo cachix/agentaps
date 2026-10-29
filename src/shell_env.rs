@@ -39,9 +39,10 @@ pub fn import_login_path() {
 fn login_shell_path(shell: &OsStr) -> Option<OsString> {
     // Interactive login mode reads the files where users usually extend PATH,
     // such as .zprofile, .zshrc, or Nushell's env.nu and config.nu.
-    // `/usr/bin/env` prints the environment the same way for any shell.
+    // `env` prints the environment the same way for any shell. Resolve it through
+    // the shell's PATH because Nix systems may not provide /usr/bin/env.
     let mut child = Command::new(shell)
-        .args(["-l", "-i", "-c", "/usr/bin/env"])
+        .args(["-l", "-i", "-c", "env"])
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
         .stderr(Stdio::null())
@@ -120,7 +121,7 @@ mod tests {
 
     #[test]
     fn reads_path_from_a_login_shell() {
-        let path = login_shell_path(OsStr::new("/bin/sh")).unwrap();
+        let path = login_shell_path(OsStr::new("sh")).unwrap();
         assert!(env::split_paths(&path).any(|entry| !entry.as_os_str().is_empty()));
     }
 }
