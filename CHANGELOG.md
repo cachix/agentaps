@@ -6,6 +6,8 @@ Notable changes to Agentaps are recorded here.
 
 ### Fixed
 
+- Search all projects and sessions, including archived sessions, regardless of the selected sidebar filter.
+
 - Discover the login shell PATH without requiring `/usr/bin/env`, and run its test without `/bin/sh` so nixpkgs builds no longer need to skip it.
 
 - Run the Linux notification test without a host D-Bus session configuration, removing the need for a nixpkgs source substitution.
