@@ -6,6 +6,8 @@ Notable changes to Agentaps are recorded here.
 
 ### Changed
 
+- Website fallback downloads and release labels point to Agentaps 0.7.0 installers.
+
 - Allow publishing dry runs against stable version tags so trusted publishing can be verified before a release becomes public.
 
 ## [0.7.0] - 2026-10-29
