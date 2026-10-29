@@ -5,7 +5,6 @@
     clang
     trunk
     python312
-    zig_0_16
   ] ++ lib.optionals stdenv.hostPlatform.isLinux [
     dbus
     alsa-lib
@@ -17,8 +16,6 @@
     libxkbcommon
     wayland
     vulkan-loader
-    llvmPackages.libcxx
-    libxml2
     libglvnd
   ];
 
@@ -36,8 +33,6 @@
   env = lib.mkMerge [
     (lib.optionalAttrs pkgs.stdenv.hostPlatform.isLinux {
       LIBRARY_PATH = lib.makeLibraryPath [
-        pkgs.llvmPackages.libcxx
-        pkgs.libxml2
         pkgs.libglvnd
       ];
       LD_LIBRARY_PATH = lib.makeLibraryPath [
@@ -49,13 +44,10 @@
         pkgs.libxkbcommon
         pkgs.wayland
         pkgs.vulkan-loader
-        pkgs.llvmPackages.libcxx
-        pkgs.libxml2
         pkgs.libglvnd
       ];
     })
     {
-      ZIG = "${pkgs.zig_0_16}/bin/zig";
       CC_wasm32_unknown_unknown = "${pkgs.llvmPackages.clang-unwrapped}/bin/clang";
     }
   ];

@@ -20,7 +20,7 @@ If Codex or Claude is installed without its ACP adapter, Agentaps can offer to s
 - **View chats together.** Use the session **••• menu** to **Split Right** or **Split Down**, then select a sidebar session or create one in the new pane. Empty panes keep a small **••• menu** in the top-right corner. Split any pane again, drag dividers to resize, and use **Close Pane** to remove a view while its agent keeps running. Sidebar selections open in the active pane; sessions already visible receive focus. Layouts restore on restart, and the shared Diff panel follows the active pane.
 - **Choose your theme.** Open **Theme** using the settings button at the bottom of the sidebar. Choose Agentaps, System, or a bundled light or dark palette. Agentaps follows the desktop light/dark scheme using its own palettes; bundled presets keep their selected scheme. The choice and zoom are remembered across restarts. On Linux, System follows the current GTK or Qt theme, including desktop settings changes.
 - **Review local changes.** Select **Diff** in a conversation to inspect staged and unstaged changes against HEAD. Open files in unified or split view. The diff refreshes as the checkout changes.
-- **Open a terminal.** Use the terminal icon or **Ctrl+T** for a shell below the composer in local macOS and Linux Wayland sessions. See the [terminal guide](docs/session-terminal.md).
+- **Open a terminal.** Use the terminal icon or **Ctrl+T** for a shell below the composer in local macOS and Linux sessions. See the [terminal guide](docs/session-terminal.md).
 - **Use your agent's controls.** Choose a model or reasoning effort when the agent offers them, run its slash commands, and answer ACP form questions in the chat.
 - **Work over SSH.** Enter a path such as `ssh://user@server.example/home/user/project` when creating a project. Agentaps runs the agent on that server using your existing SSH configuration and keys. The agent and its ACP adapter must be installed there, and the server's host key must already be known. Try `ssh user@server.example` first. Diff review is currently available for local projects only.
 - **Continue in a browser.** Pair a phone browser with the desktop app to read conversations, send prompts, stop turns, and answer permission requests. Agent processes and project files stay on the desktop computer.
@@ -45,9 +45,9 @@ See the [Web Connect guide](docs/web-connect.md) for setup, storage, revocation,
 
 ## Build from source
 
-Install Rust and the native build dependencies before running Cargo. **Default builds on Linux and macOS require Zig 0.16** for the built-in terminal. Linux terminal builds also need libc++ 21 or newer and libxml2 development libraries. Follow the [terminal build requirements](docs/session-terminal.md#build-requirements), including LLVM repository setup on Ubuntu 24.04. Zig is a build dependency; downloaded installers do not require it.
+Install Rust and the native build dependencies before running Cargo. The built-in terminal uses Rio's Rust core and GPUI rendering, with no separate Zig or Ghostty toolchain. See the [terminal guide](docs/session-terminal.md#build-requirements).
 
-On Linux, GPUI and theme probing require native development libraries, including fontconfig, FreeType, XKB, Wayland, GTK 4.10 or later, and Qt 6 Widgets. On Ubuntu 24.04, install these in addition to the terminal dependencies:
+On Linux, GPUI and theme probing require native development libraries, including fontconfig, FreeType, XKB, Wayland, GTK 4.10 or later, and Qt 6 Widgets. On Ubuntu 24.04, install:
 
 ```sh
 sudo apt-get install build-essential pkg-config \
@@ -65,7 +65,7 @@ With the dependencies installed, install the current release from crates.io:
 cargo install agentaps --locked
 ```
 
-To install without the terminal, omit its Zig, libc++, and libxml2 build requirements with:
+To install without the terminal, use:
 
 ```sh
 cargo install agentaps --locked --no-default-features
@@ -87,7 +87,7 @@ To run this checkout with [devenv](https://devenv.sh/) installed:
 devenv shell cargo run --release
 ```
 
-The development environment provides Rust, Zig, GPUI's native libraries, the terminal libraries, and Node for optional ACP adapters. To build the static website and Web Connect UI in `web/`:
+The development environment provides Rust, GPUI's native libraries, and Node for optional ACP adapters. To build the static website and Web Connect UI in `web/`:
 
 ```sh
 devenv shell -- bash web/build.sh

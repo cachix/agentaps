@@ -156,7 +156,7 @@ impl Shortcut {
         ) || cfg!(target_os = "macos"))
             && (self != Self::ToggleTerminal
                 || cfg!(all(
-                    feature = "ghostty-terminal",
+                    feature = "rio-terminal",
                     any(target_os = "linux", target_os = "macos")
                 )))
     }
@@ -446,7 +446,7 @@ impl Workspace {
             .filter(|shortcut| shortcut.available())
         {
             #[cfg(all(
-                feature = "ghostty-terminal",
+                feature = "rio-terminal",
                 any(target_os = "linux", target_os = "macos")
             ))]
             if !shortcut.global() && self.terminal_focused(window, cx) {
@@ -475,7 +475,7 @@ impl Workspace {
                 match shortcut {
                     Shortcut::ToggleTerminal => {
                         #[cfg(all(
-                            feature = "ghostty-terminal",
+                            feature = "rio-terminal",
                             any(target_os = "linux", target_os = "macos")
                         ))]
                         self.toggle_active_terminal(window, cx);

@@ -473,7 +473,7 @@ impl Workspace {
 impl Render for Workspace {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         #[cfg(all(
-            feature = "ghostty-terminal",
+            feature = "rio-terminal",
             any(target_os = "linux", target_os = "macos")
         ))]
         self.sync_terminals(cx);
@@ -540,7 +540,7 @@ impl Render for Workspace {
                 }),
             );
         #[cfg(all(
-            feature = "ghostty-terminal",
+            feature = "rio-terminal",
             any(target_os = "linux", target_os = "macos")
         ))]
         let root = root.on_drag_move(cx.listener(Self::resize_terminal));

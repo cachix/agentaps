@@ -1,6 +1,6 @@
 # Session terminal
 
-The terminal is enabled by default on macOS and Linux Wayland. Click a project's
+The terminal is enabled by default on macOS and Linux. Click a project's
 **+** button and select **Terminal** to start a standalone shell in that project.
 Terminal sessions fill their pane and appear with a terminal icon in the sidebar;
 coding sessions show their agent's icon before the status indicator. Terminal
@@ -14,7 +14,10 @@ switching sessions, or closing a pane keeps the shell running. **Stop** closes
 the shell; **Restart** replaces it with a fresh shell. Exiting the shell, including
 **Ctrl+D** at an empty prompt, closes the drawer and returns focus to the composer.
 Opening it again starts a fresh shell at the previous height. The terminal opens
-below the composer and follows the app's theme, including live dark/light changes.
+below the composer and follows the app's theme, using its monospace font at
+the smaller code-text size (13 px at default zoom). Generic Monospace aliases
+and missing theme fonts resolve to an installed monospace family to keep
+columns aligned. The terminal follows live dark/light changes and app zoom.
 **Ctrl+T** toggles the terminal in the focused session, including from
 the shell.
 Opening focuses the shell; hiding returns focus to the composer. The shortcut
@@ -29,19 +32,11 @@ Shell processes end when the app exits and are not restored on restart.
 Run `devenv shell cargo run` to build and launch with all dependencies supplied.
 For builds without devenv, install the dependencies below.
 
-The terminal uses [gpui-libghostty](https://github.com/behzade/gpui-libghostty).
-Building requires [Zig 0.16](https://ziglang.org/download/) on `PATH` (or set
-`ZIG` to the downloaded Zig executable). Check `zig version`, or `"$ZIG" version`
-when using `ZIG`, before running Cargo. If Zig is missing, the build fails with
-`read Zig version from "zig": No such file or directory`. macOS also
-requires Xcode command-line tools. Linux requires Wayland, EGL, OpenGL 4.3,
-libxml2, and libc++ 21 or newer, including development libraries for linking.
-The first build downloads Ghostty's Zig dependencies. On Ubuntu 24.04, configure
-the LLVM repository as shown below, then install the terminal development libraries:
-
-```sh
-sudo apt-get install libc++-21-dev libc++abi-21-dev libxml2-dev libgl-dev
-```
+The terminal uses [Rio's embeddable Rust core](https://docs.rs/rio-vt/0.5.28/rio_vt/)
+for VT parsing, scrollback, and PTY management, and GPUI for rendering.
+It needs no Zig, libc++, libxml2, or separate terminal application. macOS requires
+Xcode command-line tools. Linux requires the GPUI and theme development libraries
+listed in the [source build guide](../README.md#build-from-source).
 
 For a build without the terminal and its dependencies, use
 `cargo run --no-default-features`, `cargo install agentaps --locked --no-default-features`,
@@ -51,50 +46,30 @@ GPUI and theme development libraries are still required, as listed in the
 
 ## Linux package prerequisites
 
-Downloaded packages do not require Zig. The Linux DEB requires the libc++ 21,
-libc++abi 21, and libxml2 runtime packages in addition to GTK and Qt. Choose the
-DEB built for your Ubuntu version. Ubuntu 24.04 packages use `libxml2.so.2`;
-Ubuntu 26.04 packages use `libxml2.so.16` and have `_ubuntu26.04_amd64.deb` in
-their filename. The two libxml2 ABIs require separate binaries.
-
-On Ubuntu 24.04, configure [LLVM's APT repository](https://apt.llvm.org/) before installing
-the DEB so APT can resolve `libc++1` and `libc++abi1` at version 21 or newer:
+New builds need only the app's GTK, Qt, and audio runtime dependencies. Install
+the matching DEB with APT so those packages are resolved automatically:
 
 ```sh
-sudo apt-get update
-sudo apt-get install ca-certificates curl
-sudo install -d -m 0755 /etc/apt/keyrings
-curl --fail --silent --show-error https://apt.llvm.org/llvm-snapshot.gpg.key \
-  | sudo tee /etc/apt/keyrings/apt.llvm.org.asc >/dev/null
-sudo chmod 0644 /etc/apt/keyrings/apt.llvm.org.asc
-echo 'deb [signed-by=/etc/apt/keyrings/apt.llvm.org.asc] https://apt.llvm.org/noble/ llvm-toolchain-noble-21 main' \
-  | sudo tee /etc/apt/sources.list.d/llvm-21.list >/dev/null
-sudo apt-get update
-sudo apt-get install libc++1 libc++abi1 libxml2
+sudo apt update
+sudo apt install ./agentaps_VERSION_amd64.deb
 ```
 
-For releases with corrected runtime dependencies, install the downloaded DEB
-with `sudo apt install ./agentaps_VERSION_amd64.deb` from its download directory,
-replacing `VERSION` with the release version. APT installs the remaining package
-dependencies. These LLVM repository commands are specific to Ubuntu 24.04.
+Replace `VERSION` with the release version. Ubuntu 26.04 packages retain the
+`_ubuntu26.04_amd64.deb` suffix and are tested on Ubuntu 26.04. Neither new build
+requires LLVM's APT repository, libc++, or libxml2 for the terminal.
+Older Ghostty-based releases through 0.6.2 still need their original terminal
+runtime dependencies; these new requirements apply to Rio-based builds.
 
-The 0.5.2 DEB requires the old names `libc++1-21` and `libc++abi1-21`, which
-LLVM's Ubuntu 24.04 repository no longer supplies. Repository setup alone does
-not fix that package. Until a corrected DEB is released, use the
-[source installation instructions](../README.md#build-from-source), optionally
-with `--no-default-features` to omit the terminal.
+## Input and scrollback
 
-On Ubuntu 26.04, the native runtime dependencies are available in Ubuntu's
-repositories. Install its matching DEB with
-`sudo apt install ./agentaps_VERSION_ubuntu26.04_amd64.deb`, replacing `VERSION`
-with the release version. APT installs GTK, Qt, libc++, and `libxml2-16`.
-The existing 0.5.2 Ubuntu 24.04 DEB cannot be installed this way on Ubuntu 26.04.
-For source builds on Ubuntu 26.04, install `libc++-21-dev`, `libc++abi-21-dev`,
-`libxml2-dev`, and `libgl-dev` directly from Ubuntu, along with Zig and the GPUI
-development libraries. The LLVM repository commands above are for Ubuntu 24.04 only.
+Use the mouse wheel to scroll the 10,000-line history. Drag to select text.
+Copy and paste use **Ctrl+Shift+C/V** on Linux and **Cmd+C/V** on macOS.
+**Ctrl+C** sends an interrupt to the shell. Applications requesting bracketed
+paste receive pasted text between the standard paste delimiters.
 
 ## Current limitations
 
-SSH, Windows, X11, Web Connect, agent-controlled terminals, and sending terminal
-selections into chat are not yet supported. Agent commands still
-run through ACP independently of the shell.
+SSH, Windows, Web Connect, agent-controlled terminals, and sending terminal
+selections into chat are not yet supported. The initial GPUI renderer does not
+display terminal graphics or forward application mouse reporting. Agent commands
+still run through ACP independently of the shell.

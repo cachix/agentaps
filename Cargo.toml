@@ -19,7 +19,7 @@ license-file = "LICENSE"
 icons = ["assets/packaging/icon.png"]
 
 [package.metadata.packager.deb]
-depends = ["libgtk-4-1 (>= 4.10)", "libqt6widgets6t64 (>= 6.2) | libqt6widgets6 (>= 6.2)", "qt6-qpa-plugins", "libc++1 (>= 1:21) | libc++1-21", "libc++abi1 (>= 1:21) | libc++abi1-21", "libxml2", "libasound2t64 | libasound2"]
+depends = ["libgtk-4-1 (>= 4.10)", "libqt6widgets6t64 (>= 6.2) | libqt6widgets6 (>= 6.2)", "qt6-qpa-plugins", "libasound2t64 | libasound2"]
 files = { "LICENSE" = "usr/share/doc/agentaps/copyright" }
 
 [package.metadata.packager.macos]
@@ -57,12 +57,12 @@ toml = "1.1"
 url = "2"
 
 [features]
-# Native terminal on macOS and Linux Wayland; omit with --no-default-features.
-default = ["ghostty-terminal"]
-ghostty-terminal = ["dep:gpui-libghostty"]
+# Embedded terminal on macOS and Linux; omit with --no-default-features.
+default = ["rio-terminal"]
+rio-terminal = ["dep:rio-vt"]
 
 [target.'cfg(any(target_os = "linux", target_os = "macos"))'.dependencies]
-gpui-libghostty = { version = "=0.3.1", optional = true }
+rio-vt = { version = "=0.5.28", optional = true }
 
 [dev-dependencies]
 gpui-kit = { version = "=0.7.3", features = ["test-support"] }

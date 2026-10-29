@@ -1,9 +1,8 @@
-//! Experimental session-owned native terminals. Hiding a view never drops its shell.
+//! Session-owned Rio terminals. Hiding a view never drops its shell.
 use super::*;
 use gpui_kit::Div;
-use gpui_libghostty::{TerminalColor, TerminalConfiguration, TerminalOptions, TerminalTheme};
-
-gpui_libghostty::bind_gpui!(gpui_kit);
+mod rio;
+use rio::{Terminal, TerminalColor, TerminalTheme};
 
 pub(super) struct SessionTerminal {
     entity: Entity<Terminal>,
@@ -51,11 +50,11 @@ fn terminal_theme(cx: &App) -> TerminalTheme {
     ];
     let color = |value: gpui_kit::Hsla| {
         let rgb = value.to_rgb();
-        TerminalColor::new(
-            (rgb.r * 255.).round() as u8,
-            (rgb.g * 255.).round() as u8,
-            (rgb.b * 255.).round() as u8,
-        )
+        TerminalColor {
+            r: (rgb.r * 255.).round() as u8,
+            g: (rgb.g * 255.).round() as u8,
+            b: (rgb.b * 255.).round() as u8,
+        }
     };
     let ansi = std::array::from_fn(|index| match index {
         0..=7 => color(colors[index]),
@@ -122,7 +121,7 @@ impl Workspace {
         cx: &mut Context<Self>,
     ) {
         let drag = event.drag(cx);
-        // A native child may receive the release before GPUI clears its drag state.
+        // Clear a stale drag when the divider no longer has the left button.
         if event.event.pressed_button != Some(MouseButton::Left) {
             cx.stop_active_drag(window);
             return;
@@ -258,16 +257,12 @@ impl Workspace {
             return;
         }
         let shell = std::env::var("SHELL").unwrap_or_else(|_| "/bin/sh".into());
-        // Ghostty accepts a shell command string, so quote executable paths with spaces.
-        let mut options =
-            TerminalOptions::new(shell_words::quote(&shell).into_owned(), &project.path);
         let theme = terminal_theme(cx);
-        options.configuration = TerminalConfiguration::UserDefaultWithOverride(theme);
         let height = self
             .terminals
             .get(&agent_id)
             .and_then(|terminal| terminal.height);
-        match Terminal::spawn(options, window, cx) {
+        match Terminal::spawn(&shell, &project.path, theme, cx) {
             Ok(entity) => {
                 entity.update(cx, |terminal, cx| terminal.focus(window, cx));
                 self.terminals.insert(
@@ -288,7 +283,7 @@ impl Workspace {
         cx.notify();
     }
 
-    /// Native surfaces need explicit visibility and live color updates from GPUI.
+    /// Keep hidden terminals alive and update their colors with the app theme.
     pub(super) fn sync_terminals(&mut self, cx: &mut Context<Self>) {
         let theme = terminal_theme(cx);
         let obscured = self.settings.is_some()
@@ -314,14 +309,8 @@ impl Workspace {
         for (&id, terminal) in &mut self.terminals {
             terminal.entity.update(cx, |entity, _| {
                 if terminal.theme != theme {
-                    match entity.update_theme(theme) {
-                        Ok(()) => terminal.theme = theme,
-                        Err(error) => {
-                            self.notice = Some(Notice::Error(format!(
-                                "Could not update terminal theme: {error}"
-                            )));
-                        }
-                    }
+                    entity.update_theme(theme);
+                    terminal.theme = theme;
                 }
                 entity.set_visible(terminal.open && visible.contains(&id));
             });

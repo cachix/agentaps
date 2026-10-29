@@ -121,21 +121,18 @@ devenv shell cargo build --release --locked
 devenv shell cargo packager --release --formats deb --out-dir dist/desktop
 ```
 
-Standard Linux and macOS builds include the session terminal. CI installs Zig
-0.16 and the native terminal libraries before building. See the
-[terminal guide](session-terminal.md) for source build requirements. Linux DEB installs
-require libc++ 21 and libxml2; Ubuntu 24.04 needs the [LLVM APT repository](https://apt.llvm.org/)
-for the libc++ runtime packages. Include terminal launch, theme switching, and
-Ctrl+D exit in platform smoke tests.
+Standard Linux and macOS builds include the Rio session terminal. It builds
+with Rust and the existing GPUI dependencies, without Zig, libc++, or libxml2.
+See the [terminal guide](session-terminal.md) for source build requirements.
+Include terminal launch, keyboard input, resizing, copy/paste, theme switching,
+and Ctrl+D exit in platform smoke tests.
 
-Ubuntu 26.04 builds run in an Ubuntu 26.04 container and link against native
-`libxml2.so.16`. Their DEB dependency list uses `libxml2-16`, and filenames end
-in `_ubuntu26.04_amd64.deb` to distinguish them from the Ubuntu 24.04 packages
-that require `libxml2.so.2`. The workflow installs the exact new DEB in a fresh
-Ubuntu 26.04 container, checks shared-library resolution and `agentaps --version`,
-and confirms that Zig and Cargo are absent. Tag builds wait for this installation
-check before creating the draft release. GUI launch and terminal rendering still
-need a desktop smoke test on both Ubuntu versions.
+Ubuntu 26.04 builds run in an Ubuntu 26.04 container. Their filenames end in
+`_ubuntu26.04_amd64.deb`. The workflow installs the exact new DEBs in fresh
+Ubuntu 24.04 and 26.04 containers, checks shared-library resolution and
+`agentaps --version`, and confirms that Zig and Cargo are absent. Tag builds
+wait for both installation checks before creating the draft release. GUI launch
+and terminal rendering still need desktop smoke tests on both Ubuntu versions.
 
 The local package is written to `dist/desktop/`. On a standard Linux host,
 replace `deb` with `deb,appimage` to build both Linux formats. AppImage packaging
