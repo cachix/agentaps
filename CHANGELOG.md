@@ -6,7 +6,7 @@ Notable changes to Agentaps are recorded here.
 
 ### Changed
 
-- Allow publishing dry runs against draft releases so trusted publishing can be verified before a release becomes public.
+- Allow publishing dry runs against stable version tags so trusted publishing can be verified before a release becomes public.
 
 ## [0.7.0] - 2026-10-29
 

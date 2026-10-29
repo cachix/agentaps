@@ -40,14 +40,14 @@ jobs:
         uses: actions/checkout@v5
         with:
           persist-credentials: false
-      - name: Verify stable release and require publication for uploads
+      - name: Verify the GitHub release is public and stable before uploads
+        if: github.event_name != 'workflow_dispatch' || !inputs.dry_run
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
-          ALLOW_DRAFT: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run }}
         run: |
           gh release view "$RELEASE_TAG" --json isDraft,isPrerelease \
-            | python3 -c 'import json,os,sys; r=json.load(sys.stdin); sys.exit("Only stable releases can be validated; uploads require publication" if r["isPrerelease"] or (r["isDraft"] and os.environ["ALLOW_DRAFT"] != "true") else 0)'
+            | python3 -c 'import json,sys; r=json.load(sys.stdin); sys.exit("Only published stable releases can be uploaded" if r["isDraft"] or r["isPrerelease"] else 0)'
       - name: Check out the exact release
         uses: actions/checkout@v5
         with:
