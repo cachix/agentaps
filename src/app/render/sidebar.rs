@@ -424,8 +424,12 @@ impl Workspace {
             if !nested_sidebar && has_sessions {
                 continue;
             }
-            let collapsed = self.collapsed_projects.contains(&project_index);
-            if !has_sessions && (archive_view || active_only || !project.agents.is_empty()) {
+            let collapsed =
+                session_query.is_empty() && self.collapsed_projects.contains(&project_index);
+            if !has_sessions
+                && ((session_query.is_empty() && (archive_view || active_only))
+                    || !project.agents.is_empty())
+            {
                 continue;
             }
             let name = project
@@ -656,7 +660,7 @@ impl Workspace {
                     .text_color(palette.color(MUTED))
                     .child("No active sessions"),
             );
-        } else if archive_view && archived_count == 0 {
+        } else if session_query.is_empty() && archive_view && archived_count == 0 {
             project_list = project_list.child(
                 div()
                     .px_3()

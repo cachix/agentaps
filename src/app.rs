@@ -1486,7 +1486,8 @@ impl Workspace {
         self.ordered_sessions(query, archive_view)
             .into_iter()
             .filter(|location| {
-                archive_view
+                !query.is_empty()
+                    || archive_view
                     || !self.sidebar_active_only
                     || self.projects[location.project_index].agents[location.agent_index]
                         .has_sidebar_status()
@@ -1506,7 +1507,7 @@ impl Workspace {
                     .iter()
                     .enumerate()
                     .filter_map(move |(agent_index, agent)| {
-                        if agent.config.archived != archive_view {
+                        if query.is_empty() && agent.config.archived != archive_view {
                             return None;
                         }
                         let rank = session_search_score(

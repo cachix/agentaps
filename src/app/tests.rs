@@ -2392,15 +2392,15 @@ fn verify_project_session_sidebar(
                     .collect::<Vec<_>>()
             };
             assert_eq!(ids(this, ""), vec![402, 401, 404]);
-            assert_eq!(ids(this, "first"), vec![402, 401]);
+            assert_eq!(ids(this, "first"), vec![402, 401, 403]);
             let search = this.sidebar_results("sidebar");
-            assert_eq!(search.len(), 3);
+            assert_eq!(search.len(), 5);
             assert_eq!(
                 search
                     .iter()
                     .map(|location| location.project_index)
                     .collect::<Vec<_>>(),
-                vec![0, 0, 1]
+                vec![0, 0, 0, 1, 1]
             );
             this.move_agent(401, 404, cx);
             assert_eq!(this.sidebar_order, vec![404, 402, 405, 401, 403]);
@@ -2461,7 +2461,7 @@ fn verify_project_session_sidebar(
             assert_eq!(ids(this, ""), vec![401, 402, 404]);
             assert_eq!(
                 ids(this, "sidebar").len(),
-                3,
+                5,
                 "collapsed sessions stay searchable"
             );
             this.toggle_project(0, cx);
@@ -2495,8 +2495,8 @@ fn verify_project_session_sidebar(
                 this.projects[0].agents[0].status = status;
                 this.projects[0].agents[2].status = status;
                 assert_eq!(ids(this, ""), vec![401], "status: {status:?}");
-                assert_eq!(ids(this, "first"), vec![401]);
-                assert!(ids(this, "second").is_empty());
+                assert_eq!(ids(this, "first"), vec![401, 402, 403]);
+                assert_eq!(ids(this, "second"), vec![404, 405]);
             }
             this.projects[0].agents[0].status = Status::Idle;
             this.projects[1].agents[0].elicitations.push(Elicitation {
@@ -2516,6 +2516,15 @@ fn verify_project_session_sidebar(
             this.sidebar_active_only = true;
             this.set_view(WorkspaceView::Archive { return_to: None }, window, cx);
             assert_eq!(ids(this, ""), vec![403, 405]);
+            assert_eq!(ids(this, "first"), vec![401, 402, 403]);
+            assert_eq!(ids(this, "second"), vec![404, 405]);
+            this.projects[1].agents[0].config.archived = true;
+            this.set_view(view, window, cx);
+            assert_eq!(
+                ids(this, "second"),
+                vec![404, 405],
+                "projects with only archived sessions remain searchable"
+            );
             this.sidebar_active_only = false;
             assert!(ids(this, "missing").is_empty());
         });
