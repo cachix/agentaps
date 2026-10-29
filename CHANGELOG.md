@@ -4,6 +4,10 @@ Notable changes to Agentaps are recorded here.
 
 ## [Unreleased]
 
+### Fixed
+
+- Run the Linux notification test without a host D-Bus session configuration, removing the need for a nixpkgs source substitution.
+
 ### Changed
 
 - Website fallback downloads and release labels point to Agentaps 0.7.0 installers.

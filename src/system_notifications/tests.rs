@@ -93,8 +93,25 @@ fn event(service: &Service) -> Event {
 #[test]
 fn reuses_connection_replaces_notifications_and_releases_resources() {
     // This private bus never displays a notification or touches the desktop session.
+    // Supply our own configuration so sandboxed builds need no host session.conf.
+    let config = tempfile::NamedTempFile::new().unwrap();
+    std::fs::write(
+        config.path(),
+        r#"<busconfig>
+  <type>session</type>
+  <listen>unix:tmpdir=/tmp</listen>
+  <policy context="default">
+    <allow send_destination="*"/>
+    <allow receive_sender="*"/>
+    <allow own="*"/>
+  </policy>
+</busconfig>"#,
+    )
+    .unwrap();
     let mut bus = Bus(ProcessCommand::new("dbus-daemon")
-        .args(["--session", "--nofork", "--print-address=1"])
+        .arg("--config-file")
+        .arg(config.path())
+        .args(["--nofork", "--print-address=1"])
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
         .spawn()
