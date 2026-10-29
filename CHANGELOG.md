@@ -4,6 +4,8 @@ Notable changes to Agentaps are recorded here.
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-10-29
+
 ### Fixed
 
 - Avoid redundant background painting in Rio terminal panes to reduce repaint work while typing and resizing.
