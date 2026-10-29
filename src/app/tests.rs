@@ -2233,7 +2233,7 @@ fn verify_archiving_releases_and_reconnects_agents(
             assert_eq!(archived.snapshot().session_id.as_deref(), Some("archived-harness-session"));
             assert_eq!(archived.config.pending_prompts.len(), 1);
             #[cfg(all(
-                feature = "ghostty-terminal",
+                feature = "rio-terminal",
                 any(target_os = "linux", target_os = "macos")
             ))]
             {
@@ -2558,7 +2558,7 @@ fn verify_project_agent_picker(
             );
             let ssh_host = this.projects[1].ssh_host.take();
             let terminal_supported = cfg!(all(
-                feature = "ghostty-terminal",
+                feature = "rio-terminal",
                 any(target_os = "linux", target_os = "macos")
             ));
             assert_eq!(this.terminal_picker_available(cx), terminal_supported);

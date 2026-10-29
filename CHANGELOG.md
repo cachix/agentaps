@@ -4,7 +4,17 @@ Notable changes to Agentaps are recorded here.
 
 ## [Unreleased]
 
+### Fixed
+
+- Avoid redundant background painting in Rio terminal panes to reduce repaint work while typing and resizing.
+
+- Use an installed monospace font in the Rio terminal at 13 px at default zoom, falling back when a theme requests a missing font such as Adwaita Mono instead of silently rendering proportional text.
+
 ### Changed
+
+- Make the Rio terminal reusable by other GPUI applications through the new `gpui-rio` crate, with host-supplied fonts and colors.
+
+- Replace the embedded Ghostty terminal with Rio’s Rust core and GPUI rendering on macOS and Linux, removing the Zig, libc++, and libxml2 terminal requirements and allowing Linux X11 terminals.
 
 - Website fallback downloads and release labels point to Agentaps 0.6.2 installers.
 

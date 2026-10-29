@@ -70,8 +70,6 @@ jobs:
             libxkbcommon-dev libxkbcommon-x11-dev libwayland-dev libx11-dev \
             libxcb-shape0-dev libxcb-xfixes0-dev libxcb-randr0-dev \
             libxcb-xinput-dev libegl1-mesa-dev libgles2-mesa-dev libglib2.0-dev libgtk-4-dev qt6-base-dev libasound2-dev
-      - name: Set up session terminal
-        uses: ./.github/actions/setup-terminal
       - name: Install Rust toolchain
         run: |
           rustup toolchain install 1.97.1 --profile minimal

@@ -7,7 +7,6 @@ on:
   pull_request:
     paths:
       - .github/workflows/desktop-builds.yml
-      - .github/actions/setup-terminal/**
       - Cargo.toml
       - Cargo.lock
       - crates/**
@@ -54,9 +53,6 @@ jobs:
             libxkbcommon-dev libxkbcommon-x11-dev libwayland-dev libx11-dev \
             libxcb-shape0-dev libxcb-xfixes0-dev libxcb-randr0-dev \
             libxcb-xinput-dev libegl1-mesa-dev libgles2-mesa-dev libglib2.0-dev libgtk-4-dev qt6-base-dev libasound2-dev
-      - name: Set up session terminal
-        if: runner.os != 'Windows'
-        uses: ./.github/actions/setup-terminal
       - name: Install Rust toolchain
         shell: bash
         run: |
@@ -75,6 +71,13 @@ jobs:
       - name: Build desktop app
         shell: bash
         run: cargo build --release --locked --target "${{ matrix.target }}"
+      - name: Check Linux terminal linking
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          libraries=$(readelf -d "target/${{ matrix.target }}/release/agentaps")
+          [[ "$libraries" != *"[libxml2.so"* ]]
+          [[ "$libraries" != *"[libc++.so"* ]]
       - name: Test Windows agent discovery
         if: runner.os == 'Windows'
         shell: bash
@@ -126,8 +129,6 @@ jobs:
             libxcb-shape0-dev libxcb-xfixes0-dev libxcb-randr0-dev libxcb-xinput-dev \
             libegl-dev libgles-dev libglib2.0-dev libgtk-4-dev qt6-base-dev libasound2-dev
       - uses: actions/checkout@v5
-      - name: Set up session terminal
-        uses: ./.github/actions/setup-terminal
       - name: Install Rust toolchain
         run: |
           curl --fail --silent --show-error https://sh.rustup.rs \
@@ -137,26 +138,8 @@ jobs:
         run: |
           cargo build --release --locked --target x86_64-unknown-linux-gnu
           libraries=$(readelf -d target/x86_64-unknown-linux-gnu/release/agentaps)
-          [[ "$libraries" == *"[libxml2.so.16]"* ]]
-          [[ "$libraries" != *"[libxml2.so.2]"* ]]
-      - name: Select the native libxml2 package dependency
-        run: |
-          python3 - <<'PYTHON'
-          import json
-          from pathlib import Path
-          import re
-          import tomllib
-
-          manifest = Path("Cargo.toml")
-          source = manifest.read_text()
-          metadata = tomllib.loads(source)["package"]["metadata"]["packager"]["deb"]
-          dependencies = metadata["depends"]
-          assert dependencies.count("libxml2") == 1
-          dependencies = ["libxml2-16" if dep == "libxml2" else dep for dep in dependencies]
-          updated, count = re.subn(r"^depends = .*", "depends = " + json.dumps(dependencies), source, flags=re.M)
-          assert count == 1
-          manifest.write_text(updated)
-          PYTHON
+          [[ "$libraries" != *"[libxml2.so"* ]]
+          [[ "$libraries" != *"[libc++.so"* ]]
       - name: Package Ubuntu 26.04 DEB
         run: |
           cargo install cargo-packager --version 0.11.8 --locked
@@ -193,12 +176,37 @@ jobs:
           cd /packages
           sha256sum --check -- *.sha256
           apt-get install -y ./*_ubuntu26.04_amd64.deb
-          dpkg-query -W agentaps libxml2-16
+          dpkg-query -W agentaps
           libraries=$(ldd /usr/bin/agentaps)
           printf '%s\n' "$libraries"
           [[ "$libraries" != *"not found"* ]]
-          [[ "$libraries" == *"libxml2.so.16"* ]]
-          [[ "$libraries" != *"libxml2.so.2 "* ]]
+          [[ "$(agentaps --version)" == "agentaps $(dpkg-query -W -f='${Version}' agentaps)" ]]
+          ! command -v zig
+          ! command -v cargo
+          SH
+
+  ubuntu24-install:
+    name: DEB install (clean Ubuntu 24.04)
+    needs: build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          name: desktop-x86_64-unknown-linux-gnu
+          path: dist/desktop
+      - name: Install the candidate without build dependencies
+        run: |
+          docker run --rm -i --env DEBIAN_FRONTEND=noninteractive \
+            --volume "$GITHUB_WORKSPACE/dist/desktop:/packages:ro" \
+            ubuntu:24.04 bash -euo pipefail <<'SH'
+          apt-get update
+          cd /packages
+          sha256sum --check -- *.sha256
+          apt-get install -y ./*_amd64.deb
+          libraries=$(ldd /usr/bin/agentaps)
+          printf '%s\n' "$libraries"
+          [[ "$libraries" != *"not found"* ]]
           [[ "$(agentaps --version)" == "agentaps $(dpkg-query -W -f='${Version}' agentaps)" ]]
           ! command -v zig
           ! command -v cargo
@@ -206,7 +214,7 @@ jobs:
 
   draft_release:
     if: startsWith(github.ref, 'refs/tags/v')
-    needs: [build, ubuntu26-install]
+    needs: [build, ubuntu24-install, ubuntu26-install]
     runs-on: ubuntu-22.04
     permissions:
       contents: write

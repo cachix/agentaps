@@ -54,7 +54,7 @@ mod sessions;
 mod settings;
 use key_bindings::Shortcut;
 #[cfg(all(
-    feature = "ghostty-terminal",
+    feature = "rio-terminal",
     any(target_os = "linux", target_os = "macos")
 ))]
 mod terminal;
@@ -527,7 +527,7 @@ struct Workspace {
     settings: Option<settings::SettingsPage>,
     session_composers: HashMap<u64, Entity<TextareaState>>,
     #[cfg(all(
-        feature = "ghostty-terminal",
+        feature = "rio-terminal",
         any(target_os = "linux", target_os = "macos")
     ))]
     terminals: HashMap<u64, terminal::SessionTerminal>,
@@ -1054,7 +1054,7 @@ impl Workspace {
             settings: None,
             session_composers: HashMap::new(),
             #[cfg(all(
-                feature = "ghostty-terminal",
+                feature = "rio-terminal",
                 any(target_os = "linux", target_os = "macos")
             ))]
             terminals: HashMap::new(),
@@ -1271,7 +1271,7 @@ impl Workspace {
                     this.poll_sync_counts(cx);
                     this.tick_panes(window, cx);
                     #[cfg(all(
-                        feature = "ghostty-terminal",
+                        feature = "rio-terminal",
                         any(target_os = "linux", target_os = "macos")
                     ))]
                     this.close_exited_terminals(window, cx);
@@ -1610,7 +1610,7 @@ impl Workspace {
 
     fn terminal_picker_available(&self, cx: &Context<Self>) -> bool {
         cfg!(all(
-            feature = "ghostty-terminal",
+            feature = "rio-terminal",
             any(target_os = "linux", target_os = "macos")
         )) && matches!(self.view, WorkspaceView::NewSession {
                 step: PickerStep::Agents { project_index }, ..
@@ -1863,7 +1863,7 @@ impl Workspace {
             agent.elicitations.clear();
             self.deferred_connections.retain(|id| *id != agent_id);
             #[cfg(all(
-                feature = "ghostty-terminal",
+                feature = "rio-terminal",
                 any(target_os = "linux", target_os = "macos")
             ))]
             self.terminals.remove(&agent_id);
@@ -1946,7 +1946,7 @@ impl Workspace {
                     && self.picker.selection == self.agent_results(cx).len()
                 {
                     #[cfg(all(
-                        feature = "ghostty-terminal",
+                        feature = "rio-terminal",
                         any(target_os = "linux", target_os = "macos")
                     ))]
                     self.start_project_terminal(window, cx);
@@ -2077,7 +2077,7 @@ impl Workspace {
             let config = &self.projects[session.project_index].agents[session.agent_index].config;
             if config.terminal {
                 #[cfg(all(
-                    feature = "ghostty-terminal",
+                    feature = "rio-terminal",
                     any(target_os = "linux", target_os = "macos")
                 ))]
                 if self.focus_terminal(config.id, window, cx) {
@@ -2476,7 +2476,7 @@ impl Workspace {
 
     fn handle_escape(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         #[cfg(all(
-            feature = "ghostty-terminal",
+            feature = "rio-terminal",
             any(target_os = "linux", target_os = "macos")
         ))]
         if self.terminal_focused(window, cx) {

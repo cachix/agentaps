@@ -33,9 +33,6 @@ jobs:
             libxkbcommon-dev libxkbcommon-x11-dev libwayland-dev libx11-dev \
             libxcb-shape0-dev libxcb-xfixes0-dev libxcb-randr0-dev \
             libxcb-xinput-dev libegl1-mesa-dev libgles2-mesa-dev libglib2.0-dev libgtk-4-dev qt6-base-dev libasound2-dev
-      - name: Set up session terminal
-        if: runner.os != 'Windows'
-        uses: ./.github/actions/setup-terminal
       - name: Install Rust toolchain
         shell: bash
         run: |
@@ -75,74 +72,3 @@ jobs:
         run: |
           rustup component add clippy
           RUSTC_BOOTSTRAP=wasm_thread cargo clippy --manifest-path web/Cargo.toml --target wasm32-unknown-unknown --locked -- -D warnings
-
-  ubuntu-install:
-    name: DEB install (clean Ubuntu 24.04)
-    runs-on: ubuntu-24.04
-    timeout-minutes: 15
-    env:
-      AGENTAPS_VERSION: 0.5.2
-    steps:
-      - uses: actions/checkout@v5
-      - name: Extract documented package prerequisites
-        run: |
-          python3 - <<'PY'
-          import os
-          from pathlib import Path
-          import re
-
-          guide = Path("docs/session-terminal.md").read_text()
-          section = guide.split("## Linux package prerequisites\n", 1)[1]
-          script = re.search(r"```sh\n(.*?)```", section, flags=re.S).group(1)
-          Path(os.environ["RUNNER_TEMP"], "agentaps-prerequisites.sh").write_text(script)
-          PY
-          bash -n "$RUNNER_TEMP/agentaps-prerequisites.sh"
-      - name: Verify candidate DEB dependencies with the released binary
-        run: |
-          docker run --rm -i \
-            --env AGENTAPS_VERSION \
-            --env DEBIAN_FRONTEND=noninteractive \
-            --volume "$RUNNER_TEMP/agentaps-prerequisites.sh:/tmp/prerequisites.sh:ro" \
-            --volume "$GITHUB_WORKSPACE/Cargo.toml:/tmp/Cargo.toml:ro" \
-            ubuntu:24.04 bash -euo pipefail <<'SH'
-          # Start with a plain Ubuntu image, without runner development libraries.
-          echo 'APT::Get::Assume-Yes "true";' > /etc/apt/apt.conf.d/90ci
-          apt-get update
-          apt-get install sudo python3
-          bash -euo pipefail /tmp/prerequisites.sh
-
-          cd /tmp
-          package="agentaps_${AGENTAPS_VERSION}_amd64.deb"
-          release="https://github.com/cachix/agentaps/releases/download/v${AGENTAPS_VERSION}"
-          curl --fail --location --retry 3 "$release/$package" --output "$package"
-          curl --fail --location --retry 3 "$release/$package.sha256" --output "$package.sha256"
-          sha256sum --check "$package.sha256"
-
-          # Test this checkout's package dependencies using the verified release
-          # binary, without a full desktop build or inherited build libraries.
-          dpkg-deb --raw-extract "$package" /tmp/candidate
-          python3 - <<'PY'
-          from pathlib import Path
-          import re
-          import tomllib
-
-          manifest = tomllib.loads(Path("/tmp/Cargo.toml").read_text())
-          dependencies = manifest["package"]["metadata"]["packager"]["deb"]["depends"]
-          control = Path("/tmp/candidate/DEBIAN/control")
-          updated, count = re.subn(r"^Depends: .*", "Depends: " + ", ".join(dependencies), control.read_text(), flags=re.M)
-          assert count == 1
-          control.write_text(updated)
-          PY
-          dpkg-deb --build /tmp/candidate /tmp/agentaps-candidate.deb
-          sudo apt install ./agentaps-candidate.deb
-
-          dpkg-query -W agentaps libc++1 libc++abi1 libxml2
-          for runtime in libc++1 libc++abi1; do
-            dpkg --compare-versions "$(dpkg-query -W -f='${Version}' "$runtime")" ge 1:21
-          done
-          dependencies=$(ldd /usr/bin/agentaps)
-          printf '%s\n' "$dependencies"
-          [[ "$dependencies" != *"not found"* ]]
-          [[ "$(agentaps --version)" == "agentaps $AGENTAPS_VERSION" ]]
-          ! command -v zig
-          SH

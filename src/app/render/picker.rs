@@ -179,12 +179,12 @@ impl Workspace {
                         )
                         .on_click(self.pane_listener(cx, |this, _, window, cx| {
                             #[cfg(all(
-                                feature = "ghostty-terminal",
+                                feature = "rio-terminal",
                                 any(target_os = "linux", target_os = "macos")
                             ))]
                             this.start_project_terminal(window, cx);
                             #[cfg(not(all(
-                                feature = "ghostty-terminal",
+                                feature = "rio-terminal",
                                 any(target_os = "linux", target_os = "macos")
                             )))]
                             let _ = (this, window, cx);

@@ -15,10 +15,11 @@ spec.loader.exec_module(publisher)
 
 
 class PublishTests(unittest.TestCase):
-    def run_release(self, published, tag="v0.5.3", dry_run=False):
+    def run_release(self, published, tag="v0.5.3", dry_run=False, terminal=True):
         metadata = {
             "packages": [
                 {"name": "agentaps", "version": "0.5.3", "publish": None},
+                {"name": "gpui-rio", "version": "0.1.0", "publish": None},
                 {
                     "name": "agentaps-control-protocol",
                     "version": "0.1.0",
@@ -26,6 +27,8 @@ class PublishTests(unittest.TestCase):
                 },
             ]
         }
+        if not terminal:
+            metadata["packages"] = [p for p in metadata["packages"] if p["name"] != "gpui-rio"]
         args = ["--tag", tag]
         if dry_run:
             args.append("--dry-run")
@@ -40,30 +43,45 @@ class PublishTests(unittest.TestCase):
             return [call.args[0] for call in run.call_args_list[1:]]
 
     def test_existing_protocol_is_not_republished_with_a_new_desktop_release(self):
-        commands = self.run_release([True, False])
+        commands = self.run_release([True, True, False])
         self.assertEqual(
             commands,
             [["cargo", "publish", "--locked", "--registry", "crates-io", "--package", "agentaps"]],
         )
 
-    def test_retry_after_both_uploads_does_not_upload_again(self):
-        self.assertEqual(self.run_release([True, True]), [])
+    def test_retry_after_all_uploads_does_not_upload_again(self):
+        self.assertEqual(self.run_release([True, True, True]), [])
 
-    def test_first_publication_selects_protocol_and_desktop_together(self):
-        commands = self.run_release([False, False])
+    def test_first_publication_selects_dependencies_and_desktop_together(self):
+        commands = self.run_release([False, False, False])
         self.assertEqual(
             commands,
             [[
                 "cargo", "publish", "--locked", "--registry", "crates-io",
-                "--package", "agentaps-control-protocol", "--package", "agentaps",
+                "--package", "agentaps-control-protocol", "--package", "gpui-rio",
+                "--package", "agentaps",
             ]],
         )
 
     def test_dry_run_still_validates_packages_for_an_existing_release(self):
         self.assertEqual(
-            self.run_release([True, True], dry_run=True),
+            self.run_release([True, True, True], dry_run=True),
             [["cargo", "publish", "--workspace", "--dry-run", "--locked", "--registry", "crates-io"]],
         )
+
+    def test_release_before_rio_extraction_can_still_be_retried(self):
+        commands = self.run_release([True, False], terminal=False)
+        self.assertEqual(commands, [[
+            "cargo", "publish", "--locked", "--registry", "crates-io",
+            "--package", "agentaps",
+        ]])
+
+    def test_new_terminal_version_is_published_before_desktop(self):
+        commands = self.run_release([True, False, False])
+        self.assertEqual(commands, [[
+            "cargo", "publish", "--locked", "--registry", "crates-io",
+            "--package", "gpui-rio", "--package", "agentaps",
+        ]])
 
     def test_mismatched_version_cannot_publish(self):
         with self.assertRaisesRegex(ValueError, "match"):

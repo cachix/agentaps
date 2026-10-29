@@ -25,7 +25,7 @@ impl Workspace {
         let agent = &project.agents[agent_index];
         if agent.config.terminal {
             #[cfg(all(
-                feature = "ghostty-terminal",
+                feature = "rio-terminal",
                 any(target_os = "linux", target_os = "macos")
             ))]
             if let Some(terminal) = self.render_terminal(agent.config.id, cx) {
@@ -37,17 +37,17 @@ impl Workspace {
                         .icon(IconName::SquareTerminal)
                         .label("Open terminal")
                         .disabled(!cfg!(all(
-                            feature = "ghostty-terminal",
+                            feature = "rio-terminal",
                             any(target_os = "linux", target_os = "macos")
                         )))
                         .on_click(self.pane_listener(cx, move |this, _, window, cx| {
                             #[cfg(all(
-                                feature = "ghostty-terminal",
+                                feature = "rio-terminal",
                                 any(target_os = "linux", target_os = "macos")
                             ))]
                             this.toggle_active_terminal(window, cx);
                             #[cfg(not(all(
-                                feature = "ghostty-terminal",
+                                feature = "rio-terminal",
                                 any(target_os = "linux", target_os = "macos")
                             )))]
                             let _ = (this, window, cx);
@@ -939,7 +939,7 @@ impl Workspace {
                 .tooltip(move |window, cx| Tooltip::new(label).build(window, cx))
         });
         #[cfg(all(
-            feature = "ghostty-terminal",
+            feature = "rio-terminal",
             any(target_os = "linux", target_os = "macos")
         ))]
         let terminal_control = Some(
@@ -980,7 +980,7 @@ impl Workspace {
                 })),
         );
         #[cfg(not(all(
-            feature = "ghostty-terminal",
+            feature = "rio-terminal",
             any(target_os = "linux", target_os = "macos")
         )))]
         let terminal_control: Option<Button> = None;
@@ -1028,7 +1028,7 @@ impl Workspace {
             ),
         );
         #[cfg(all(
-            feature = "ghostty-terminal",
+            feature = "rio-terminal",
             any(target_os = "linux", target_os = "macos")
         ))]
         if let Some(terminal) = self.render_terminal(agent_id, cx) {
