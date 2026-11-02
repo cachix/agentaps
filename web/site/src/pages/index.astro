@@ -1,0 +1,286 @@
+---
+import StarlightPage from '@astrojs/starlight/components/StarlightPage.astro';
+import { Image } from 'astro:assets';
+import Button from '@cachix/site-kit/ui/Button.astro';
+import ButtonGroup from '@cachix/site-kit/ui/ButtonGroup.astro';
+import LandingHero from '@cachix/site-kit/ui/LandingHero.astro';
+import TerminalFrame from '@cachix/site-kit/ui/TerminalFrame.astro';
+import claude from '../../../../assets/agents/claude.svg?raw';
+import codex from '../../../../assets/agents/codex.svg?raw';
+import gemini from '../../../../assets/agents/gemini.svg?raw';
+import opencode from '../../../../assets/agents/opencode.svg?raw';
+import screenshot from '../assets/agentaps-desktop.png';
+import linux from '../assets/platforms/linux.svg?raw';
+import macos from '../assets/platforms/macos.svg?raw';
+import windows from '../assets/platforms/windows.svg?raw';
+import '../styles/landing.css';
+
+const repository = 'https://github.com/cachix/agentaps';
+const version = '0.7.0';
+const release = `${repository}/releases/download/v${version}`;
+const platforms = [
+  { name: 'Linux', icon: linux },
+  { name: 'macOS', icon: macos },
+  { name: 'Windows', icon: windows },
+];
+const downloads = [
+  {
+    platform: 'linux',
+    icon: linux,
+    links: [
+      { label: 'Ubuntu 24.04 DEB', href: `${release}/agentaps_${version}_amd64.deb` },
+      { label: 'Ubuntu 26.04 DEB', href: `${release}/agentaps_${version}_ubuntu26.04_amd64.deb` },
+      { label: 'Linux AppImage', href: `${release}/agentaps_${version}_x86_64.AppImage` },
+    ],
+  },
+  {
+    platform: 'macos',
+    icon: macos,
+    links: [{ label: 'macOS (Apple Silicon)', href: `${release}/Agentaps_${version}_aarch64.dmg` }],
+  },
+  {
+    platform: 'windows',
+    icon: windows,
+    links: [{ label: 'Windows', href: `${release}/agentaps_${version}_x64-setup.exe` }],
+  },
+];
+const quickstart = [
+  { title: 'Choose your project', body: 'Open Agentaps, select New, and pick a local folder or an SSH path.' },
+  { title: 'Connect your harness', body: 'Choose an ACP-compatible agent with your existing setup and authentication.' },
+  { title: 'Start the conversation', body: 'Send a prompt, follow tool activity, and review the changes alongside your chat.' },
+];
+const agents = [
+  { name: 'Claude Code', icon: claude },
+  { name: 'Codex', icon: codex },
+  { name: 'Gemini CLI', icon: gemini },
+  { name: 'OpenCode', icon: opencode },
+];
+const features = [
+  { title: 'Every project, together', body: 'Keep sessions in one sidebar. Archive conversations, fork a reply, and return to the work that matters.', href: '/using-agentaps/' },
+  { title: 'Work over SSH', body: 'Run agents on a server using your existing SSH setup. Follow the conversation from your desktop.', href: '/using-agentaps/' },
+  { title: 'See what changed', body: 'Inspect local changes in unified or split diffs beside the conversation, without leaving your workspace.', href: '/using-agentaps/' },
+  { title: 'Take it to your browser', body: 'Read conversations, send prompts, and answer permission requests through an encrypted Iroh connection.', href: '/web-connect/' },
+];
+const connection = [
+  { icon: '>_', label: 'Your computer', title: 'Agentaps + your harness', body: 'Projects and agent processes stay here.' },
+  { icon: '⇄', label: 'Encrypted connection', title: 'Connected through Iroh', body: 'Pair once with a QR code.' },
+  { icon: '↗', label: 'Your browser', title: 'The conversation continues', body: 'Unlock with a passkey or passphrase.' },
+];
+---
+
+<StarlightPage
+  frontmatter={{
+    title: 'Your coding agents. One workspace.',
+    description: 'One workspace for your coding agents. Run your harness locally or over SSH, review changes, and continue securely from your browser with Agentaps.',
+    template: 'splash',
+    hero: { tagline: '' },
+    pagefind: false,
+    llmActions: false,
+    head: [
+      {
+        tag: 'script',
+        content: 'if (/^#[^:]+:[0-9a-f]{64}$/i.test(location.hash)) location.replace(`/connect/${location.hash}`);',
+      },
+    ],
+  }}
+  hasSidebar={false}
+>
+  <div class="not-content landing">
+    <LandingHero class="hero-section">
+      <div class="landing-container hero-inner">
+        <div class="hero-copy">
+          <p class="eyebrow"><span class="eyebrow-dot" aria-hidden="true"></span>Open source. Built in Rust.</p>
+          <h1>Your coding agents.<br /><span>One workspace.</span></h1>
+          <p class="hero-lead">A universal UI for coding harnesses. Work locally or over SSH, keep every conversation together, and pick up from your browser.</p>
+          <ButtonGroup class="hero-actions">
+            <Button href="#downloads" arrow><span data-release-label>Get Agentaps {version}</span></Button>
+            <Button href={repository} variant="secondary" arrow>View on GitHub</Button>
+          </ButtonGroup>
+        </div>
+
+        <div class="hero-demo">
+          <TerminalFrame class="product-frame" title="AGENTAPS / DESKTOP" status="LOCAL + SSH + WEB">
+            <Image src={screenshot} alt="Agentaps desktop app showing project sessions, a Codex conversation, and agent controls" widths={[640, 960, 1280, 1909]} sizes="(min-width: 72rem) 38rem, 100vw" loading="eager" />
+          </TerminalFrame>
+          <div class="platform-support">
+            {platforms.map(({ name, icon }) => <strong><span class="platform-icon" aria-hidden="true" set:html={icon} />{name}</strong>)}
+          </div>
+        </div>
+      </div>
+    </LandingHero>
+
+    <section class="agents-section" aria-labelledby="agents-title">
+      <div class="landing-container">
+        <div class="section-heading centered">
+          <span class="section-kicker">Bring your own agent</span>
+          <h2 id="agents-title">Keep the harness you know.</h2>
+          <p>Agentaps speaks <a class="csk-text-link concept-link" href="https://agentclientprotocol.com/get-started/introduction">Agent Client Protocol</a>. Connect your agent directly or through an ACP adapter.</p>
+        </div>
+        <ul class="agent-grid" aria-label="Supported agents">
+          {agents.map(({ name, icon }) => <li><span class="agent-icon" aria-hidden="true" set:html={icon} />{name}</li>)}
+        </ul>
+        <a class="arrow-link csk-text-link" href="/getting-started/">Or connect another ACP-compatible harness <span aria-hidden="true">→</span></a>
+      </div>
+    </section>
+
+    <section class="features-section" aria-labelledby="features-title">
+      <div class="landing-container">
+        <div class="section-heading centered">
+          <span class="section-kicker">Built for how you work</span>
+          <h2 id="features-title">Local. Remote. Wherever you are.</h2>
+        </div>
+        <div class="feature-grid">
+          {features.map(({ title, body, href }) => (
+            <a class="feature-card csk-interactive-surface" href={href}>
+              <h3>{title} <span aria-hidden="true">→</span></h3>
+              <p>{body}</p>
+            </a>
+          ))}
+        </div>
+      </div>
+    </section>
+
+    <section class="connect-section" aria-labelledby="connect-title">
+      <div class="landing-container connect-inner">
+        <div class="section-heading">
+          <span class="section-kicker">Remote Control</span>
+          <h2 id="connect-title">Step away.<br />Stay connected.</h2>
+          <p>Open the phone icon in Agentaps and scan its QR code. Your agents keep running on your desktop. Your browser goes with you.</p>
+          <ButtonGroup class="section-actions">
+            <Button href="/connect/" arrow>Open Remote Control</Button>
+          </ButtonGroup>
+          <p class="fine-print">Encrypted peer-to-peer connection · No mobile app required</p>
+        </div>
+        <ol class="connection-flow" aria-label="How Remote Control works">
+          {connection.map(({ icon, label, title, body }) => (
+            <li>
+              <span class="flow-icon" aria-hidden="true">{icon}</span>
+              <div><span class="flow-label">{label}</span><strong>{title}</strong><p>{body}</p></div>
+            </li>
+          ))}
+        </ol>
+      </div>
+    </section>
+
+    <section class="install-section" id="downloads" aria-labelledby="install-title">
+      <div class="landing-container install-grid">
+        <div class="install-card">
+          <h2 id="install-title">Install</h2>
+          <p>Choose your platform. Bring your own agent.</p>
+          <div class="platforms" role="group" aria-label="Desktop downloads">
+            {downloads.map(({ platform, icon, links }) => (
+              <div class="platform" data-platform={platform}>
+                <span class="platform-icon" aria-hidden="true" set:html={icon} />
+                <span class="platform-links">
+                  {links.map(({ label, href }) => <a class="platform-link csk-interactive-surface" href={href}>{label}</a>)}
+                </span>
+              </div>
+            ))}
+          </div>
+          <p class="release-note">Latest release: <a class="csk-text-link" href={`${repository}/releases/tag/v${version}`} data-release-link>Agentaps {version}</a></p>
+          <div class="source-install">
+            <span class="section-kicker">Or build from source</span>
+            <TerminalFrame class="terminal" title="terminal">
+              <pre class="csk-terminal__body"><code><span class="prompt">$</span> cargo install agentaps --locked</code></pre>
+            </TerminalFrame>
+            <a class="arrow-link csk-text-link" href="/build-from-source/">Build instructions <span aria-hidden="true">→</span></a>
+          </div>
+        </div>
+
+        <div class="install-card">
+          <h2>Quickstart</h2>
+          <ol class="quickstart">
+            {quickstart.map(({ title, body }) => (
+              <li><strong>{title}</strong><p>{body}</p></li>
+            ))}
+          </ol>
+        </div>
+      </div>
+    </section>
+
+    <section class="final-section" aria-labelledby="final-title">
+      <div class="landing-container final-card">
+        <div>
+          <h2 id="final-title">Get started with Agentaps.</h2>
+          <p>Install the desktop app, then connect your first agent.</p>
+        </div>
+        <ButtonGroup class="final-actions">
+          <Button href="/getting-started/" arrow>Get started</Button>
+          <Button href="/connect/" variant="secondary">Open Remote Control</Button>
+        </ButtonGroup>
+      </div>
+    </section>
+  </div>
+</StarlightPage>
+
+<script>
+  const releaseUrl = 'https://api.github.com/repos/cachix/agentaps/releases/latest';
+  const patterns: Record<string, RegExp> = {
+    linux: /(?:linux|unknown-linux|appimage|\.deb$|\.rpm$)/i,
+    macos: /(?:macos-aarch64|_aarch64)\.dmg$/i,
+    windows: /(?:windows|pc-windows|\.msi$|\.exe$)/i,
+  };
+  const platformNames: Record<string, string> = { linux: 'Linux', macos: 'macOS (Apple Silicon)', windows: 'Windows' };
+  const installerFile = /\.(?:AppImage|deb|rpm|tar\.gz|tar\.xz|zip|dmg|pkg|msi|exe)$/i;
+
+  interface Asset {
+    name: string;
+    browser_download_url?: string;
+  }
+
+  const assetLabel = (platform: string, asset: Asset) => {
+    if (platform === 'linux' && /\.deb$/i.test(asset.name)) {
+      return /_ubuntu26\.04_/i.test(asset.name) ? 'Ubuntu 26.04 DEB' : 'Ubuntu 24.04 DEB';
+    }
+    if (platform === 'linux' && /\.AppImage$/i.test(asset.name)) return 'Linux AppImage';
+    return platformNames[platform];
+  };
+
+  const currentPlatform = () => {
+    const userAgent = navigator.userAgent || '';
+    const userAgentData = (navigator as Navigator & { userAgentData?: { mobile?: boolean; platform?: string } }).userAgentData;
+    const mobile = userAgentData?.mobile
+      || /Android|iPhone|iPad|iPod/i.test(userAgent)
+      || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+    if (mobile) return null;
+    const platform = userAgentData?.platform || navigator.platform || userAgent;
+    return /Win/i.test(platform) ? 'windows'
+      : /Mac/i.test(platform) ? 'macos'
+        : /Linux/i.test(platform) ? 'linux' : null;
+  };
+
+  const links = (platform: string) => document.querySelector<HTMLElement>(`.platform[data-platform="${platform}"] .platform-links`);
+
+  const platform = currentPlatform();
+  if (platform) document.querySelector(`.platform[data-platform="${platform}"]`)?.classList.add('is-current');
+
+  fetch(releaseUrl, { headers: { Accept: 'application/vnd.github+json' } })
+    .then((response) => response.ok ? response.json() : null)
+    .then((release) => {
+      if (!release || !Array.isArray(release.assets)) return;
+      let published = 0;
+      for (const [platform, pattern] of Object.entries(patterns)) {
+        const target = links(platform);
+        const assets = (release.assets as Asset[]).filter((asset) => pattern.test(asset.name) && installerFile.test(asset.name) && asset.browser_download_url);
+        if (!target || assets.length === 0) continue;
+        published += 1;
+        target.replaceChildren(...assets.map((asset) => {
+          const link = document.createElement('a');
+          link.className = 'platform-link csk-interactive-surface';
+          link.href = asset.browser_download_url!;
+          link.textContent = assetLabel(platform, asset);
+          return link;
+        }));
+      }
+      if (published !== Object.keys(patterns).length || !release.tag_name || !release.html_url) return;
+      const version = release.tag_name.replace(/^v/, '');
+      for (const link of document.querySelectorAll<HTMLAnchorElement>('[data-release-link]')) {
+        link.textContent = `Agentaps ${version}`;
+        link.href = release.html_url;
+      }
+      for (const label of document.querySelectorAll('[data-release-label]')) {
+        label.textContent = `Get Agentaps ${version}`;
+      }
+    })
+    .catch(() => {});
+</script>
