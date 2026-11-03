@@ -46,8 +46,8 @@ packages from the same tag. Drafts and prereleases do not publish to crates.io.
 3. Smoke test the exact files on supported systems. Sign and notarize the macOS
    build and sign the Windows build, or decide to distribute unsigned builds.
    If signed files replace draft assets, replace their checksums too. Publish
-   the draft when the files are ready, then update the fallback release label
-   and installer links in `web/site/index.html` to match the published assets.
+   the draft when the files are ready, then update the fallback `version` in
+   `web/site/src/components/Landing.astro` to match the published assets.
    Check the website download links both with and without the GitHub API available.
 
 ## Publish to crates.io

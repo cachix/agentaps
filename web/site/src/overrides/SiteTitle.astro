@@ -1,0 +1,27 @@
+---
+const { siteTitle, siteTitleHref } = Astro.locals.starlightRoute;
+---
+
+<a href={siteTitleHref} class="agentaps-site-title" aria-label={`${siteTitle} home`}>
+  <img src="/favicon.svg" alt="" width="28" height="28" />agentaps
+</a>
+
+<style>
+  .agentaps-site-title {
+    align-items: center;
+    color: var(--sl-color-white);
+    display: flex;
+    font-size: 1.3rem;
+    font-weight: 600;
+    gap: 0.55rem;
+    letter-spacing: -0.05em;
+    text-decoration: none;
+    white-space: nowrap;
+  }
+
+  .agentaps-site-title img {
+    display: block;
+    height: 1.75rem;
+    width: 1.75rem;
+  }
+</style>

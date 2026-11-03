@@ -1,0 +1,85 @@
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap');
+
+:root {
+  --agentaps-accent: #206b9f;
+  --agentaps-accent-strong: #164e75;
+  --agentaps-accent-soft: #e0edf7;
+  --agentaps-surface: #ffffff;
+  --agentaps-sidebar: #f0f4f8;
+  --agentaps-line: #ccd6e0;
+  --sl-font: 'IBM Plex Sans', system-ui, sans-serif;
+  --sl-font-mono: 'IBM Plex Mono', ui-monospace, monospace;
+  --sl-color-accent-low: #e0edf7;
+  --sl-color-accent: #206b9f;
+  --sl-color-accent-high: #164e75;
+  --sl-color-text-accent: #206b9f;
+  --sl-color-bg-accent: #206b9f;
+  --sl-color-bg: #f8fafc;
+  --sl-color-bg-nav: #f8fafc;
+  --sl-color-bg-sidebar: #f0f4f8;
+  --sl-color-hairline-light: var(--agentaps-line);
+  --sl-color-hairline: var(--agentaps-line);
+  --csk-button-primary-background: var(--agentaps-accent);
+  --csk-button-primary-color: #ffffff;
+  --csk-button-radius: 0.3rem;
+  --csk-radius: 0.4rem;
+  --csk-landing-glow-primary: color-mix(in srgb, var(--agentaps-accent) 12%, transparent);
+  --csk-landing-glow-secondary: transparent;
+}
+
+:root[data-theme='light'] {
+  --sl-color-white: #1d2a38;
+  --sl-color-gray-1: #26384a;
+  --sl-color-gray-2: #3b4d60;
+  --sl-color-gray-3: #526579;
+  --sl-color-gray-4: #8796a6;
+  --sl-color-gray-5: #ccd6e0;
+  --sl-color-gray-6: #f0f4f8;
+  --sl-color-black: #f8fafc;
+}
+
+:root[data-theme='dark'] {
+  --agentaps-accent: #8fc5ec;
+  --agentaps-accent-strong: #b6dcf4;
+  --agentaps-accent-soft: #1d3142;
+  --agentaps-surface: #202a36;
+  --agentaps-sidebar: #151c25;
+  --agentaps-line: #334253;
+  --sl-color-accent-low: #1d3142;
+  --sl-color-accent: #8fc5ec;
+  --sl-color-accent-high: #b6dcf4;
+  --sl-color-text-accent: #8fc5ec;
+  --sl-color-bg-accent: #8fc5ec;
+  --sl-color-bg: #10151c;
+  --sl-color-bg-nav: #10151c;
+  --sl-color-bg-sidebar: #151c25;
+  --sl-color-white: #ffffff;
+  --sl-color-gray-1: #edf2f7;
+  --sl-color-gray-2: #c6d1dc;
+  --sl-color-gray-3: #9aaaba;
+  --sl-color-gray-4: #6b7c8e;
+  --sl-color-gray-5: #334253;
+  --sl-color-gray-6: #202a36;
+  --sl-color-black: #10151c;
+  --csk-button-primary-color: #10151c;
+}
+
+:where(a, button, input, select):focus-visible {
+  outline: 2px solid var(--sl-color-text-accent);
+  outline-offset: 4px;
+}
+
+::selection {
+  background: color-mix(in srgb, var(--agentaps-accent) 30%, transparent);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+  }
+}

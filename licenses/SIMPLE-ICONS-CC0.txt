@@ -6,3 +6,8 @@ https://creativecommons.org/publicdomain/zero/1.0/
 
 The logos remain trademarks of their respective owners and are used only to
 identify the matching agents.
+
+Platform logos in web/site/src/assets/platforms come from Simple Icons 11.0.0
+https://github.com/simple-icons/simple-icons/tree/11.0.0/icons
+
+They are unchanged SVGs and identify the supported operating systems.

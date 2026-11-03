@@ -14,6 +14,14 @@ Notable changes to Agentaps are recorded here.
 
 ### Changed
 
+- Rebuild the website on the shared Cachix site kit, with light and dark themes in the Agentaps palette.
+
+- Serve the website through a Cloudflare Worker that shows GitHub stars and the latest release in the navigation bar and answers Markdown requests from coding agents.
+
+- Add guides for getting started, Web Connect, the session terminal, and building from source to the website, with search and Markdown for coding agents.
+
+- Check the generated website for broken links in CI.
+
 - Website fallback downloads and release labels point to Agentaps 0.7.0 installers.
 
 - Allow publishing dry runs against stable version tags so trusted publishing can be verified before a release becomes public.

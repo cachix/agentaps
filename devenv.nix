@@ -1,6 +1,7 @@
 { pkgs, lib, ... }: {
   packages = with pkgs; [
     pkg-config
+    lychee
     nodejs
     clang
     trunk
