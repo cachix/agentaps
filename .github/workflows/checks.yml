@@ -55,7 +55,7 @@ jobs:
 
   web:
     name: Browser tests and WASM build
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-26.04
     timeout-minutes: 60
     steps:
       - uses: actions/checkout@v5
