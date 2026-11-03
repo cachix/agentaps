@@ -6,6 +6,8 @@ Notable changes to Agentaps are recorded here.
 
 ### Fixed
 
+- Run website and devenv checks on Ubuntu 26.04, allowing the website link checker to start with its required glibc version.
+
 - Search all projects and sessions, including archived sessions, regardless of the selected sidebar filter.
 
 - Discover the login shell PATH without requiring `/usr/bin/env`, and run its test without `/bin/sh` so nixpkgs builds no longer need to skip it.
