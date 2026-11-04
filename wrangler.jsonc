@@ -2,10 +2,10 @@
   "$schema": "https://unpkg.com/wrangler@4.141.0/config-schema.json",
   "name": "agentaps",
   "compatibility_date": "2026-10-01",
-  "main": "./worker.js",
+  "main": "./web/site/worker.js",
   "previews": {},
   "assets": {
-    "directory": "../dist",
+    "directory": "./web/dist",
     "binding": "ASSETS",
     "not_found_handling": "404-page",
     "run_worker_first": ["/*", "!/_astro/*", "!/connect/*"]

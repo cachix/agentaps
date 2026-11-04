@@ -32,10 +32,12 @@ Connect the `cachix/agentaps` GitHub repository to a Cloudflare Worker with Work
 | Production branch | `main` |
 | Root directory | `/` |
 | Build command | `bash web/cloudflare-build.sh` |
-| Deploy command | `npx wrangler deploy --config web/site/wrangler.jsonc` |
-| Non-production branch deploy command | `npx wrangler preview --config web/site/wrangler.jsonc` |
+| Deploy command | `npx wrangler deploy` |
+| Non-production branch deploy command | `npx wrangler preview` |
 
-Pushes to `main` then publish the site. [`web/site/wrangler.jsonc`](../web/site/wrangler.jsonc) serves `web/dist/` as static assets through [`web/site/worker.js`](../web/site/worker.js). The Worker serves GitHub stars and the latest release at `/api/github` for the navigation bar, and answers Markdown requests from coding agents through the site kit middleware. An optional `GITHUB_TOKEN` secret raises the GitHub API rate limit.
+Pushes to `main` then publish the site. [`wrangler.jsonc`](../wrangler.jsonc) serves `web/dist/` as static assets through [`web/site/worker.js`](../web/site/worker.js). The Worker serves GitHub stars and the latest release at `/api/github` for the navigation bar, and answers Markdown requests from coding agents through the site kit middleware. An optional `GITHUB_TOKEN` secret raises the GitHub API rate limit.
+
+Wrangler discovers the configuration at the repository root, so the default deploy and preview commands use only the built `web/dist/` assets. If existing Cloudflare build settings include `--config web/site/wrangler.jsonc`, remove that argument from both commands after this change.
 
 The empty `previews` block enables branch previews. Assets and compatibility settings stay at the top level and also apply to previews. See the [Cloudflare preview configuration guide](https://developers.cloudflare.com/workers/previews/configuration/#wrangler-configuration-file).
 
