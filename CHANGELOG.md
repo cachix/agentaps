@@ -6,6 +6,8 @@ Notable changes to Agentaps are recorded here.
 
 ### Fixed
 
+- Make default Wrangler deploy and preview commands discover the website configuration and upload only built assets.
+
 - Allow Cloudflare branch previews to start with the required Wrangler preview configuration.
 
 - Search all projects and sessions, including archived sessions, regardless of the selected sidebar filter.
