@@ -213,7 +213,7 @@ impl Workspace {
             let row = sidebar_row()
                 .id(("agent", agent_id))
                 .group(row_group.clone())
-                .pr(rems(if nested_sidebar { 1.875 } else { 0.25 }))
+                .pr(rems(1.875))
                 .cursor_pointer()
                 .when(!archived, |element| element.cursor_move())
                 .bg(palette.color(row_color))
@@ -283,7 +283,7 @@ impl Workspace {
                     .text_color(palette.color(MUTED)),
                 )
                 .when(
-                    show_agent_status || (!nested_sidebar && sync_counts.is_some()),
+                    !show_agent_status && !nested_sidebar && sync_counts.is_some(),
                     |row| {
                         row.child(
                             div()
@@ -293,18 +293,13 @@ impl Workspace {
                                 .flex()
                                 .items_center()
                                 .justify_start()
-                                .when(show_agent_status, |slot| {
-                                    slot.child(status_badge(agent, palette))
-                                })
-                                .when(!show_agent_status, |slot| {
-                                    slot.when_some(sync_counts, |slot, (ahead, behind)| {
-                                        slot.child(sync_counts_badge(
-                                            ("sync-agent", agent_id).into(),
-                                            ahead,
-                                            behind,
-                                            palette,
-                                        ))
-                                    })
+                                .when_some(sync_counts, |slot, (ahead, behind)| {
+                                    slot.child(sync_counts_badge(
+                                        ("sync-agent", agent_id).into(),
+                                        ahead,
+                                        behind,
+                                        palette,
+                                    ))
                                 }),
                         )
                     },
@@ -361,6 +356,21 @@ impl Workspace {
                             .text_xs()
                             .text_color(palette.color(STATUS_QUESTION))
                             .child(format!("{} ?", agent.elicitations.len())),
+                    )
+                })
+                .when(show_agent_status, |row| {
+                    row.child(
+                        div()
+                            .absolute()
+                            .right(rems(0.25))
+                            .top(px(0.))
+                            .bottom(px(0.))
+                            .w(rems(1.375))
+                            .flex()
+                            .items_center()
+                            .justify_center()
+                            .group_hover(row_group.clone(), |style| style.invisible())
+                            .child(status_badge(agent, palette)),
                     )
                 })
                 .child(
