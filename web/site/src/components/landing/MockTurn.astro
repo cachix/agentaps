@@ -1,0 +1,22 @@
+---
+interface Props {
+  prompt: string;
+  steps?: string[];
+  reply: string;
+}
+
+const { prompt, steps = [], reply } = Astro.props;
+---
+
+<p class="app-user">{prompt}</p>
+{steps.length > 0 && (
+  <div class="app-tools">
+    <p class="app-tools-head"><span class="app-mark is-done">✓</span>Completed<span class="app-caret">⌄</span></p>
+    <p class:list={['app-tool-row', { 'is-summary': steps.length > 1 }]}>
+      <span class="app-mark is-done">✓</span>
+      {steps.length > 1 ? `${steps.length} completed steps` : steps[0]}
+      <span class="app-caret">›</span>
+    </p>
+  </div>
+)}
+<p class="app-reply">{reply}</p>

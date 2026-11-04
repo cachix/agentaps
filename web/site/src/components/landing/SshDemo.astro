@@ -1,0 +1,46 @@
+---
+import TerminalFrame from '@cachix/site-kit/ui/TerminalFrame.astro';
+import Icon from './Icon.astro';
+import MockPicker from './MockPicker.astro';
+
+const modes = [
+  { state: 'local', label: 'Local folder' },
+  { state: 'ssh', label: 'SSH path' },
+] as const;
+const typed = 'ssh://user@server.example/home/user/project';
+const folders = [
+  { name: 'agentaps', path: '/home/you/dev/agentaps', panel: 'local' },
+  { name: 'devenv', path: '/home/you/dev/devenv', panel: 'local' },
+  { name: 'project', path: typed, panel: 'local ssh' },
+].map(({ name, path, panel }, index) => ({
+  name,
+  path,
+  attributes: {
+    'data-panel': panel,
+    'data-active': panel.includes('local') || undefined,
+    'data-first': index === 0 || undefined,
+  },
+}));
+---
+
+<div class="demo-split ssh-demo" data-ssh-demo data-states="local ssh" data-state="local">
+  <TerminalFrame class="app-frame ssh-window" title="Agentaps">
+    <MockPicker folders={folders} returnable>
+      <span class="app-placeholder" data-panel="local" data-active>Search recent folders or enter a local or SSH path…</span>
+      <span class="app-typed ssh-typed" data-panel="ssh" style={`--chars: ${typed.length}`}>{typed}</span>
+      <Icon name="x" />
+    </MockPicker>
+  </TerminalFrame>
+
+  <div class="demo-controls" role="group" aria-label="Project location">
+    {modes.map(({ state, label }) => (
+      <button type="button" class="csk-button demo-chip" data-variant="secondary" data-state-target={state}>{label}</button>
+    ))}
+  </div>
+</div>
+
+<script>
+  import { diorama } from '../../scripts/diorama';
+
+  diorama('[data-ssh-demo]', { interval: 4200 });
+</script>

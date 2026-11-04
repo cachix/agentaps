@@ -1,15 +1,17 @@
 ---
 import StarlightPage from '@astrojs/starlight/components/StarlightPage.astro';
-import { Image } from 'astro:assets';
 import Button from '@cachix/site-kit/ui/Button.astro';
 import ButtonGroup from '@cachix/site-kit/ui/ButtonGroup.astro';
 import LandingHero from '@cachix/site-kit/ui/LandingHero.astro';
 import TerminalFrame from '@cachix/site-kit/ui/TerminalFrame.astro';
-import claude from '../../../../assets/agents/claude.svg?raw';
-import codex from '../../../../assets/agents/codex.svg?raw';
-import gemini from '../../../../assets/agents/gemini.svg?raw';
-import opencode from '../../../../assets/agents/opencode.svg?raw';
-import screenshot from '../assets/agentaps-desktop.png';
+import AgentsHub from '../components/landing/AgentsHub.astro';
+import ComposerDemo from '../components/landing/ComposerDemo.astro';
+import DiffDemo from '../components/landing/DiffDemo.astro';
+import FeatureGrid from '../components/landing/FeatureGrid.astro';
+import HeroApp from '../components/landing/HeroApp.astro';
+import PanesDemo from '../components/landing/PanesDemo.astro';
+import RemoteDemo from '../components/landing/RemoteDemo.astro';
+import SshDemo from '../components/landing/SshDemo.astro';
 import linux from '../assets/platforms/linux.svg?raw';
 import macos from '../assets/platforms/macos.svg?raw';
 import windows from '../assets/platforms/windows.svg?raw';
@@ -49,22 +51,39 @@ const quickstart = [
   { title: 'Connect your harness', body: 'Choose an ACP-compatible agent with your existing setup and authentication.' },
   { title: 'Start the conversation', body: 'Send a prompt, follow tool activity, and review the changes alongside your chat.' },
 ];
-const agents = [
-  { name: 'Claude Code', icon: claude },
-  { name: 'Codex', icon: codex },
-  { name: 'Gemini CLI', icon: gemini },
-  { name: 'OpenCode', icon: opencode },
-];
-const features = [
-  { title: 'Every project, together', body: 'Keep sessions in one sidebar. Archive conversations, fork a reply, and return to the work that matters.', href: '/using-agentaps/' },
-  { title: 'Work over SSH', body: 'Run agents on a server using your existing SSH setup. Follow the conversation from your desktop.', href: '/using-agentaps/' },
-  { title: 'See what changed', body: 'Inspect local changes in unified or split diffs beside the conversation, without leaving your workspace.', href: '/using-agentaps/' },
-  { title: 'Take it to your browser', body: 'Read conversations, send prompts, and answer permission requests through an encrypted Iroh connection.', href: '/web-connect/' },
-];
-const connection = [
-  { icon: '>_', label: 'Your computer', title: 'Agentaps + your harness', body: 'Projects and agent processes stay here.' },
-  { icon: '⇄', label: 'Encrypted connection', title: 'Connected through Iroh', body: 'Pair once with a QR code.' },
-  { icon: '↗', label: 'Your browser', title: 'The conversation continues', body: 'Unlock with a passkey or passphrase.' },
+const showcases = [
+  {
+    id: 'panes',
+    layout: 'wide',
+    title: 'Every conversation in view.',
+    lead: 'Split any pane right or down and drag the dividers to resize. Close a pane and its agent keeps running. Your layout comes back on restart.',
+    link: { label: 'Work in Agentaps', href: '/using-agentaps/' },
+    demo: PanesDemo,
+  },
+  {
+    id: 'diff',
+    layout: 'wide',
+    title: 'See what changed.',
+    lead: 'Inspect staged and unstaged changes in unified or split diffs beside the conversation. The diff refreshes as the checkout changes.',
+    link: { label: 'Review local changes', href: '/using-agentaps/' },
+    demo: DiffDemo,
+  },
+  {
+    id: 'ssh',
+    layout: 'text-left',
+    title: 'Run agents where the code lives.',
+    lead: 'Enter an ssh:// path and Agentaps runs the agent on that server. Follow the conversation from your desktop as if it were local.',
+    link: { label: 'SSH projects', href: '/using-agentaps/' },
+    demo: SshDemo,
+  },
+  {
+    id: 'composer',
+    layout: 'text-right',
+    title: 'Ask your way.',
+    lead: 'Type / for agent commands, @ to find a file, or ! to ask for a shell command. Record a voice prompt, drop in images and files, and queue prompts while the agent works.',
+    link: { label: 'Composer shortcuts', href: '/using-agentaps/' },
+    demo: ComposerDemo,
+  },
 ];
 ---
 
@@ -89,7 +108,6 @@ const connection = [
     <LandingHero class="hero-section">
       <div class="landing-container hero-inner">
         <div class="hero-copy">
-          <p class="eyebrow"><span class="eyebrow-dot" aria-hidden="true"></span>Open source. Built in Rust.</p>
           <h1>Your coding agents.<br /><span>One workspace.</span></h1>
           <p class="hero-lead">A universal UI for coding harnesses. Work locally or over SSH, keep every conversation together, and pick up from your browser.</p>
           <ButtonGroup class="hero-actions">
@@ -99,9 +117,7 @@ const connection = [
         </div>
 
         <div class="hero-demo">
-          <TerminalFrame class="product-frame" title="AGENTAPS / DESKTOP" status="LOCAL + SSH + WEB">
-            <Image src={screenshot} alt="Agentaps desktop app showing project sessions, a Codex conversation, and agent controls" widths={[640, 960, 1280, 1909]} sizes="(min-width: 72rem) 38rem, 100vw" loading="eager" />
-          </TerminalFrame>
+          <HeroApp />
           <div class="platform-support">
             {platforms.map(({ name, icon }) => <strong><span class="platform-icon" aria-hidden="true" set:html={icon} />{name}</strong>)}
           </div>
@@ -112,53 +128,50 @@ const connection = [
     <section class="agents-section" aria-labelledby="agents-title">
       <div class="landing-container">
         <div class="section-heading centered">
-          <span class="section-kicker">Bring your own agent</span>
           <h2 id="agents-title">Keep the harness you know.</h2>
           <p>Agentaps speaks <a class="csk-text-link concept-link" href="https://agentclientprotocol.com/get-started/introduction">Agent Client Protocol</a>. Connect your agent directly or through an ACP adapter.</p>
         </div>
-        <ul class="agent-grid" aria-label="Supported agents">
-          {agents.map(({ name, icon }) => <li><span class="agent-icon" aria-hidden="true" set:html={icon} />{name}</li>)}
-        </ul>
+        <AgentsHub />
         <a class="arrow-link csk-text-link" href="/getting-started/">Or connect another ACP-compatible harness <span aria-hidden="true">→</span></a>
       </div>
     </section>
 
-    <section class="features-section" aria-labelledby="features-title">
+    {showcases.map(({ id, layout, title, lead, link, demo: Demo }) => (
+      <section class:list={['showcase', `is-${layout}`]} aria-labelledby={`${id}-title`}>
+        <div class="landing-container showcase-inner">
+          <div class:list={['section-heading', { centered: layout === 'wide' }]}>
+            <h2 id={`${id}-title`}>{title}</h2>
+            <p>{lead}</p>
+            <a class="arrow-link csk-text-link" href={link.href}>{link.label} <span aria-hidden="true">→</span></a>
+          </div>
+          <Demo />
+        </div>
+      </section>
+    ))}
+
+    <section class="connect-section" aria-labelledby="connect-title">
       <div class="landing-container">
         <div class="section-heading centered">
-          <span class="section-kicker">Built for how you work</span>
-          <h2 id="features-title">Local. Remote. Wherever you are.</h2>
+          <h2 id="connect-title">Step away. Stay connected.</h2>
+          <p>Open the phone icon in Agentaps and scan its QR code. Your agents keep running on your desktop. Your browser goes with you.</p>
         </div>
-        <div class="feature-grid">
-          {features.map(({ title, body, href }) => (
-            <a class="feature-card csk-interactive-surface" href={href}>
-              <h3>{title} <span aria-hidden="true">→</span></h3>
-              <p>{body}</p>
-            </a>
-          ))}
+        <RemoteDemo />
+        <div class="connect-actions">
+          <ButtonGroup>
+            <Button href="/connect/" arrow>Open Remote Control</Button>
+            <Button href="/web-connect/" variant="secondary">How pairing works</Button>
+          </ButtonGroup>
+          <p class="fine-print">Encrypted peer-to-peer connection · No mobile app required</p>
         </div>
       </div>
     </section>
 
-    <section class="connect-section" aria-labelledby="connect-title">
-      <div class="landing-container connect-inner">
-        <div class="section-heading">
-          <span class="section-kicker">Remote Control</span>
-          <h2 id="connect-title">Step away.<br />Stay connected.</h2>
-          <p>Open the phone icon in Agentaps and scan its QR code. Your agents keep running on your desktop. Your browser goes with you.</p>
-          <ButtonGroup class="section-actions">
-            <Button href="/connect/" arrow>Open Remote Control</Button>
-          </ButtonGroup>
-          <p class="fine-print">Encrypted peer-to-peer connection · No mobile app required</p>
+    <section class="details-section" aria-labelledby="details-title">
+      <div class="landing-container">
+        <div class="section-heading centered">
+          <h2 id="details-title">The details are done.</h2>
         </div>
-        <ol class="connection-flow" aria-label="How Remote Control works">
-          {connection.map(({ icon, label, title, body }) => (
-            <li>
-              <span class="flow-icon" aria-hidden="true">{icon}</span>
-              <div><span class="flow-label">{label}</span><strong>{title}</strong><p>{body}</p></div>
-            </li>
-          ))}
-        </ol>
+        <FeatureGrid />
       </div>
     </section>
 
@@ -179,7 +192,6 @@ const connection = [
           </div>
           <p class="release-note">Latest release: <a class="csk-text-link" href={`${repository}/releases/tag/v${version}`} data-release-link>Agentaps {version}</a></p>
           <div class="source-install">
-            <span class="section-kicker">Or build from source</span>
             <TerminalFrame class="terminal" title="terminal">
               <pre class="csk-terminal__body"><code><span class="prompt">$</span> cargo install agentaps --locked</code></pre>
             </TerminalFrame>
@@ -212,6 +224,12 @@ const connection = [
     </section>
   </div>
 </StarlightPage>
+
+<script>
+  import { pinChatsToLatest } from '../scripts/chat-scroll';
+
+  pinChatsToLatest();
+</script>
 
 <script>
   const releaseUrl = 'https://api.github.com/repos/cachix/agentaps/releases/latest';

@@ -1,0 +1,136 @@
+---
+import AgentIcon from './AgentIcon.astro';
+import Icon from './Icon.astro';
+
+const shortcuts = [
+  { keys: 'ctrl-N', label: 'New session' },
+  { keys: 'ctrl-shift-N', label: 'New session in folder' },
+  { keys: 'ctrl-,', label: 'Open settings' },
+  { keys: 'ctrl-B', label: 'Show or hide sidebar' },
+  { keys: 'ctrl-shift-D', label: 'Show or hide diff' },
+  { keys: 'ctrl-K', label: 'Search sessions' },
+];
+const themes = ['Agentaps (follows system)', 'System', 'Gruvbox Light', 'Gruvbox Dark', 'One Light', 'One Dark'];
+const resumed = [
+  {
+    project: 'agentaps',
+    sessions: [
+      { agent: 'codex', title: 'Count sessions per project' },
+      { agent: 'gemini', title: 'Draft 0.7.1 release notes' },
+    ],
+  },
+  {
+    project: 'devenv',
+    sessions: [{ agent: 'claude', title: 'Fix the postgres service' }],
+  },
+] as const;
+---
+
+<div class="feature-grid" data-feature-grid>
+  <article class="feature-tile is-wide">
+    <div class="tile-visual tile-terminal" aria-hidden="true">
+      <span class="tile-keys"><kbd>Ctrl</kbd><kbd>T</kbd></span>
+      <div class="tile-drawer">
+        <p class="tile-drawer-head"><span>Terminal</span><span>Restart</span><span>Stop</span><Icon name="x" /></p>
+        <pre class="tile-shell"><code><span class="prompt">$</span> cargo test --quiet
+<span class="tile-out">
+running 160 tests
+{'.'.repeat(87)} 87/160
+{'.'.repeat(12)}<span class="tile-ignored">i</span>{'.'.repeat(60)}</span>
+<span class="tile-out is-late">test result: <span class="tile-ok">ok</span>. 159 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 2.21s</span></code></pre>
+      </div>
+    </div>
+    <h3>Session terminal</h3>
+    <p>Open a shell below the composer with Ctrl+T in local macOS and Linux sessions.</p>
+  </article>
+
+  <article class="feature-tile">
+    <div class="tile-visual tile-themes" aria-hidden="true">
+      <p class="tile-select"><span>Agentaps (follows system)</span><Icon name="chevron-down" /></p>
+      <div class="tile-select-menu">
+        <p class="tile-select-search"><Icon name="search" />Search...</p>
+        <ul>
+          {themes.map((name, index) => (
+            <li class:list={{ 'is-selected': index === 0 }} style={`--i: ${index}`}>{name}{index === 0 && <Icon name="check" />}</li>
+          ))}
+        </ul>
+      </div>
+    </div>
+    <h3>Your theme</h3>
+    <p>Follow your desktop's light and dark scheme, your GTK or Qt theme, or pick a bundled palette.</p>
+  </article>
+
+  <article class="feature-tile">
+    <div class="tile-visual tile-shortcuts" aria-hidden="true">
+      <p class="tile-shortcuts-title">Workspace</p>
+      <div class="tile-shortcuts-card">
+        {shortcuts.map(({ keys, label }, index) => (
+          <p class="tile-shortcut" style={`--i: ${index}`}><span>{label}</span><span>{keys}</span></p>
+        ))}
+      </div>
+    </div>
+    <h3>Keyboard first</h3>
+    <p>Start, search, and switch sessions without reaching for the mouse.</p>
+  </article>
+
+  <article class="feature-tile">
+    <div class="tile-visual tile-fork" aria-hidden="true">
+      <p class="app-reply">The draft covers searching archived sessions and the new website.</p>
+      <p class="tile-actions"><span><Icon name="copy" />Copy</span><span class="tile-fork-action"><Icon name="network" />Fork from here</span></p>
+      <p class="tile-system"><b>SYSTEM</b><span>Forked here. The earlier conversation will be provided as context with your first message. Project files reflect their current state.</span></p>
+    </div>
+    <h3>Fork a reply</h3>
+    <p>Start a new session from any reply with the visible conversation as context.</p>
+  </article>
+
+  <article class="feature-tile">
+    <div class="tile-visual tile-spawn" aria-hidden="true">
+      <p class="app-tool-row"><span class="app-mark is-done">✓</span>agentaps new-session<span class="app-caret">›</span></p>
+      <p class="app-project-row"><Icon name="chevron-down" /><span class="app-project-name">agentaps</span><span class="app-project-line" /><span class="app-project-branch">main</span><Icon name="plus" /></p>
+      <p class="app-session"><AgentIcon agent="codex" /><span class="app-dot" data-status="working" /><span class="app-session-title">Count sessions per project</span></p>
+      <p class="app-session tile-spawn-new"><AgentIcon agent="codex" /><span class="app-dot" data-status="connecting" /><span class="app-session-title">Codex</span></p>
+    </div>
+    <h3>Agents open sessions</h3>
+    <p>Local agents can start a fresh session in the same project while they keep working.</p>
+  </article>
+
+  <article class="feature-tile">
+    <div class="tile-visual tile-attach" aria-hidden="true">
+      <div class="app-composer-box">
+        <div class="app-attachments">
+          <span class="app-attachment"><span class="app-attachment-media"><Icon name="file" /></span>notes.md</span>
+        </div>
+
+        <p class="app-composer-row"><span class="app-composer-field">Why does this layout overflow?</span><span class="app-send is-ready"><Icon name="arrow-up" /></span></p>
+      </div>
+    </div>
+    <h3>Images and files</h3>
+    <p>Paste an image or drop files on the composer. Text files reach the agent with their contents.</p>
+  </article>
+
+  <article class="feature-tile is-wide">
+    <div class="tile-visual tile-resume" aria-hidden="true">
+      {resumed.map(({ project, sessions }, group) => [
+        <p class="app-project-row"><Icon name="chevron-down" /><span class="app-project-name">{project}</span><span class="app-project-line" /><span class="app-project-branch">main</span><Icon name="plus" /></p>,
+        ...sessions.map(({ agent, title }, index) => (
+          <p class="app-session" style={`--i: ${group * 2 + index}`}>
+            <AgentIcon agent={agent} />
+            <span class="app-dot" data-status="connecting" />
+            <span class="app-session-title">{title}</span>
+          </p>
+        )),
+      ])}
+    </div>
+    <h3>Pick up where you left off</h3>
+    <p>On launch, Agentaps reconnects your agents, resumes their sessions, and restores your pane layout.</p>
+  </article>
+</div>
+
+<script>
+  import { createAstroMotionLifecycle } from '@cachix/site-kit/motion';
+  import { animationPauser } from '../../scripts/motion';
+
+  for (const grid of document.querySelectorAll<HTMLElement>('[data-feature-grid]')) {
+    createAstroMotionLifecycle({ target: grid, threshold: 0.1, onChange: animationPauser(grid) });
+  }
+</script>
