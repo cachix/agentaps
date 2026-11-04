@@ -6,6 +6,8 @@ Notable changes to Agentaps are recorded here.
 
 ### Fixed
 
+- Allow Cloudflare branch previews to start with the required Wrangler preview configuration.
+
 - Search all projects and sessions, including archived sessions, regardless of the selected sidebar filter.
 
 - Discover the login shell PATH without requiring `/usr/bin/env`, and run its test without `/bin/sh` so nixpkgs builds no longer need to skip it.

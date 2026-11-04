@@ -3,6 +3,7 @@
   "name": "agentaps",
   "compatibility_date": "2026-10-01",
   "main": "./worker.js",
+  "previews": {},
   "assets": {
     "directory": "../dist",
     "binding": "ASSETS",
