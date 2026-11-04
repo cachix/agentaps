@@ -6,6 +6,8 @@ Notable changes to Agentaps are recorded here.
 
 ### Fixed
 
+- Allow Cloudflare branch previews to start with the required Wrangler preview configuration.
+
 - Search all projects and sessions, including archived sessions, regardless of the selected sidebar filter.
 
 - Discover the login shell PATH without requiring `/usr/bin/env`, and run its test without `/bin/sh` so nixpkgs builds no longer need to skip it.
@@ -13,6 +15,8 @@ Notable changes to Agentaps are recorded here.
 - Run the Linux notification test without a host D-Bus session configuration, removing the need for a nixpkgs source substitution.
 
 ### Changed
+
+- Make the README easier to navigate with a concise quick start, project links, and links to the website documentation.
 
 - Rebuild the website on the shared Cachix site kit, with light and dark themes in the Agentaps palette.
 
