@@ -36,6 +36,13 @@ Connect the `cachix/agentaps` GitHub repository to a Cloudflare Worker with Work
 
 Pushes to `main` then publish the site. [`web/site/wrangler.jsonc`](../web/site/wrangler.jsonc) serves `web/dist/` as static assets through [`web/site/worker.js`](../web/site/worker.js). The Worker serves GitHub stars and the latest release at `/api/github` for the navigation bar, and answers Markdown requests from coding agents through the site kit middleware. An optional `GITHUB_TOKEN` secret raises the GitHub API rate limit.
 
+If deployment reports an oversized `web/target/.../agentaps_web.wasm`, check that
+the deploy command uses the Wrangler config above. Pointing `--assets` at `web/`
+uploads Rust's intermediate build files along with the website. The public assets
+directory is `web/dist/`; Trunk processes the raw WASM into the browser bundle
+under `web/dist/connect/`. Release builds use Trunk's `data-wasm-opt="z"` setting
+to optimize that bundle for size.
+
 With Wrangler signed in to the same Cloudflare account, you can build and publish manually:
 
 ```sh

@@ -14,6 +14,8 @@ Notable changes to Agentaps are recorded here.
 
 ### Changed
 
+- Optimize the Web Connect WebAssembly bundle for smaller files and clarify the Cloudflare asset directory.
+
 - Rebuild the website on the shared Cachix site kit, with light and dark themes in the Agentaps palette.
 
 - Serve the website through a Cloudflare Worker that shows GitHub stars and the latest release in the navigation bar and answers Markdown requests from coding agents.
