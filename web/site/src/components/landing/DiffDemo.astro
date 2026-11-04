@@ -1,0 +1,131 @@
+---
+import TerminalFrame from '@cachix/site-kit/ui/TerminalFrame.astro';
+import Icon from './Icon.astro';
+import MockComposer from './MockComposer.astro';
+import MockHeader from './MockHeader.astro';
+import MockTurn from './MockTurn.astro';
+
+type Row = { kind: 'context' | 'added' | 'removed'; text: string };
+
+const hunk = '@@ -1,6 +1,14 @@';
+const rows: Row[] = [
+  { kind: 'context', text: 'use super::*;' },
+  { kind: 'context', text: '' },
+  { kind: 'context', text: 'impl Workspace {' },
+  { kind: 'added', text: '    pub(super) fn session_count(&self, project_index: usize) -> usize {' },
+  { kind: 'added', text: '        self.projects[project_index]' },
+  { kind: 'added', text: '            .agents' },
+  { kind: 'added', text: '            .iter()' },
+  { kind: 'added', text: '            .filter(|agent| !agent.config.archived)' },
+  { kind: 'added', text: '            .count()' },
+  { kind: 'added', text: '    }' },
+  { kind: 'added', text: '' },
+  { kind: 'context', text: '    pub(super) fn sign_in_to_claude(' },
+  { kind: 'context', text: '        &mut self,' },
+  { kind: 'context', text: '        project_index: usize,' },
+];
+
+const numbered = rows.reduce<{ old: number; new: number; rows: (Row & { old?: number; new?: number })[] }>(
+  (state, row) => ({
+    old: state.old + (row.kind === 'added' ? 0 : 1),
+    new: state.new + (row.kind === 'removed' ? 0 : 1),
+    rows: [...state.rows, {
+      ...row,
+      old: row.kind === 'added' ? undefined : state.old,
+      new: row.kind === 'removed' ? undefined : state.new,
+    }],
+  }),
+  { old: 1, new: 1, rows: [] },
+).rows;
+
+const sign = { context: '', added: '+', removed: '−' };
+const files = [
+  { path: 'src/app/render/sidebar.rs', added: 7, removed: 0, open: false },
+  { path: 'src/app/sessions.rs', added: 8, removed: 0, open: true },
+];
+const views = [
+  { state: 'unified', label: 'Unified' },
+  { state: 'split', label: 'Split' },
+] as const;
+---
+
+<div class="demo-split" data-diff-demo data-states="unified split" data-state="unified">
+  <TerminalFrame class="app-frame diff-window" title="Agentaps">
+    <div class="diff-layout">
+      <section class="app-pane">
+        <MockHeader agent="codex" name="Codex" title="Count sessions per project" path="/home/you/dev/agentaps" diff={{ added: 15, removed: 0 }} diffOpen />
+        <div class="app-chat">
+          <div class="app-column">
+            <MockTurn
+              prompt="Show how many sessions each project has next to its name"
+              steps={["Read file '/home/you/dev/agentaps/src/app/render/sidebar.rs'", "Search for 'session_count' in src", 'Editing files', 'Run tests', 'Check formatting']}
+              reply="Project headers now show a session count after the folder name. Tests and formatting checks pass."
+            />
+          </div>
+        </div>
+        <MockComposer agent="codex" context={22} />
+      </section>
+
+      <section class="diff-panel">
+        <div class="diff-toolbar">
+          <span class="diff-toolbar-title">Checkout vs HEAD</span>
+          <span class="diff-totals">2 files <b>+15</b> <i>-0</i></span>
+
+          {views.map(({ state, label }) => <span class="diff-toggle" data-panel={state} data-active={(state === views[0].state) || undefined}>{label}</span>)}
+          <span class="diff-close">Close</span>
+        </div>
+        <div class="diff-body">
+          {files.map(({ path, added, removed, open }) => (
+            <div class="diff-file">
+              <p class="diff-file-header">
+                <Icon name={open ? 'chevron-down' : 'chevron-right'} />
+                <span>{path}</span>
+                <b>+{added}</b>
+                <i>-{removed}</i>
+              </p>
+              {open && (
+                <>
+                  <p class="diff-hunk">{hunk}</p>
+                  <div class="diff-lines" data-panel="unified" data-active>
+                    {numbered.map((row, index) => (
+                      <p class:list={['diff-row', `is-${row.kind}`]} style={`--i: ${index}`}>
+                        <span class="diff-no">{row.old}</span>
+                        <span class="diff-no">{row.new}</span>
+                        <span class="diff-sign">{sign[row.kind]}</span>
+                        <span class="diff-text">{row.text}</span>
+                      </p>
+                    ))}
+                  </div>
+                  <div class="diff-lines diff-split" data-panel="split">
+                    {numbered.map((row, index) => (
+                      <p class="diff-pair" style={`--i: ${index}`}>
+                        {row.kind === 'added' ? (
+                          <span class="diff-row is-empty" />
+                        ) : (
+                          <span class:list={['diff-row', `is-${row.kind}`]}><span class="diff-no">{row.old}</span><span class="diff-sign">{sign[row.kind]}</span><span class="diff-text">{row.text}</span></span>
+                        )}
+                        <span class:list={['diff-row', `is-${row.kind}`]}><span class="diff-no">{row.new}</span><span class="diff-sign">{sign[row.kind]}</span><span class="diff-text">{row.text}</span></span>
+                      </p>
+                    ))}
+                  </div>
+                </>
+              )}
+            </div>
+          ))}
+        </div>
+      </section>
+    </div>
+  </TerminalFrame>
+
+  <div class="demo-controls" role="group" aria-label="Diff layout">
+    {views.map(({ state, label }) => (
+      <button type="button" class="csk-button demo-chip" data-variant="secondary" data-state-target={state}>{label}</button>
+    ))}
+  </div>
+</div>
+
+<script>
+  import { diorama } from '../../scripts/diorama';
+
+  diorama('[data-diff-demo]', { interval: 4200 });
+</script>

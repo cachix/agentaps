@@ -1,0 +1,116 @@
+---
+import TerminalFrame from '@cachix/site-kit/ui/TerminalFrame.astro';
+import Icon from './Icon.astro';
+import MockComposer from './MockComposer.astro';
+import MockHeader from './MockHeader.astro';
+import MockTurn from './MockTurn.astro';
+
+const modes = [
+  { state: 'commands', key: '/', label: 'Commands', typed: '/mem' },
+  { state: 'files', key: '@', label: 'Files', typed: 'Explain how @ses' },
+  { state: 'shell', key: '!', label: 'Shell', typed: '!cargo test' },
+  { state: 'voice', key: '', label: 'Record', typed: '' },
+  { state: 'queue', key: '', label: 'Queue', typed: '' },
+] as const;
+const commands = [
+  { name: '/memory', body: 'Manage memory.' },
+  { name: '/memory show', body: 'Shows the current memory contents.' },
+  { name: '/memory refresh', body: 'Refreshes the memory from the source.' },
+  { name: '/memory list', body: 'Lists the paths of the GEMINI.md files in use.' },
+  { name: '/memory inbox', body: 'Lists memory items extracted from past sessions that are pending review.' },
+];
+const files = ['src/session/', 'src/session.rs', 'src/app/sessions.rs', 'src/session/tests.rs', 'src/session/prompt.rs', 'src/session/protocol.rs'];
+---
+
+<div class="demo-split composer-demo" data-composer-demo data-states={modes.map(({ state }) => state).join(' ')} data-state={modes[0].state}>
+  <TerminalFrame class="app-frame composer-window" title="Agentaps">
+    <section class="app-pane">
+      <MockHeader agent="gemini" name="Gemini CLI" title="Draft 0.7.1 release notes" path="/home/you/dev/agentaps" />
+      <div class="app-chat">
+        <div class="app-column">
+          <MockTurn
+            prompt="Draft release notes for 0.7.1 from CHANGELOG.md"
+            steps={['CHANGELOG.md', 'Inspect git history']}
+            reply="The draft covers searching archived sessions, finding the login shell PATH without /usr/bin/env, and the new website."
+          />
+          <div class="composer-queue-turn" data-panel="queue">
+            <p class="app-user">Add a line about the notification test fix</p>
+            <div class="app-tools">
+              <p class="app-tools-head"><span class="app-mark is-running" />Working · CHANGELOG.md<span class="app-caret">⌄</span></p>
+              <p class="app-tool-row is-running"><span class="app-mark is-running" />CHANGELOG.md · running<span class="app-caret">›</span></p>
+            </div>
+            <div class="app-queued">
+              <p><span>Queued 1</span><span class="app-ghost">Edit</span></p>
+              <p>Keep each entry to one line</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <MockComposer agent="gemini" context={14}>
+        <div slot="above" class="composer-popups">
+          <ul class="app-popup" data-panel="commands" data-active>
+            {commands.map(({ name, body }, index) => (
+              <li class:list={{ 'is-selected': index === 0 }}><code>{name}</code><span>{body}</span></li>
+            ))}
+          </ul>
+          <ul class="app-popup" data-panel="files">
+            {files.map((file, index) => (
+              <li class:list={{ 'is-selected': index === 0 }}><Icon name={file.endsWith('/') ? 'folder' : 'file'} /><span>{file}</span></li>
+            ))}
+          </ul>
+        </div>
+        <div slot="attachments" class="app-attachments">
+          <span class="app-attachment"><span class="app-attachment-media"><Icon name="mic" /></span>Voice recording.wav</span>
+        </div>
+        <span class="app-placeholder" data-panel="voice queue">Ask your agent…</span>
+        {modes.filter(({ typed }) => typed).map(({ state, typed }) => (
+          <span class="app-typed" data-panel={state} data-active={(state === modes[0].state) || undefined} style={`--chars: ${typed.length}`}>{typed}</span>
+        ))}
+        <span class="composer-shell-label" data-panel="shell">shell</span>
+        <span slot="record" class="app-ghost composer-record">
+          <span class="composer-record-idle"><Icon name="mic" />Record</span>
+          <span class="composer-record-live"><Icon name="circle-stop" /><span data-seconds>Stop (0s)</span></span>
+        </span>
+      </MockComposer>
+    </section>
+  </TerminalFrame>
+
+  <div class="demo-controls" role="group" aria-label="Composer features">
+    {modes.map(({ state, key, label }) => (
+      <button type="button" class="csk-button demo-chip" data-variant="secondary" data-state-target={state}>
+        {key ? <kbd>{key}</kbd> : <Icon name={state === 'voice' ? 'mic' : 'arrow-up'} />}{label}
+      </button>
+    ))}
+  </div>
+</div>
+
+<script>
+  import { diorama } from '../../scripts/diorama';
+
+  let timer: number | undefined;
+
+  const record = (state: string, root: HTMLElement) => {
+    const label = root.querySelector<HTMLElement>('[data-seconds]')!;
+    window.clearInterval(timer);
+    delete root.dataset.recording;
+    delete root.dataset.attached;
+    if (state !== 'voice') return;
+    let seconds = 0;
+    label.textContent = 'Stop (0s)';
+    root.dataset.recording = '';
+    timer = window.setInterval(() => {
+      seconds += 1;
+      if (seconds <= 3) {
+        label.textContent = `Stop (${seconds}s)`;
+        return;
+      }
+      window.clearInterval(timer);
+      delete root.dataset.recording;
+      root.dataset.attached = '';
+    }, 1000);
+  };
+
+  diorama('[data-composer-demo]', { interval: (state) => state === 'voice' ? 6400 : 3200, onShow: record });
+
+</script>

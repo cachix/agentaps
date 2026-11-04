@@ -1,0 +1,85 @@
+---
+import TerminalFrame from '@cachix/site-kit/ui/TerminalFrame.astro';
+import MockComposer from './MockComposer.astro';
+import MockHeader from './MockHeader.astro';
+import MockSidebar from './MockSidebar.astro';
+import MockTurn from './MockTurn.astro';
+
+const layouts = [
+  { state: 'one', label: '1 pane' },
+  { state: 'two', label: '2 panes' },
+  { state: 'three', label: '3 panes' },
+] as const;
+---
+
+<div class="demo-split panes-demo" data-panes-demo data-states={layouts.map(({ state }) => state).join(' ')} data-state={layouts[0].state}>
+  <TerminalFrame class="app-frame panes-window" title="Agentaps">
+    <div class="app">
+      <MockSidebar />
+      <div class="app-panes">
+        <div class="panes">
+          <section class="pane" data-pane="a">
+            <div class="app-pane">
+              <MockHeader agent="codex" name="Codex" title="Count sessions per project" path="/home/you/dev/agentaps" diff={{ added: 15, removed: 0 }} />
+              <div class="app-chat">
+                <div class="app-column">
+                  <MockTurn
+                    prompt="Show how many sessions each project has next to its name"
+                    steps={["Read file '/home/you/dev/agentaps/src/app/render/sidebar.rs'", "Search for 'session_count' in src", 'Editing files', 'Run tests', 'Check formatting']}
+                    reply="Project headers now show a session count after the folder name. Tests and formatting checks pass."
+                  />
+                </div>
+              </div>
+              <MockComposer agent="codex" context={22} />
+            </div>
+          </section>
+
+          <section class="pane" data-pane="b">
+            <div class="app-pane" data-compact>
+              <MockHeader agent="claude" name="Claude" title="Fix the postgres service" path="/home/you/dev/devenv" diff={{ added: 1, removed: 1 }} />
+              <div class="app-chat">
+                <div class="app-column">
+                  <MockTurn
+                    prompt="Why does postgres fail to start?"
+                    steps={['Read devenv.nix', 'Search 5432', 'Edit devenv.nix']}
+                    reply="Another postgres is already listening on port 5432. I changed services.postgres.port to 5433 in devenv.nix, so this one starts next to it."
+                  />
+                </div>
+              </div>
+              <MockComposer agent="claude" context={9} />
+            </div>
+          </section>
+
+          <section class="pane" data-pane="c">
+            <div class="app-pane" data-compact>
+              <MockHeader agent="gemini" name="Gemini CLI" title="Update agentaps to 0.7.0" path="/home/you/dev/nixpkgs" status="working" />
+              <div class="app-chat">
+                <div class="app-column">
+                  <p class="app-user">Update agentaps to 0.7.0</p>
+                  <div class="app-tools">
+                    <p class="app-tools-head"><span class="app-mark is-running" />Working · nix-build -A agentaps<span class="app-caret">⌄</span></p>
+                    <p class="app-tool-row is-summary"><span class="app-mark is-done">✓</span>2 completed steps<span class="app-caret">›</span></p>
+                    <p class="app-tool-row is-running"><span class="app-mark is-running" />nix-build -A agentaps · running<span class="app-caret">›</span></p>
+                  </div>
+                </div>
+              </div>
+              <MockComposer agent="gemini" working />
+            </div>
+          </section>
+        </div>
+      </div>
+    </div>
+  </TerminalFrame>
+
+  <div class="demo-controls" role="group" aria-label="Pane layout">
+    {layouts.map(({ state, label }) => (
+      <button type="button" class="csk-button demo-chip" data-variant="secondary" data-state-target={state}>{label}</button>
+    ))}
+  </div>
+</div>
+
+<script>
+  import { diorama } from '../../scripts/diorama';
+
+  diorama('[data-panes-demo]', { interval: 3200 });
+</script>

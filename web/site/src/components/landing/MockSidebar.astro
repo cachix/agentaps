@@ -1,0 +1,73 @@
+---
+import AgentIcon from './AgentIcon.astro';
+import Icon from './Icon.astro';
+
+interface Props {
+  targets?: string[];
+}
+
+const { targets = [] } = Astro.props;
+
+const projects = [
+  {
+    name: 'agentaps',
+    branch: 'main',
+    sessions: [
+      { id: 'codex', agent: 'codex', title: 'Count sessions per project' },
+      { id: 'notes', agent: 'gemini', title: 'Draft 0.7.1 release notes' },
+    ],
+  },
+  {
+    name: 'devenv',
+    branch: 'main',
+    sessions: [{ id: 'claude', agent: 'claude', title: 'Fix the postgres service' }],
+  },
+  {
+    name: 'nixpkgs',
+    branch: 'master',
+    sessions: [{ id: 'nixpkgs', agent: 'gemini', title: 'Update agentaps to 0.7.0', status: 'working' }],
+  },
+  {
+    name: 'secretspec',
+    branch: 'main',
+    sessions: [{ id: 'secretspec', agent: 'opencode', title: 'Add PHP SDK examples', status: 'done' }],
+  },
+] as const;
+---
+
+<aside class="app-sidebar">
+  <div class="app-search">
+    <span class="app-input">Search sessions…</span>
+    <span class="app-icon-button"><Icon name="list-filter" /></span>
+  </div>
+  <div class="app-tree">
+    {projects.map(({ name, branch, sessions }) => (
+      <div class="app-project">
+        <p class="app-project-row">
+          <Icon name="chevron-down" />
+          <span class="app-project-name">{name}</span>
+          <span class="app-project-line" />
+          <span class="app-project-branch">{branch}</span>
+          <Icon name="plus" />
+        </p>
+        {sessions.map((session) => (
+          <p
+            class="app-session"
+            data-session={session.id}
+            {...(targets.includes(session.id) ? { 'data-state-target': session.id, role: 'button', tabindex: 0 } : {})}
+          >
+            <AgentIcon agent={session.agent} />
+            <span class="app-dot" data-status={'status' in session ? session.status : undefined} />
+            <span class="app-session-title">{session.title}</span>
+          </p>
+        ))}
+      </div>
+    ))}
+  </div>
+  <div class="app-sidebar-bar">
+    <span class="app-icon-button"><Icon name="panel-left-close" /></span>
+    <span class="app-icon-button"><Icon name="settings" /></span>
+    <span class="app-icon-button"><Icon name="phone" /></span>
+    <span class="app-new"><Icon name="plus" />New</span>
+  </div>
+</aside>

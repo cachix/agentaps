@@ -1,0 +1,40 @@
+---
+import Icon from './Icon.astro';
+import { footers } from './footers';
+
+interface Props {
+  agent: keyof typeof footers;
+  context?: number;
+  working?: boolean;
+}
+
+const { agent, context, working = false } = Astro.props;
+const { mode, plan = false, model, effort, audio = false } = footers[agent];
+---
+
+<div class="app-composer" data-working={working || undefined}>
+  <slot name="above" />
+  <div class="app-composer-box">
+    <slot name="attachments" />
+    <div class="app-composer-row">
+      <span class="app-composer-field">
+        <slot><span class="app-placeholder">Ask your agent…</span></slot>
+      </span>
+      <span class="app-send"><Icon name="arrow-up" /></span>
+      <span class="app-stop"><i />Stop</span>
+    </div>
+  </div>
+  <div class="app-composer-bar">
+    <span class="app-ghost app-ghost-icon"><Icon name="plus" /></span>
+    <slot name="record"><span class="app-ghost" data-disabled={!audio || undefined}><Icon name="mic" />Record</span></slot>
+    <span class="app-ghost app-select is-mode"><Icon name="chevron-down" /><span>{mode}</span></span>
+    {plan && <span class="app-plan"><i /><span class="app-compact-hide">Plan</span></span>}
+    <span class="app-work"><span class="app-dot" data-status="working" /><span class="app-compact-hide">Working</span></span>
+    <span class="app-bar-end">
+      {model && <span class="app-ghost app-select is-model"><Icon name="chevron-down" /><span>{model}</span></span>}
+      {effort && <span class="app-ghost app-select is-effort"><Icon name="chevron-down" /><span>{effort}</span></span>}
+      {context !== undefined && <span class="app-context">{context}%<i style={`--p: ${context}%`} /></span>}
+      <span class="app-icon-button"><Icon name="square-terminal" /></span>
+    </span>
+  </div>
+</div>

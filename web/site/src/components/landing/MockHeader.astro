@@ -1,0 +1,31 @@
+---
+import AgentIcon from './AgentIcon.astro';
+import Icon from './Icon.astro';
+
+interface Props {
+  agent: 'claude' | 'codex' | 'gemini' | 'opencode';
+  name: string;
+  title?: string;
+  path?: string;
+  diff?: { added: number; removed: number };
+  diffOpen?: boolean;
+  status?: 'working' | 'done';
+}
+
+const { agent, name, title, path, diff, diffOpen = false, status } = Astro.props;
+---
+
+<header class="app-header">
+  <span class="app-status-slot"><span class="app-dot" data-status={status} /></span>
+  <span class="app-agent-select"><AgentIcon agent={agent} />{name}<Icon name="chevron-down" /></span>
+  {title && <span class="app-title">{title}</span>}
+  <span class="app-header-end">
+    {path && <span class="app-header-path">{path}</span>}
+    <span class="app-diff-button" data-diff data-changed={diff ? '' : undefined}>
+      {diff && diffOpen ? 'Hide diff' : 'Diff'}
+      {diff && <b>+{diff.added}</b>}
+      {diff && <i>-{diff.removed}</i>}
+    </span>
+    <span class="app-icon-button"><Icon name="ellipsis" /></span>
+  </span>
+</header>

@@ -1,0 +1,131 @@
+---
+import Icon from './Icon.astro';
+import MockComposer from './MockComposer.astro';
+import MockHeader from './MockHeader.astro';
+import QrCode from './QrCode.astro';
+
+const steps = [
+  { state: 'pair', label: 'Pair' },
+  { state: 'unlock', label: 'Unlock' },
+  { state: 'approve', label: 'Approve' },
+] as const;
+---
+
+<div class="remote-demo" data-remote-demo data-states={steps.map(({ state }) => state).join(' ')} data-state={steps[0].state}>
+  <div class="remote-stage">
+    <div class="app-frame remote-desktop">
+      <div class="remote-desktop-bar"><span /><span /><span /><em>Agentaps</em></div>
+      <div class="remote-desktop-body">
+        <div class="remote-connect" data-panel="pair unlock" data-active>
+          <p class="remote-connect-title">Connect your phone</p>
+          <p class="remote-connect-lead">Open https://agentaps.dev/ on your phone and scan this code.</p>
+          <span class="remote-qr"><QrCode /><QrCode code={1} /></span>
+          <p class="remote-buttons"><span class="app-button is-primary">Copy link</span><span class="app-button">Close</span></p>
+          <p class="remote-clients-title">Linked clients</p>
+          <p class="remote-empty" data-panel="pair" data-active>No browsers linked yet.</p>
+          <div class="remote-client" data-panel="unlock">
+            <b>iPhone browser</b>
+            <em>Paired just now</em>
+            <span class="remote-revoke">Revoke</span>
+          </div>
+        </div>
+
+        <section class="app-pane remote-session" data-panel="approve">
+          <MockHeader agent="claude" name="Claude" title="Fix the postgres service" path="/home/you/dev/devenv" status="working" />
+          <div class="app-chat">
+            <div class="app-column">
+              <p class="app-user">Start the dev services</p>
+              <p class="app-reply">Starting postgres and redis with devenv up.</p>
+              <div class="app-tools">
+                <p class="app-tools-head">
+                  <span class="remote-swap">
+                    <span class="remote-waiting"><span class="app-mark is-pending">○</span>Waiting · devenv up</span>
+                    <span class="remote-running"><span class="app-mark is-running" />Working · devenv up</span>
+                  </span>
+                  <span class="app-caret">⌄</span>
+                </p>
+                <p class="app-tool-row">
+                  <span class="remote-swap">
+                    <span class="remote-waiting"><span class="app-mark is-pending">○</span>devenv up · pending</span>
+                    <span class="remote-running"><span class="app-mark is-running" />devenv up · running</span>
+                  </span>
+                  <span class="app-caret">›</span>
+                </p>
+              </div>
+              <div class="app-permission">
+                <p>devenv up</p>
+                <p class="app-permission-options"><span>Yes</span><span>No</span></p>
+              </div>
+            </div>
+          </div>
+          <MockComposer agent="claude" working />
+        </section>
+      </div>
+    </div>
+
+    <div class="remote-link" aria-hidden="true">
+      <span class="remote-link-line"><i /><i /><i /></span>
+      <span class="remote-link-label"><Icon name="lock" />Encrypted peer-to-peer connection</span>
+    </div>
+
+    <div class="remote-phone">
+      <span class="remote-phone-notch" />
+      <div class="remote-phone-screen">
+        <div class="phone-scan" data-panel="pair" data-active>
+          <p>Scan the QR code shown in desktop Agentaps</p>
+          <span class="phone-camera"><QrCode /></span>
+          <span class="phone-button">Cancel</span>
+        </div>
+
+        <div class="phone-page" data-panel="unlock">
+          <p class="phone-link">Back</p>
+          <p class="phone-title">Pair desktop</p>
+          <div class="phone-swap">
+            <p class="phone-status">Waiting for phone unlock…</p>
+            <div class="phone-actions">
+              <span class="phone-action phone-unlock">Pair with phone unlock</span>
+              <span class="phone-input">Choose a passphrase (15+ characters)</span>
+              <span class="phone-action">Pair with passphrase</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="phone-app" data-panel="approve">
+          <p class="phone-header"><b>Agentaps</b><span class="phone-link">New</span></p>
+          <p class="phone-chips"><span>agentaps · Codex</span><span>agentaps · Gemini CLI</span><span class="is-selected">devenv · Claude</span><span>nixpkgs · Gemini CLI</span><span>secretspec · OpenCode</span></p>
+          <div class="phone-messages">
+            <p class="phone-bubble is-user"><em>You</em>Start the dev services</p>
+            <p class="phone-bubble"><em>Claude</em>Starting postgres and redis with devenv up.</p>
+            <p class="phone-bubble is-tool">
+              <em>Tool</em>
+              <span class="phone-tool-swap"><span class="remote-waiting">devenv up · pending</span><span class="remote-running">devenv up · in_progress</span></span>
+            </p>
+            <div class="phone-permission">
+              <p>devenv up</p>
+              <p class="phone-options"><span class="phone-approve">Yes</span><span>No</span></p>
+            </div>
+          </div>
+          <p class="phone-composer"><span>Ask your agent…</span><b>Send</b><i>Stop</i></p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="demo-controls" role="group" aria-label="Remote Control steps">
+    {steps.map(({ state, label }) => (
+      <button type="button" class="csk-button demo-chip" data-variant="secondary" data-state-target={state}>{label}</button>
+    ))}
+  </div>
+</div>
+
+<script>
+  import { diorama } from '../../scripts/diorama';
+
+  diorama('[data-remote-demo]', { interval: (state) => state === 'approve' ? 5600 : 3600 });
+
+  for (const chips of document.querySelectorAll<HTMLElement>('.phone-chips')) {
+    const strip = chips.getBoundingClientRect();
+    const selected = chips.querySelector('.is-selected')!.getBoundingClientRect();
+    chips.scrollLeft += selected.left + selected.width / 2 - (strip.left + strip.width / 2);
+  }
+</script>
