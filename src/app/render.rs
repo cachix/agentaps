@@ -44,7 +44,7 @@ fn status_badge(agent: &AgentView, palette: theme::Palette) -> impl IntoElement 
         .flex_shrink_0()
         .size(px(12.))
         .items_center()
-        .justify_start()
+        .justify_center()
         .when(agent.has_sidebar_status(), |badge| {
             badge.child(status_dot(color, palette))
         })
