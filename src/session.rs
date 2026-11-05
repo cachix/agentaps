@@ -438,12 +438,11 @@ impl SessionController {
         .into_iter()
         .filter_map(|(kind, option)| option.as_ref().map(|option| (kind, option.current.clone())))
         .collect();
-        let title = self.config.title.clone();
         let pending_prompts = std::mem::take(&mut self.config.pending_prompts);
         let commands = std::mem::take(&mut self.config.available_commands);
         let history = std::mem::take(&mut self.config.prompt_history);
         self.config = self.reset_config(self.config.id, Vec::new());
-        self.config.title = title;
+        self.config.custom_title = None;
         self.config.pending_prompts = pending_prompts;
         self.config.available_commands = commands;
         self.config.prompt_history = history;
