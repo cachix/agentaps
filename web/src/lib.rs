@@ -166,6 +166,7 @@ pub fn start() {
             })
             .expect("Could not open browser window");
             cx.activate(true);
+            applicationReady();
         }));
     });
 }

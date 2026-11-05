@@ -7,6 +7,7 @@ use wasm_bindgen::prelude::*;
 #[wasm_bindgen(module = "/src/browser.js")]
 
 extern "C" {
+    pub(super) fn applicationReady();
     pub(super) fn pollDelay() -> Promise;
     pub(super) fn savedConnections() -> String;
     pub(super) fn renameSavedConnection(id: String) -> bool;

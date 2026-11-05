@@ -6,11 +6,81 @@
     <meta name="theme-color" content="#10151c">
     <title>Agentaps Connect</title>
     <link rel="icon" href="/favicon.svg" type="image/svg+xml">
-    <link data-trunk rel="rust" data-wasm-opt="z">
+    <script>
+      (() => {
+        let ready = false;
+        let failed = false;
+        const showFailure = () => {
+          if (ready) return;
+          failed = true;
+          const status = document.getElementById('startup-status');
+          if (!status) return;
+          status.textContent = 'Remote Control could not start. Reload to try again. If this continues, try an updated browser with hardware acceleration enabled.';
+          document.getElementById('startup-progress').hidden = true;
+          document.getElementById('startup-retry').hidden = false;
+        };
+        const showProgress = ({ detail }) => {
+          if (ready || failed) return;
+          const status = document.getElementById('startup-status');
+          const bar = document.getElementById('startup-progress');
+          if (detail.starting) {
+            bar.removeAttribute('value');
+            status.textContent = 'Starting Remote Control…';
+          } else if (detail.total > 0) {
+            const percent = Math.min(100, Math.floor(detail.current / detail.total * 100));
+            bar.value = percent;
+            status.textContent = percent === 100
+              ? 'Download complete. Starting Remote Control…'
+              : `Downloading Remote Control… ${percent}%`;
+          } else {
+            bar.removeAttribute('value');
+            status.textContent = detail.current > 0
+              ? `Downloading Remote Control… ${(detail.current / 1048576).toFixed(1)} MB`
+              : 'Downloading Remote Control…';
+          }
+        };
+        window.addEventListener('error', showFailure, true);
+        window.addEventListener('unhandledrejection', showFailure);
+        window.addEventListener('AgentapsStartupFailed', showFailure);
+        window.addEventListener('AgentapsLoadProgress', showProgress);
+        window.addEventListener('AgentapsReady', () => {
+          ready = true;
+          document.getElementById('startup')?.remove();
+          window.removeEventListener('error', showFailure, true);
+          window.removeEventListener('unhandledrejection', showFailure);
+          window.removeEventListener('AgentapsStartupFailed', showFailure);
+          window.removeEventListener('AgentapsLoadProgress', showProgress);
+        }, { once: true });
+        document.addEventListener('DOMContentLoaded', () => {
+          if (failed) showFailure();
+          document.getElementById('startup-retry').addEventListener('click', () => location.reload());
+        });
+        setTimeout(() => {
+          if (ready || failed) return;
+          document.getElementById('startup-status').textContent = 'Still loading Remote Control. The first visit downloads the app and may take a moment on a slow connection.';
+          document.getElementById('startup-retry').hidden = false;
+        }, 15000);
+      })();
+    </script>
+    <link data-trunk rel="rust" data-wasm-opt="z" data-initializer="src/initializer.js">
     <style>
-      html, body { margin: 0; width: 100%; height: 100%; background: #10151c; }
+      html, body { margin: 0; width: 100%; height: 100%; background: #10151c; color: #edf2f7; }
       canvas { display: block; }
+      #startup { position: fixed; inset: 0; z-index: 1; display: grid; place-content: center; padding: 24px; pointer-events: none; font: 16px/1.5 system-ui, sans-serif; text-align: center; }
+      #startup p { max-width: 32em; }
+      #startup-progress { justify-self: center; width: min(100%, 20em); height: 8px; border: 0; border-radius: 4px; overflow: hidden; accent-color: #8fc5ec; margin-bottom: 20px; }
+      #startup-progress::-webkit-progress-bar { background: #202a36; border-radius: 4px; }
+      #startup-progress::-webkit-progress-value { background: #8fc5ec; border-radius: 4px; }
+      #startup-progress::-moz-progress-bar { background: #8fc5ec; border-radius: 4px; }
+      #startup-retry { justify-self: center; padding: 10px 24px; border: 0; border-radius: 8px; background: #8fc5ec; color: #10151c; font: inherit; cursor: pointer; pointer-events: auto; }
     </style>
   </head>
-  <body></body>
+  <body>
+    <div id="startup" role="status" aria-live="polite">
+      <p id="startup-status">Loading Remote Control…</p>
+      <progress id="startup-progress" max="100" aria-label="Remote Control download"></progress>
+      <button id="startup-retry" type="button" hidden>Reload</button>
+      <noscript>Enable JavaScript to use Remote Control.</noscript>
+    </div>
+  </body>
 </html>
