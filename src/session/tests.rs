@@ -1071,8 +1071,9 @@ fn context_reset_keeps_live_agent_and_restores_settings_before_prompts() {
         session.reset_context(Path::new("/")).unwrap();
         assert_eq!(next_request(&rx)["method"], "session/new");
         assert_eq!(session.config.id, 1);
-        assert_eq!(session.config.session_title(), Some("My session"));
-        assert_eq!(session.config.title.as_deref(), Some("My task"));
+        assert_eq!(session.config.session_title(), None);
+        assert_eq!(session.config.custom_title, None);
+        assert_eq!(session.config.title, None);
         assert_eq!(session.config.prompt_history, ["Old context"]);
         assert_eq!(session.config.pending_prompts[0].text, "Next task");
         assert!(session.connection.is_some());

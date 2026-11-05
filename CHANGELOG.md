@@ -6,6 +6,8 @@ Notable changes to Agentaps are recorded here.
 
 ### Fixed
 
+- Reset session titles along with context, preserving the previous titles on the archived conversation.
+
 - Show a download progress bar while Remote Control loads, keep feedback visible until the app is ready, and offer a retry if startup fails.
 
 - Make default Wrangler deploy and preview commands discover the website configuration and upload only built assets.

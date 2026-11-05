@@ -764,7 +764,8 @@ fn verify_resets_and_folder_moves_preserve_harness_references(
             let (events_tx, _events_rx) = mpsc::channel();
             original.connection =
                 Some(Connection::spawn(1, &command, path, None, None, events_tx).unwrap());
-            original.config.custom_title = Some("Keep my session name".into());
+            original.config.title = Some("Previous task".into());
+            original.config.custom_title = Some("Previous session name".into());
             original.log(Role::User, "Previous conversation");
             this.projects = vec![ProjectView {
                 path: path.to_owned(),
@@ -783,14 +784,16 @@ fn verify_resets_and_folder_moves_preserve_harness_references(
             assert_eq!(this.projects[0].agents.len(), 2);
             assert_eq!(this.projects[0].agents[0].config.id, 1);
             assert_eq!(this.sidebar_order, [1]);
-            assert_eq!(
-                this.projects[0].agents[0].config.session_title(),
-                Some("Keep my session name")
-            );
+            assert_eq!(this.projects[0].agents[0].config.session_title(), None);
             assert!(this.projects[0].agents[0].connection.is_some());
             assert_eq!(this.projects[0].agents[1].config.id, 200);
             let archived = &this.projects[0].agents[1];
             assert!(archived.config.archived);
+            assert_eq!(archived.config.title.as_deref(), Some("Previous task"));
+            assert_eq!(
+                archived.config.session_title(),
+                Some("Previous session name")
+            );
             assert_eq!(archived.config.session_id.as_deref(), Some("session-1"));
             assert!(archived.messages.is_empty());
             assert!(
