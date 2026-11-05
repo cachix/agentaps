@@ -5,6 +5,10 @@ const decoder = new TextDecoder();
 let pendingPasskey = null;
 let qrCamera = null;
 
+export function applicationReady() {
+  window.dispatchEvent(new Event('AgentapsReady'));
+}
+
 export function browserClientName() {
   const agent = navigator.userAgent;
   if (/iPad/i.test(agent)) return 'iPad browser';

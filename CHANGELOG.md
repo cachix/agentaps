@@ -6,6 +6,8 @@ Notable changes to Agentaps are recorded here.
 
 ### Fixed
 
+- Show a download progress bar while Remote Control loads, keep feedback visible until the app is ready, and offer a retry if startup fails.
+
 - Make default Wrangler deploy and preview commands discover the website configuration and upload only built assets.
 
 - Allow Cloudflare branch previews to start with the required Wrangler preview configuration.
