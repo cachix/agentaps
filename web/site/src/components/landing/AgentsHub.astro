@@ -1,0 +1,69 @@
+---
+import TerminalFrame from '@cachix/site-kit/ui/TerminalFrame.astro';
+import AgentIcon from './AgentIcon.astro';
+import Icon from './Icon.astro';
+
+const agents = [
+  { id: 'claude', name: 'Claude Code', label: 'Claude', detail: 'Installed ACP adapter' },
+  { id: 'codex', name: 'Codex', label: 'Codex', detail: 'Installed ACP adapter' },
+  { id: 'gemini', name: 'Gemini CLI', label: 'Gemini CLI', detail: 'Native ACP mode' },
+  { id: 'opencode', name: 'OpenCode', label: 'OpenCode', detail: 'Native ACP mode' },
+] as const;
+const wires = agents.map((_, index) => 50 + index * 100);
+---
+
+<div class="agents-hub" data-agents-hub data-states={agents.map(({ id }) => id).join(' ')} data-state={agents[0].id}>
+  <ul class="agents-list" aria-label="Supported agents">
+    {agents.map(({ id, name }) => (
+      <li>
+        <button type="button" class="agent-card csk-interactive-surface" data-state-target={id}>
+          <AgentIcon agent={id} />
+          <span>{name}</span>
+        </button>
+      </li>
+    ))}
+  </ul>
+
+  <svg class="agents-wires" viewBox="0 0 100 400" preserveAspectRatio="none" aria-hidden="true">
+    {wires.map((y, index) => (
+      <g data-panel={agents[index].id} data-active={(index === 0) || undefined}>
+        <path class="wire-base" d={`M0 ${y} C 55 ${y}, 45 200, 100 200`} />
+        <path class="wire-flow" d={`M0 ${y} C 55 ${y}, 45 200, 100 200`} />
+      </g>
+    ))}
+  </svg>
+
+  <TerminalFrame class="app-frame agents-window" title="Agentaps">
+    <div class="app-picker">
+      <p class="app-picker-top"><span class="app-kicker">NEW SESSION</span><span class="app-picker-back">Back</span></p>
+      <p class="app-picker-title">Choose an agent</p>
+      <p class="app-picker-lead">Select an installed agent or enter an ACP command.</p>
+      <p class="app-path-pill"><Icon name="folder" />/home/you/dev/agentaps</p>
+      <div class="app-picker-search">
+        <p class="app-picker-input"><span class="app-placeholder">Search installed agents or enter an ACP command…</span></p>
+      </div>
+      <p class="app-picker-section"><span>AVAILABLE AGENTS</span><span class="app-picker-manage"><Icon name="settings" />Manage agents</span></p>
+      <ul class="app-picker-rows">
+        {agents.map(({ id, label, detail }) => (
+          <li class="app-picker-row" data-panel={id} data-active={(id === agents[0].id) || undefined}>
+            <AgentIcon agent={id} />
+            <span class="app-picker-text"><b>{label}</b><span>{detail}</span></span>
+            <Icon name="chevron-right" />
+          </li>
+        ))}
+        <li class="app-picker-row app-picker-terminal">
+          <Icon name="square-terminal" />
+          <span class="app-picker-text"><b>Terminal</b></span>
+          <small>Shell in project folder</small>
+        </li>
+      </ul>
+      <p class="app-picker-footer">↑ ↓ Navigate  ·  Enter Select  ·  Esc Back</p>
+    </div>
+  </TerminalFrame>
+</div>
+
+<script>
+  import { diorama } from '../../scripts/diorama';
+
+  diorama('[data-agents-hub]', { interval: 2600 });
+</script>

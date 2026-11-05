@@ -1,0 +1,239 @@
+---
+import TerminalFrame from '@cachix/site-kit/ui/TerminalFrame.astro';
+import MockComposer from './MockComposer.astro';
+import MockHeader from './MockHeader.astro';
+import MockSidebar from './MockSidebar.astro';
+import MockTurn from './MockTurn.astro';
+
+const scenes = [
+  {
+    id: 'codex',
+    agent: 'codex',
+    name: 'Codex',
+    title: 'Count sessions per project',
+    path: '/home/you/dev/agentaps',
+    diff: { added: 15, removed: 0 },
+    context: 22,
+    history: {
+      prompt: 'Where are project headers drawn?',
+      steps: ["Search for 'project_header' in src", "Read file '/home/you/dev/agentaps/src/app/render/sidebar.rs'"],
+      reply: 'In src/app/render/sidebar.rs. The project header row draws the folder name, a divider line, and the branch.',
+    },
+    turn: {
+      prompt: 'Show how many sessions each project has next to its name',
+      steps: [
+        "Read file '/home/you/dev/agentaps/src/app/render/sidebar.rs'",
+        "Search for 'session_count' in src",
+        'Editing files',
+        'Run tests',
+        'Check formatting',
+      ],
+      pending: false,
+      reply: 'Project headers now show a session count after the folder name. Tests and formatting checks pass.',
+    },
+  },
+  {
+    id: 'claude',
+    agent: 'claude',
+    name: 'Claude',
+    title: 'Fix the postgres service',
+    path: '/home/you/dev/devenv',
+    diff: { added: 1, removed: 1 },
+    context: 9,
+    history: {
+      prompt: 'Which services does this project start?',
+      steps: ['Read devenv.nix'],
+      reply: 'devenv.nix enables services.postgres and services.redis. Both start with devenv up.',
+    },
+    turn: {
+      prompt: 'Why does postgres fail to start?',
+      steps: ['Read devenv.nix', 'Search 5432', 'Edit devenv.nix'],
+      pending: true,
+      reply: 'Another postgres is already listening on port 5432. I changed services.postgres.port to 5433 in devenv.nix, so this one starts next to it.',
+    },
+  },
+] as const;
+
+const script = scenes.map(({ id, turn }) => ({ id, ...turn }));
+---
+
+<div class="hero-app" data-hero-app data-states={scenes.map(({ id }) => id).join(' ')} data-state={scenes[0].id} data-script={JSON.stringify(script)}>
+  <TerminalFrame class="app-frame" title="Agentaps">
+    <div class="app">
+      <MockSidebar targets={scenes.map(({ id }) => id)} />
+
+      <div class="app-panes">
+        {scenes.map(({ id, agent, name, title, path, diff, context, history, turn }) => (
+          <section class="app-pane app-scene" data-panel={id} data-active={(id === scenes[0].id) || undefined} data-scene={id} aria-label={`${name} session`}>
+            <MockHeader agent={agent} name={name} title={title} path={path} diff={diff} />
+            <div class="app-chat">
+              <div class="app-column">
+                <MockTurn prompt={history.prompt} steps={[...history.steps]} reply={history.reply} />
+                <div class="app-live" data-live>
+                  <MockTurn prompt={turn.prompt} steps={[...turn.steps]} reply={turn.reply} />
+                </div>
+              </div>
+            </div>
+            <MockComposer agent={agent} context={context}>
+              <span class="app-placeholder">Ask your agent…</span>
+            </MockComposer>
+          </section>
+        ))}
+      </div>
+    </div>
+  </TerminalFrame>
+</div>
+
+<script>
+  import { diorama } from '../../scripts/diorama';
+
+  interface Scene {
+    id: string;
+    prompt: string;
+    steps: string[];
+    pending: boolean;
+    reply: string;
+  }
+
+  const verbs = [
+    ['Run ', 'Running '],
+    ['Check ', 'Checking '],
+    ['Read ', 'Reading '],
+    ['Search ', 'Searching '],
+    ['Edit ', 'Editing '],
+  ];
+
+  const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  let run = 0;
+  let finish: (() => void) | undefined;
+
+  const element = (tag: string, className: string, text = '') => {
+    const node = document.createElement(tag);
+    node.className = className;
+    node.textContent = text;
+    return node;
+  };
+
+  const mark = (state: 'done' | 'running' | 'pending') => element('span', `app-mark is-${state}`, { done: '✓', running: '', pending: '○' }[state]);
+
+  const ongoing = (step: string) => {
+    const match = verbs.find(([verb]) => step.startsWith(verb));
+    return match ? `${match[1]}${step.slice(match[0].length)}` : step;
+  };
+
+  const heading = (scene: Scene, step: string) =>
+    scene.pending ? [mark('pending'), `Waiting · ${step}`] : [mark('running'), `Working · ${ongoing(step)}`];
+
+  const toolRows = (scene: Scene, completed: number) => {
+    const { steps } = scene;
+    const rows: HTMLElement[] = [];
+    if (completed > 1) {
+      const row = element('p', 'app-tool-row is-summary');
+      row.append(mark('done'), `${completed} completed steps`, element('span', 'app-caret', '›'));
+      rows.push(row);
+    } else if (completed === 1) {
+      const row = element('p', 'app-tool-row');
+      row.append(mark('done'), steps[0], element('span', 'app-caret', '›'));
+      rows.push(row);
+    }
+    if (completed < steps.length) {
+      const state = scene.pending ? 'pending' : 'running';
+      const row = element('p', `app-tool-row is-${state}`);
+      row.append(mark(state), `${steps[completed]} · ${state}`, element('span', 'app-caret', '›'));
+      rows.push(row);
+    }
+    return rows;
+  };
+
+  const play = (state: string, root: HTMLElement) => {
+    if (reduced) return;
+    finish?.();
+    finish = undefined;
+    const token = ++run;
+    const scenes: Scene[] = JSON.parse(root.dataset.script ?? '[]');
+    const scene = scenes.find(({ id }) => id === state);
+    const pane = root.querySelector<HTMLElement>(`[data-scene="${state}"]`);
+    if (!scene || !pane) return;
+
+    const live = pane.querySelector<HTMLElement>('[data-live]')!;
+    const composer = pane.querySelector<HTMLElement>('.app-composer')!;
+    const field = composer.querySelector<HTMLElement>('.app-composer-field')!;
+    const diff = pane.querySelector<HTMLElement>('[data-diff]');
+    const headerDot = pane.querySelector<HTMLElement>('.app-header .app-dot')!;
+    const sidebarDot = root.querySelector<HTMLElement>(`[data-session="${state}"] .app-dot`);
+    const chat = pane.querySelector<HTMLElement>('.app-chat')!;
+    const wait = (ms: number) => new Promise<void>((resolve, reject) => {
+      window.setTimeout(() => (token === run ? resolve() : reject()), ms);
+    });
+    const setStatus = (status?: string) => {
+      for (const dot of [headerDot, sidebarDot]) {
+        if (!dot) continue;
+        if (status) dot.dataset.status = status;
+        else delete dot.dataset.status;
+      }
+    };
+    const scroll = () => chat.scrollTo({ top: chat.scrollHeight, behavior: 'smooth' });
+
+    live.replaceChildren();
+    diff?.removeAttribute('data-changed');
+    composer.removeAttribute('data-working');
+    setStatus();
+    field.replaceChildren(element('span', 'app-placeholder', 'Ask your agent…'));
+    chat.scrollTop = chat.scrollHeight;
+
+    const tools = element('div', 'app-tools');
+    const head = element('p', 'app-tools-head');
+    const body = element('div', 'app-tools-body');
+    const reply = element('p', 'app-reply');
+    tools.append(head, body);
+    const complete = () => {
+      head.replaceChildren(mark('done'), 'Completed', element('span', 'app-caret', '⌄'));
+      body.replaceChildren(...toolRows(scene, scene.steps.length));
+      live.append(reply);
+      composer.removeAttribute('data-working');
+    };
+
+    (async () => {
+      await wait(500);
+      const typed = element('span', 'app-typed');
+      field.replaceChildren(typed);
+      composer.dataset.ready = '';
+      for (const character of scene.prompt) {
+        typed.textContent += character;
+        await wait(28);
+      }
+      await wait(450);
+
+      field.replaceChildren(element('span', 'app-placeholder', 'Ask your agent…'));
+      delete composer.dataset.ready;
+      composer.dataset.working = '';
+      setStatus('working');
+      live.append(element('p', 'app-user', scene.prompt), tools);
+      finish = () => {
+        diff?.setAttribute('data-changed', '');
+        reply.textContent = scene.reply;
+        complete();
+        setStatus('done');
+      };
+
+      for (let completed = 0; completed < scene.steps.length; completed++) {
+        head.replaceChildren(...heading(scene, scene.steps[completed]), element('span', 'app-caret', '⌄'));
+        body.replaceChildren(...toolRows(scene, completed));
+        scroll();
+        await wait(900);
+        if (scene.steps[completed].startsWith('Edit')) diff?.setAttribute('data-changed', '');
+      }
+
+      complete();
+      for (const word of scene.reply.split(' ')) {
+        reply.textContent = reply.textContent ? `${reply.textContent} ${word}` : word;
+        scroll();
+        await wait(45);
+      }
+      finish = undefined;
+      setStatus();
+    })().catch(() => {});
+  };
+
+  diorama('[data-hero-app]', { interval: 12000, onShow: play });
+</script>

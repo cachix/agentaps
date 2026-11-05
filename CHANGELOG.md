@@ -28,6 +28,8 @@ Notable changes to Agentaps are recorded here.
 
 - Rebuild the website on the shared Cachix site kit, with light and dark themes in the Agentaps palette.
 
+- Show Agentaps features on the website home page with interactive previews of sessions, agents, split panes, diff review, SSH projects, the composer, and Remote Control.
+
 - Serve the website through a Cloudflare Worker that shows GitHub stars and the latest release in the navigation bar and answers Markdown requests from coding agents.
 
 - Add guides for getting started, Web Connect, the session terminal, and building from source to the website, with search and Markdown for coding agents.
