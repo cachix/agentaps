@@ -1,8 +1,3 @@
-# Agentaps
-
-**A desktop workspace for your coding agents.**
-
-Run agents in local projects or over SSH, keep conversations side by side, review changes, and continue from your phone. Agentaps is built in Rust and speaks the [Agent Client Protocol (ACP)](https://agentclientprotocol.com/get-started/introduction).
 
 [![Release](https://img.shields.io/github/v/release/cachix/agentaps)](https://github.com/cachix/agentaps/releases/latest)
 [![Checks](https://github.com/cachix/agentaps/actions/workflows/checks.yml/badge.svg)](https://github.com/cachix/agentaps/actions/workflows/checks.yml)
@@ -10,6 +5,15 @@ Run agents in local projects or over SSH, keep conversations side by side, revie
 [![License: Apache-2.0](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
 
 [Download](https://github.com/cachix/agentaps/releases/latest) · [Website](https://agentaps.dev) · [Documentation](https://agentaps.dev/getting-started/) · [Changelog](CHANGELOG.md) · [Report an issue](https://github.com/cachix/agentaps/issues)
+
+
+# Agentaps
+
+**A desktop GUI for your coding agents.**
+
+Run agents in local projects or over SSH, keep conversations side by side, review changes, and continue from your phone. 
+
+Agentaps is built in Rust and speaks the [Agent Client Protocol (ACP)](https://agentclientprotocol.com/get-started/introduction).
 
 ![Agentaps showing a Codex conversation, project sessions, and task activity](web/site/src/assets/agentaps-desktop.png)
 
