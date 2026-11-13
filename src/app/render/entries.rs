@@ -417,14 +417,67 @@ impl Workspace {
         match entry.role {
             Role::User | Role::Agent => {
                 let from_user = entry.role == Role::User;
-                let reply_text = entry.text.clone();
+                let message_text = entry.text.clone();
+                let copy_state = window.use_keyed_state(
+                    format!("copy-state-{}-{index}", agent.config.id),
+                    cx,
+                    |_, _| CopyFeedback::default(),
+                );
+                let copied = copy_state.read(cx).copied;
+                let group = format!("reply-{}-{index}", agent.config.id);
+                let actions = div()
+                    .flex()
+                    .when(!from_user, |actions| actions.pl(px(CHAT_CONTENT_INSET)))
+                    .items_center()
+                    .gap_1()
+                    .when(!copied, |actions| {
+                        actions
+                            .invisible()
+                            .group_hover(group.clone(), |style| style.visible())
+                    })
+                    .child(
+                        Button::new(format!("copy-{}-{index}", agent.config.id))
+                            .ghost()
+                            .xsmall()
+                            .icon(if copied {
+                                IconName::Check
+                            } else {
+                                IconName::Copy
+                            })
+                            .label(if copied { "Copied" } else { "Copy" })
+                            .when(!copied, |button| {
+                                button.on_click(move |_, _, cx| {
+                                    cx.write_to_clipboard(gpui_kit::ClipboardItem::new_string(
+                                        message_text.clone(),
+                                    ));
+                                    copy_state.update(cx, |state, cx| {
+                                        state.copied = true;
+                                        cx.notify();
+                                    });
+                                    let copy_state = copy_state.clone();
+                                    cx.spawn(async move |cx| {
+                                        cx.background_executor()
+                                            .timer(Duration::from_secs(2))
+                                            .await;
+                                        copy_state.update(cx, |state, cx| {
+                                            state.copied = false;
+                                            cx.notify();
+                                        });
+                                    })
+                                    .detach();
+                                })
+                            }),
+                    );
                 if from_user {
                     return div()
                         .w_full()
                         .min_w(px(0.))
+                        .group(group.clone())
                         .mt_2()
                         .flex()
-                        .justify_end()
+                        .flex_col()
+                        .items_end()
+                        .gap_1()
                         .child(
                             div()
                                 .max_w(relative(0.85))
@@ -446,15 +499,9 @@ impl Workspace {
                                 })
                                 .children(images)
                                 .when(!entry.text.is_empty(), |bubble| bubble.child(content)),
-                        );
+                        )
+                        .child(actions);
                 }
-                let copy_state = window.use_keyed_state(
-                    format!("copy-state-{}-{index}", agent.config.id),
-                    cx,
-                    |_, _| CopyFeedback::default(),
-                );
-                let copied = copy_state.read(cx).copied;
-                let group = format!("reply-{}-{index}", agent.config.id);
                 // Reply text and actions share the activity labels' left edge.
                 div()
                     .group(group.clone())
@@ -481,49 +528,7 @@ impl Workspace {
                             .when(!entry.text.is_empty(), |bubble| bubble.child(content)),
                     )
                     .child(
-                        div()
-                            .flex()
-                            .pl(px(CHAT_CONTENT_INSET))
-                            .items_center()
-                            .gap_1()
-                            .when(!copied, |actions| {
-                                actions.invisible().group_hover(group, |style| style.visible())
-                            })
-                            .child(
-                                Button::new(format!("copy-{}-{index}", agent.config.id))
-                                    .ghost()
-                                    .xsmall()
-                                    .icon(if copied {
-                                        IconName::Check
-                                    } else {
-                                        IconName::Copy
-                                    })
-                                    .label(if copied { "Copied" } else { "Copy" })
-                                    .when(!copied, |button| {
-                                        button.on_click(move |_, _, cx| {
-                                            cx.write_to_clipboard(
-                                                gpui_kit::ClipboardItem::new_string(
-                                                    reply_text.clone(),
-                                                ),
-                                            );
-                                            copy_state.update(cx, |state, cx| {
-                                                state.copied = true;
-                                                cx.notify();
-                                            });
-                                            let copy_state = copy_state.clone();
-                                            cx.spawn(async move |cx| {
-                                                cx.background_executor()
-                                                    .timer(Duration::from_secs(2))
-                                                    .await;
-                                                copy_state.update(cx, |state, cx| {
-                                                    state.copied = false;
-                                                    cx.notify();
-                                                });
-                                            })
-                                            .detach();
-                                        })
-                                    }),
-                            )
+                        actions
                             .child(
                                 Button::new(format!("fork-{}-{index}", agent.config.id))
                                     .ghost()

@@ -4,6 +4,10 @@ Notable changes to Agentaps are recorded here.
 
 ## [Unreleased]
 
+### Added
+
+- Copy your own messages with the same hover button and copied confirmation as agent replies.
+
 ### Fixed
 
 - Reset session titles along with context, preserving the previous titles on the archived conversation.
