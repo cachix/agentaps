@@ -10,6 +10,8 @@ Notable changes to Agentaps are recorded here.
 
 ### Fixed
 
+- Keep the website hero on screen while the page loads instead of hiding and fading it back in, and switch between website pages without reloading the whole page.
+
 - Reset session titles along with context, preserving the previous titles on the archived conversation.
 
 - Show a download progress bar while Remote Control loads, keep feedback visible until the app is ready, and offer a retry if startup fails.

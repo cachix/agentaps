@@ -147,7 +147,7 @@ const connection = [
           <h2 id="connect-title">Step away.<br />Stay connected.</h2>
           <p>Open the phone icon in Agentaps and scan its QR code. Your agents keep running on your desktop. Your browser goes with you.</p>
           <ButtonGroup class="section-actions">
-            <Button href="/connect/" arrow>Open Remote Control</Button>
+            <Button href="/connect/" arrow data-astro-reload>Open Remote Control</Button>
           </ButtonGroup>
           <p class="fine-print">Encrypted peer-to-peer connection · No mobile app required</p>
         </div>
@@ -206,7 +206,7 @@ const connection = [
         </div>
         <ButtonGroup class="final-actions">
           <Button href="/getting-started/" arrow>Get started</Button>
-          <Button href="/connect/" variant="secondary">Open Remote Control</Button>
+          <Button href="/connect/" variant="secondary" data-astro-reload>Open Remote Control</Button>
         </ButtonGroup>
       </div>
     </section>
@@ -226,6 +226,12 @@ const connection = [
   interface Asset {
     name: string;
     browser_download_url?: string;
+  }
+
+  interface Release {
+    assets?: Asset[];
+    tag_name?: string;
+    html_url?: string;
   }
 
   const assetLabel = (platform: string, asset: Asset) => {
@@ -251,17 +257,23 @@ const connection = [
 
   const links = (platform: string) => document.querySelector<HTMLElement>(`.platform[data-platform="${platform}"] .platform-links`);
 
-  const platform = currentPlatform();
-  if (platform) document.querySelector(`.platform[data-platform="${platform}"]`)?.classList.add('is-current');
+  let latestRelease: Promise<Release | null> | undefined;
 
-  fetch(releaseUrl, { headers: { Accept: 'application/vnd.github+json' } })
-    .then((response) => response.ok ? response.json() : null)
-    .then((release) => {
+  document.addEventListener('astro:page-load', () => {
+    if (!document.getElementById('downloads')) return;
+
+    const platform = currentPlatform();
+    if (platform) document.querySelector(`.platform[data-platform="${platform}"]`)?.classList.add('is-current');
+
+    latestRelease ??= fetch(releaseUrl, { headers: { Accept: 'application/vnd.github+json' } })
+      .then((response) => response.ok ? response.json() : null)
+      .catch(() => null);
+    latestRelease.then((release) => {
       if (!release || !Array.isArray(release.assets)) return;
       let published = 0;
       for (const [platform, pattern] of Object.entries(patterns)) {
         const target = links(platform);
-        const assets = (release.assets as Asset[]).filter((asset) => pattern.test(asset.name) && installerFile.test(asset.name) && asset.browser_download_url);
+        const assets = release.assets.filter((asset) => pattern.test(asset.name) && installerFile.test(asset.name) && asset.browser_download_url);
         if (!target || assets.length === 0) continue;
         published += 1;
         target.replaceChildren(...assets.map((asset) => {
@@ -281,6 +293,6 @@ const connection = [
       for (const label of document.querySelectorAll('[data-release-label]')) {
         label.textContent = `Get Agentaps ${version}`;
       }
-    })
-    .catch(() => {});
+    });
+  });
 </script>
