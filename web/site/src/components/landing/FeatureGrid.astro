@@ -32,12 +32,8 @@ const resumed = [
       <span class="tile-keys"><kbd>Ctrl</kbd><kbd>T</kbd></span>
       <div class="tile-drawer">
         <p class="tile-drawer-head"><span>Terminal</span><span>Restart</span><span>Stop</span><Icon name="x" /></p>
-        <pre class="tile-shell"><code><span class="prompt">$</span> cargo test --quiet
-<span class="tile-out">
-running 160 tests
-{'.'.repeat(87)} 87/160
-{'.'.repeat(12)}<span class="tile-ignored">i</span>{'.'.repeat(60)}</span>
-<span class="tile-out is-late">test result: <span class="tile-ok">ok</span>. 159 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 2.21s</span></code></pre>
+        <pre class="tile-shell"><code><span class="prompt">$</span> pwd
+<span class="tile-out">/home/you/dev/agentaps</span></code></pre>
       </div>
     </div>
     <h3>Session terminal</h3>
@@ -57,15 +53,15 @@ running 160 tests
       </div>
     </div>
     <h3>Your theme</h3>
-    <p>Follow your desktop's light and dark scheme, your GTK or Qt theme, or pick a bundled palette.</p>
+    <p>Follow your desktop's light and dark scheme or pick a bundled palette. On Linux, use your GTK or Qt theme.</p>
   </article>
 
   <article class="feature-tile">
     <div class="tile-visual tile-shortcuts" aria-hidden="true">
       <p class="tile-shortcuts-title">Workspace</p>
       <div class="tile-shortcuts-card">
-        {shortcuts.map(({ keys, label }, index) => (
-          <p class="tile-shortcut" style={`--i: ${index}`}><span>{label}</span><span>{keys}</span></p>
+        {shortcuts.map(({ keys, label }) => (
+          <p class="tile-shortcut"><span>{label}</span><span>{keys}</span></p>
         ))}
       </div>
     </div>
@@ -80,7 +76,7 @@ running 160 tests
       <p class="tile-system"><b>SYSTEM</b><span>Forked here. The earlier conversation will be provided as context with your first message. Project files reflect their current state.</span></p>
     </div>
     <h3>Fork a reply</h3>
-    <p>Start a new session from any reply with the visible conversation as context.</p>
+    <p>When the agent is idle, fork a reply into a new session with the conversation so far as context.</p>
   </article>
 
   <article class="feature-tile">
@@ -98,14 +94,14 @@ running 160 tests
     <div class="tile-visual tile-attach" aria-hidden="true">
       <div class="app-composer-box">
         <div class="app-attachments">
-          <span class="app-attachment"><span class="app-attachment-media"><Icon name="file" /></span>notes.md</span>
+          <span class="app-attachment"><span class="app-attachment-media"><Icon name="file" /></span>notes.md<span class="app-attachment-remove"><Icon name="x" /></span></span>
         </div>
 
         <p class="app-composer-row"><span class="app-composer-field">Why does this layout overflow?</span><span class="app-send is-ready"><Icon name="arrow-up" /></span></p>
       </div>
     </div>
     <h3>Images and files</h3>
-    <p>Paste an image or drop files on the composer. Text files reach the agent with their contents.</p>
+    <p>Paste images for agents that accept them, or drop files on the composer. Agents that support embedded context receive text file contents. Other files are sent as links.</p>
   </article>
 
   <article class="feature-tile is-wide">
@@ -122,15 +118,18 @@ running 160 tests
       ])}
     </div>
     <h3>Pick up where you left off</h3>
-    <p>On launch, Agentaps reconnects your agents, resumes their sessions, and restores your pane layout.</p>
+    <p>On launch, Agentaps reconnects your agents and restores your pane layout. Sessions resume when the agent supports it.</p>
   </article>
 </div>
 
 <script>
-  import { createAstroMotionLifecycle } from '@cachix/site-kit/motion';
-  import { animationPauser } from '../../scripts/motion';
+  import { createMotionLifecycle } from '@cachix/site-kit/motion';
+  import { animationPauser, onPageLoad } from '../../scripts/motion';
 
-  for (const grid of document.querySelectorAll<HTMLElement>('[data-feature-grid]')) {
-    createAstroMotionLifecycle({ target: grid, threshold: 0.1, onChange: animationPauser(grid) });
-  }
+  onPageLoad(() => {
+    const motions = [...document.querySelectorAll<HTMLElement>('[data-feature-grid]')].map((grid) =>
+      createMotionLifecycle({ target: grid, threshold: 0.1, onChange: animationPauser(grid) }),
+    );
+    return () => motions.forEach((motion) => motion.destroy());
+  });
 </script>

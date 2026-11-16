@@ -59,7 +59,7 @@ const views = [
             <MockTurn
               prompt="Show how many sessions each project has next to its name"
               steps={["Read file '/home/you/dev/agentaps/src/app/render/sidebar.rs'", "Search for 'session_count' in src", 'Editing files', 'Run tests', 'Check formatting']}
-              reply="Project headers now show a session count after the folder name. Tests and formatting checks pass."
+              reply="Added the session count after each project name."
             />
           </div>
         </div>
@@ -69,9 +69,10 @@ const views = [
       <section class="diff-panel">
         <div class="diff-toolbar">
           <span class="diff-toolbar-title">Checkout vs HEAD</span>
+          <span class="diff-loading-slot" />
           <span class="diff-totals">2 files <b>+15</b> <i>-0</i></span>
 
-          {views.map(({ state, label }) => <span class="diff-toggle" data-panel={state} data-active={(state === views[0].state) || undefined}>{label}</span>)}
+          {views.map(({ state, label }) => <button type="button" class="diff-toggle" data-state-target={state}>{label}</button>)}
           <span class="diff-close">Close</span>
         </div>
         <div class="diff-body">

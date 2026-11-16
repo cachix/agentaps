@@ -3,11 +3,11 @@ title: Web Connect
 description: Pair a phone browser with the desktop app and continue your sessions.
 ---
 
-Web Connect is a browser preview for Agentaps desktop sessions. Its static site serves the landing page at `/` and the browser UI at `/connect/`. The browser connects directly to the running desktop app through Iroh. Agent processes and project files stay on the desktop computer.
+Web Connect is a browser preview for Agentaps desktop sessions. Its static site serves the landing page at `/` and the browser UI at `/connect/`. The browser connects directly to the running desktop app through Iroh. Agent processes and project files stay on the desktop computer or SSH host.
 
 ## Pair a browser
 
-1. Open Agentaps on the desktop and select the phone icon next to Archive. A QR code and linked browsers appear in the main window.
+1. Open Agentaps on the desktop and select the phone icon at the bottom of the sidebar. A QR code and linked browsers appear in the main window.
 2. On your phone, open [Web Connect](https://agentaps.dev/connect/) and allow camera access to scan the QR code. You can also open the pairing link directly. The site in the QR code must match the site open on your phone.
 3. Choose **Pair with phone unlock** or **Pair with passphrase**. Phone unlock requires a compatible browser and passkey with WebAuthn PRF support; the system may verify you with a fingerprint, face scan, or device PIN. Otherwise, use a unique passphrase of at least 15 characters.
 

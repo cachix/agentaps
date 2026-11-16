@@ -16,9 +16,10 @@ const { agent, name, title, path, diff, diffOpen = false, status } = Astro.props
 ---
 
 <header class="app-header">
-  <span class="app-status-slot"><span class="app-dot" data-status={status} /></span>
+  <span class="app-header-start"><span class="app-status-slot"><span class="app-dot" data-status={status} /></span>
   <span class="app-agent-select"><AgentIcon agent={agent} />{name}<Icon name="chevron-down" /></span>
   {title && <span class="app-title">{title}</span>}
+  </span>
   <span class="app-header-end">
     {path && <span class="app-header-path">{path}</span>}
     <span class="app-diff-button" data-diff data-changed={diff ? '' : undefined}>

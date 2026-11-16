@@ -16,7 +16,7 @@ const scenes = [
     context: 22,
     history: {
       prompt: 'Where are project headers drawn?',
-      steps: ["Search for 'project_header' in src", "Read file '/home/you/dev/agentaps/src/app/render/sidebar.rs'"],
+      steps: ["Search for 'render_sidebar' in src", "Read file '/home/you/dev/agentaps/src/app/render/sidebar.rs'"],
       reply: 'In src/app/render/sidebar.rs. The project header row draws the folder name, a divider line, and the branch.',
     },
     turn: {
@@ -28,8 +28,7 @@ const scenes = [
         'Run tests',
         'Check formatting',
       ],
-      pending: false,
-      reply: 'Project headers now show a session count after the folder name. Tests and formatting checks pass.',
+      reply: 'Added the session count after each project name.',
     },
   },
   {
@@ -48,7 +47,6 @@ const scenes = [
     turn: {
       prompt: 'Why does postgres fail to start?',
       steps: ['Read devenv.nix', 'Search 5432', 'Edit devenv.nix'],
-      pending: true,
       reply: 'Another postgres is already listening on port 5432. I changed services.postgres.port to 5433 in devenv.nix, so this one starts next to it.',
     },
   },
@@ -74,7 +72,7 @@ const script = scenes.map(({ id, turn }) => ({ id, ...turn }));
                 </div>
               </div>
             </div>
-            <MockComposer agent={agent} context={context}>
+            <MockComposer agent={agent} context={context} mode={agent === 'claude' ? 'Accept edits' : undefined}>
               <span class="app-placeholder">Ask your agent…</span>
             </MockComposer>
           </section>
@@ -91,7 +89,6 @@ const script = scenes.map(({ id, turn }) => ({ id, ...turn }));
     id: string;
     prompt: string;
     steps: string[];
-    pending: boolean;
     reply: string;
   }
 
@@ -102,10 +99,6 @@ const script = scenes.map(({ id, turn }) => ({ id, ...turn }));
     ['Search ', 'Searching '],
     ['Edit ', 'Editing '],
   ];
-
-  const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-  let run = 0;
-  let finish: (() => void) | undefined;
 
   const element = (tag: string, className: string, text = '') => {
     const node = document.createElement(tag);
@@ -121,35 +114,33 @@ const script = scenes.map(({ id, turn }) => ({ id, ...turn }));
     return match ? `${match[1]}${step.slice(match[0].length)}` : step;
   };
 
-  const heading = (scene: Scene, step: string) =>
-    scene.pending ? [mark('pending'), `Waiting · ${step}`] : [mark('running'), `Working · ${ongoing(step)}`];
+  const heading = (step: string) => [mark('running'), element('span', 'app-tool-label', `Working · ${ongoing(step)}`)];
 
   const toolRows = (scene: Scene, completed: number) => {
     const { steps } = scene;
     const rows: HTMLElement[] = [];
     if (completed > 1) {
       const row = element('p', 'app-tool-row is-summary');
-      row.append(mark('done'), `${completed} completed steps`, element('span', 'app-caret', '›'));
+      row.append(mark('done'), element('span', 'app-tool-label', `${completed} completed steps`), element('span', 'app-caret', '›'));
       rows.push(row);
     } else if (completed === 1) {
       const row = element('p', 'app-tool-row');
-      row.append(mark('done'), steps[0], element('span', 'app-caret', '›'));
+      row.append(mark('done'), element('span', 'app-tool-label', steps[0]), element('span', 'app-caret', '›'));
       rows.push(row);
     }
     if (completed < steps.length) {
-      const state = scene.pending ? 'pending' : 'running';
+      const state = 'running';
       const row = element('p', `app-tool-row is-${state}`);
-      row.append(mark(state), `${steps[completed]} · ${state}`, element('span', 'app-caret', '›'));
+      row.append(mark(state), element('span', 'app-tool-label', `${steps[completed]} · ${state}`), element('span', 'app-caret', '›'));
       rows.push(row);
     }
     return rows;
   };
 
-  const play = (state: string, root: HTMLElement) => {
-    if (reduced) return;
-    finish?.();
-    finish = undefined;
-    const token = ++run;
+  const play = (state: string, root: HTMLElement, active: boolean) => {
+    if (!active) return;
+    const controller = new AbortController();
+    const { signal } = controller;
     const scenes: Scene[] = JSON.parse(root.dataset.script ?? '[]');
     const scene = scenes.find(({ id }) => id === state);
     const pane = root.querySelector<HTMLElement>(`[data-scene="${state}"]`);
@@ -163,7 +154,19 @@ const script = scenes.map(({ id, turn }) => ({ id, ...turn }));
     const sidebarDot = root.querySelector<HTMLElement>(`[data-session="${state}"] .app-dot`);
     const chat = pane.querySelector<HTMLElement>('.app-chat')!;
     const wait = (ms: number) => new Promise<void>((resolve, reject) => {
-      window.setTimeout(() => (token === run ? resolve() : reject()), ms);
+      if (signal.aborted) {
+        reject();
+        return;
+      }
+      const cancel = () => {
+        window.clearTimeout(timer);
+        reject();
+      };
+      const timer = window.setTimeout(() => {
+        signal.removeEventListener('abort', cancel);
+        resolve();
+      }, ms);
+      signal.addEventListener('abort', cancel, { once: true });
     });
     const setStatus = (status?: string) => {
       for (const dot of [headerDot, sidebarDot]) {
@@ -174,6 +177,9 @@ const script = scenes.map(({ id, turn }) => ({ id, ...turn }));
     };
     const scroll = () => chat.scrollTo({ top: chat.scrollHeight, behavior: 'smooth' });
 
+    const content = live.innerHTML;
+    const promptMessage = live.querySelector<HTMLElement>('[data-role="user"]')!.cloneNode(true) as HTMLElement;
+    const replyMessage = live.querySelector<HTMLElement>('[data-role="agent"]')!.cloneNode(true) as HTMLElement;
     live.replaceChildren();
     diff?.removeAttribute('data-changed');
     composer.removeAttribute('data-working');
@@ -184,13 +190,13 @@ const script = scenes.map(({ id, turn }) => ({ id, ...turn }));
     const tools = element('div', 'app-tools');
     const head = element('p', 'app-tools-head');
     const body = element('div', 'app-tools-body');
-    const reply = element('p', 'app-reply');
+    const reply = replyMessage.querySelector<HTMLElement>('.app-reply')!;
+    reply.textContent = '';
     tools.append(head, body);
     const complete = () => {
-      head.replaceChildren(mark('done'), 'Completed', element('span', 'app-caret', '⌄'));
+      head.replaceChildren(mark('done'), element('span', 'app-tool-label', 'Completed'), element('span', 'app-caret', '⌄'));
       body.replaceChildren(...toolRows(scene, scene.steps.length));
-      live.append(reply);
-      composer.removeAttribute('data-working');
+      live.append(replyMessage);
     };
 
     (async () => {
@@ -208,16 +214,10 @@ const script = scenes.map(({ id, turn }) => ({ id, ...turn }));
       delete composer.dataset.ready;
       composer.dataset.working = '';
       setStatus('working');
-      live.append(element('p', 'app-user', scene.prompt), tools);
-      finish = () => {
-        diff?.setAttribute('data-changed', '');
-        reply.textContent = scene.reply;
-        complete();
-        setStatus('done');
-      };
+      live.append(promptMessage, tools);
 
       for (let completed = 0; completed < scene.steps.length; completed++) {
-        head.replaceChildren(...heading(scene, scene.steps[completed]), element('span', 'app-caret', '⌄'));
+        head.replaceChildren(...heading(scene.steps[completed]), element('span', 'app-caret', '⌄'));
         body.replaceChildren(...toolRows(scene, completed));
         scroll();
         await wait(900);
@@ -230,9 +230,19 @@ const script = scenes.map(({ id, turn }) => ({ id, ...turn }));
         scroll();
         await wait(45);
       }
-      finish = undefined;
+      composer.removeAttribute('data-working');
       setStatus();
     })().catch(() => {});
+
+    return () => {
+      controller.abort();
+      live.innerHTML = content;
+      field.replaceChildren(element('span', 'app-placeholder', 'Ask your agent…'));
+      delete composer.dataset.ready;
+      delete composer.dataset.working;
+      diff?.setAttribute('data-changed', '');
+      setStatus();
+    };
   };
 
   diorama('[data-hero-app]', { interval: 12000, onShow: play });

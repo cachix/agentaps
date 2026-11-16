@@ -8,6 +8,6 @@ export interface Footer {
 
 export const footers: Record<'codex' | 'claude' | 'gemini', Footer> = {
   codex: { mode: 'Auto review', plan: true, model: '6.1 Sol', effort: 'Low' },
-  claude: { mode: 'Manual', model: 'Opus 5.5', effort: 'Default' },
+  claude: { mode: 'Manual', model: 'Opus (1M context)', effort: 'Default' },
   gemini: { mode: 'Default', audio: true },
 };

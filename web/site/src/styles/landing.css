@@ -1,3 +1,11 @@
+@font-face {
+  font-family: 'Agentaps Mobile';
+  src: url('../../../fonts/IBMPlexSans-Regular.ttf') format('truetype');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
 :root {
   --landing-line: color-mix(in srgb, var(--sl-color-gray-5) 72%, transparent);
   --landing-panel: var(--agentaps-surface);
@@ -9,7 +17,7 @@
   --app-muted: #9aaaba;
   --app-accent: #8fc5ec;
   --app-hover: #293747;
-  --app-input: #25313f;
+  --app-input: rgb(51 66 83 / 0.3);
   --app-font: system-ui, -apple-system, 'Segoe UI', Ubuntu, Cantarell, 'Noto Sans', sans-serif;
   --app-selected: #30485f;
   --app-user: #29465c;
@@ -239,7 +247,7 @@ html:has(.landing) {
   margin-top: 1.4rem;
 }
 
-.platform-support strong {
+.platform-support a {
   align-items: center;
   background: var(--landing-panel);
   border: 1px solid var(--landing-line);
@@ -250,6 +258,7 @@ html:has(.landing) {
   font-weight: 500;
   gap: 0.45rem;
   padding: 0.35rem 0.6rem;
+  text-decoration: none;
 }
 
 /* App mock: sizes are real app pixels scaled by --u */
@@ -265,6 +274,10 @@ html:has(.landing) {
   text-align: start;
   width: 100%;
   z-index: 1;
+}
+
+.app-frame .csk-terminal__header {
+  display: none;
 }
 
 .app-frame .csk-terminal__body {
@@ -327,7 +340,7 @@ html:has(.landing) {
 }
 
 .app-input {
-  background: #1e2833;
+  background: var(--app-input);
   border: 1px solid var(--app-line);
   border-radius: calc(6 * var(--u));
   color: var(--app-muted);
@@ -361,7 +374,7 @@ html:has(.landing) {
 
 .app-project {
   display: grid;
-  gap: calc(2 * var(--u));
+  row-gap: calc(2 * var(--u));
 }
 
 .app-project-row,
@@ -371,10 +384,10 @@ html:has(.landing) {
   display: flex;
   gap: calc(4 * var(--u));
   line-height: calc(18 * var(--u));
-  margin-left: calc(-4 * var(--u));
+  margin-left: calc(-8 * var(--u));
   min-height: calc(24 * var(--u));
   min-width: 0;
-  padding: calc(2 * var(--u)) calc(4 * var(--u));
+  padding: calc(2 * var(--u)) calc(4 * var(--u)) calc(2 * var(--u)) 5px;
 }
 
 .app-project-row {
@@ -387,11 +400,13 @@ html:has(.landing) {
 
 .app-session {
   padding-right: calc(30 * var(--u));
-  transition: background 0.25s ease;
+  position: relative;
 }
 
 .app-session .app-dot {
-  margin-right: calc(7 * var(--u));
+  position: absolute;
+  right: calc(11.5 * var(--u));
+  top: calc(50% - 3.5 * var(--u));
 }
 
 .app-project-name {
@@ -508,7 +523,6 @@ html:has(.landing) {
 .app-scene {
   grid-area: 1 / 1;
   opacity: 0;
-  transition: opacity 0.35s ease;
   visibility: hidden;
 }
 
@@ -521,10 +535,18 @@ html:has(.landing) {
   align-items: center;
   border-bottom: 1px solid var(--app-line);
   display: flex;
-  gap: calc(8 * var(--u));
+  gap: calc(12 * var(--u));
   min-width: 0;
   padding: calc(8 * var(--u)) calc(16 * var(--u));
   white-space: nowrap;
+}
+
+.app-header-start {
+  align-items: center;
+  display: flex;
+  flex: 1;
+  gap: calc(8 * var(--u));
+  min-width: 0;
 }
 
 .app-agent-select {
@@ -566,10 +588,8 @@ html:has(.landing) {
 .app-header-end {
   align-items: center;
   display: flex;
-  flex: 1;
   gap: calc(8 * var(--u));
   justify-content: flex-end;
-  margin-left: calc(4 * var(--u));
   min-width: 0;
 }
 
@@ -615,22 +635,19 @@ html:has(.landing) {
   display: inline;
 }
 
-.app-pane[data-compact] .app-header,
-.panes-demo:not([data-state='one']) .app-pane .app-header {
-  flex-wrap: wrap;
+.app-pane[data-compact] .app-header {
+  flex-direction: column;
+  align-items: stretch;
   row-gap: calc(4 * var(--u));
 }
 
-.app-pane[data-compact] .app-header-end,
-.panes-demo:not([data-state='one']) .app-pane .app-header-end {
-  flex-basis: 100%;
+.app-pane[data-compact] .app-header-end {
+  width: 100%;
   margin-left: 0;
 }
 
 .app-pane[data-compact] .app-compact-hide,
-.app-pane[data-compact] .app-context i,
-.panes-demo:not([data-state='one']) .app-pane .app-compact-hide,
-.panes-demo:not([data-state='one']) .app-pane .app-context i {
+.app-pane[data-compact] .app-context i {
   display: none;
 }
 
@@ -677,15 +694,60 @@ html:has(.landing) {
   padding: calc(8 * var(--u)) calc(12 * var(--u)) calc(8 * var(--u)) calc(22 * var(--u));
 }
 
-.app-column > .app-reply,
-.app-live > .app-reply {
-  margin-bottom: calc(40 * var(--u));
+.app-message {
+  display: flex;
+  flex-direction: column;
+  gap: calc(4 * var(--u));
+  min-width: 0;
+}
+
+.app-message[data-role='user'] {
+  align-items: flex-end;
+  margin-top: calc(8 * var(--u));
+}
+
+.app-message[data-role='agent'] {
+  margin-bottom: calc(16 * var(--u));
+}
+
+.app-message .app-user {
+  margin-top: 0;
+}
+
+.app-message-actions {
+  display: flex;
+  gap: calc(4 * var(--u));
+  height: calc(20 * var(--u));
+  font-size: calc(12 * var(--u));
+  visibility: hidden;
+}
+
+.app-message[data-role='agent'] .app-message-actions {
+  padding-left: calc(22 * var(--u));
+}
+
+.app-message:hover .app-message-actions {
+  visibility: visible;
+}
+
+.composer-demo[data-state="queue"] .app-fork,
+.composer-demo[data-state="queue"] .app-fork .icon,
+.app-pane:has(.app-composer[data-working]) .app-fork,
+.app-pane:has(.app-composer[data-working]) .app-fork .icon {
+  color: var(--app-muted);
 }
 
 .app-tools {
   display: grid;
   gap: calc(4 * var(--u));
   padding-block: calc(4 * var(--u));
+}
+
+.app-tool-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .app-tools-head,
@@ -702,6 +764,7 @@ html:has(.landing) {
 }
 
 .app-tool-row {
+  align-items: flex-start;
   color: var(--app-muted);
   padding-left: calc(22 * var(--u));
 }
@@ -781,6 +844,7 @@ html:has(.landing) {
 }
 
 .app-composer-field {
+  line-height: calc(20 * var(--u));
   align-items: center;
   display: grid;
   flex: 1;
@@ -800,6 +864,12 @@ html:has(.landing) {
 .app-typed {
   justify-self: start;
   white-space: nowrap;
+}
+
+.app-composer .app-typed {
+  max-width: 100%;
+  overflow-wrap: break-word;
+  white-space: pre-wrap;
 }
 
 .app-send {
@@ -838,7 +908,7 @@ html:has(.landing) {
 
 .app-stop i {
   background: var(--app-text);
-  border-radius: 50%;
+  border-radius: calc(2 * var(--u));
   height: calc(8 * var(--u));
   width: calc(8 * var(--u));
 }
@@ -912,18 +982,15 @@ html:has(.landing) {
   max-width: calc(80 * var(--u));
 }
 
-.app-pane[data-compact] .app-select.is-mode,
-.panes-demo:not([data-state='one']) .app-pane .app-select.is-mode {
+.app-pane[data-compact] .app-select.is-mode {
   max-width: calc(64 * var(--u));
 }
 
-.app-pane[data-compact] .app-select.is-model,
-.panes-demo:not([data-state='one']) .app-pane .app-select.is-model {
+.app-pane[data-compact] .app-select.is-model {
   max-width: calc(100 * var(--u));
 }
 
-.app-pane[data-compact] .app-select.is-effort,
-.panes-demo:not([data-state='one']) .app-pane .app-select.is-effort {
+.app-pane[data-compact] .app-select.is-effort {
   max-width: calc(48 * var(--u));
 }
 
@@ -1033,7 +1100,7 @@ html:has(.landing) {
 
 .app-popup li {
   align-items: center;
-  border-radius: calc(4 * var(--u));
+  border-radius: calc(6 * var(--u));
   display: flex;
   gap: calc(12 * var(--u));
   min-width: 0;
@@ -1048,7 +1115,7 @@ html:has(.landing) {
   background: none;
   color: var(--app-accent);
   flex: none;
-  font-family: var(--sl-font);
+  font-family: var(--app-font);
   font-size: calc(14 * var(--u));
   padding: 0;
 }
@@ -1075,7 +1142,6 @@ html:has(.landing) {
   background: var(--app-user);
   border-radius: calc(6 * var(--u));
   display: grid;
-  gap: calc(4 * var(--u));
   justify-self: end;
   max-width: 85%;
   padding: calc(8 * var(--u)) calc(12 * var(--u));
@@ -1086,7 +1152,7 @@ html:has(.landing) {
   color: var(--app-accent);
   display: flex;
   font-size: calc(12 * var(--u));
-  gap: calc(16 * var(--u));
+  gap: calc(8 * var(--u));
   justify-content: space-between;
 }
 
@@ -1230,7 +1296,6 @@ html:has(.landing) {
   gap: calc(12 * var(--u));
   min-width: 0;
   padding: calc(12 * var(--u)) calc(16 * var(--u));
-  transition: background 0.25s ease;
 }
 
 .app-picker-card {
@@ -1484,7 +1549,7 @@ html:has(.landing) {
   background: none;
   border: 0;
   color: inherit;
-  font-family: var(--sl-font-mono);
+  font-family: monospace;
   font-size: 0.78rem;
   font-weight: 600;
   padding: 0;
@@ -1505,6 +1570,7 @@ html:has(.landing) {
   height: 100%;
   min-width: 0;
   overflow: hidden;
+  transition: grid-template-columns 240ms ease, grid-template-rows 240ms ease;
 }
 
 .panes-demo[data-state='two'] .panes {
@@ -1532,10 +1598,6 @@ html:has(.landing) {
   grid-area: 1 / 2 / 2 / 3;
 }
 
-.panes-demo:not([data-state='three']) .pane[data-pane='b'] {
-  grid-area: 1 / 2 / 3 / 3;
-}
-
 .pane[data-pane='c'] {
   grid-area: 2 / 2 / 3 / 3;
 }
@@ -1545,10 +1607,6 @@ html:has(.landing) {
   position: absolute;
 }
 
-.panes-demo[data-state='two'] .pane[data-pane='b'],
-.panes-demo[data-state='three'] .pane:not([data-pane='a']) {
-  animation: landing-in 0.2s ease both;
-}
 
 .pane::after {
   background: var(--app-accent);
@@ -1607,13 +1665,29 @@ html:has(.landing) {
   white-space: nowrap;
 }
 
+.diff-loading-slot {
+  flex: none;
+  height: calc(16 * var(--u));
+  width: calc(16 * var(--u));
+}
+
+.diff-file-header > .icon {
+  flex: none;
+  height: calc(20 * var(--u));
+  padding: calc(3 * var(--u));
+  width: calc(20 * var(--u));
+}
+
 .diff-toolbar-title {
   color: var(--app-text);
   flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .diff-totals {
-  font-family: var(--sl-font-mono);
+  font-family: monospace;
 }
 
 .diff-totals b,
@@ -1630,12 +1704,15 @@ html:has(.landing) {
 
 .diff-toggle {
   background: var(--app-surface);
+  border: 0;
   border-radius: calc(6 * var(--u));
+  color: var(--app-muted);
+  cursor: pointer;
+  font: inherit;
   padding: calc(4 * var(--u)) calc(8 * var(--u));
-  transition: background 0.25s ease, color 0.25s ease;
 }
 
-.diff-toggle[data-active] {
+.diff-toggle[aria-pressed='true'] {
   background: var(--app-selected);
   color: var(--app-text);
 }
@@ -1647,7 +1724,7 @@ html:has(.landing) {
 
 .diff-body {
   min-height: 0;
-  overflow: hidden;
+  overflow: auto;
 }
 
 .diff-file + .diff-file .diff-file-header {
@@ -1659,21 +1736,27 @@ html:has(.landing) {
   border-bottom: 1px solid var(--app-line);
   display: flex;
   gap: calc(8 * var(--u));
-  min-height: calc(32 * var(--u));
-  padding: 0 calc(12 * var(--u)) 0 calc(8 * var(--u));
+  min-height: calc(34 * var(--u));
+  padding: calc(4 * var(--u)) calc(12 * var(--u)) calc(4 * var(--u)) calc(4 * var(--u));
 }
 
 .diff-file-header span {
   font-weight: 500;
+  font-size: calc(16 * var(--u));
+  max-width: calc(240 * var(--u));
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .diff-file-header b,
 .diff-file-header i {
-  font-family: var(--sl-font-mono);
+  font-family: monospace;
   font-size: calc(12 * var(--u));
 }
 
 .diff-hunk {
+  font-family: var(--app-font);
   align-items: center;
   background: color-mix(in srgb, var(--app-surface) 35%, var(--app-bg));
   color: var(--app-muted);
@@ -1685,7 +1768,7 @@ html:has(.landing) {
 
 .diff-lines {
   display: none;
-  font-family: var(--sl-font-mono);
+  font-family: monospace;
   font-size: calc(13 * var(--u));
   line-height: 1.6;
 }
@@ -1696,7 +1779,8 @@ html:has(.landing) {
 
 .diff-row {
   display: grid;
-  grid-template-columns: calc(44 * var(--u)) calc(43 * var(--u)) calc(24 * var(--u)) minmax(0, 1fr);
+  grid-template-columns: repeat(2, calc(34.2 * var(--u))) calc(16 * var(--u)) minmax(0, 1fr);
+  padding-inline: calc(8 * var(--u));
 }
 
 .diff-no {
@@ -1706,7 +1790,7 @@ html:has(.landing) {
 }
 
 .diff-sign {
-  padding-left: calc(9 * var(--u));
+  padding-left: 0;
 }
 
 .diff-text {
@@ -1739,25 +1823,22 @@ html:has(.landing) {
 }
 
 .diff-split .diff-row {
-  grid-template-columns: calc(36 * var(--u)) calc(31 * var(--u)) minmax(0, 1fr);
+  grid-template-columns: calc(34.2 * var(--u)) calc(16 * var(--u)) minmax(0, 1fr);
 }
 
 .diff-split .diff-sign {
-  padding-left: calc(20 * var(--u));
+  padding-left: 0;
 }
 
 .diff-split .diff-text {
   white-space: pre-wrap;
+  overflow-wrap: anywhere;
 }
 
 .diff-row.is-empty {
-  background: var(--app-sidebar);
+  background: color-mix(in srgb, var(--app-surface) 18%, var(--app-bg));
 }
 
-.diff-lines[data-active] .diff-row,
-.diff-lines[data-active] .diff-pair {
-  animation: landing-line 0.35s ease calc(var(--i) * 0.05s) both;
-}
 
 .diff-split[data-active] .diff-pair .diff-row {
   animation: none;
@@ -1771,7 +1852,7 @@ html:has(.landing) {
 
 .ssh-window .app-picker {
   height: calc(720 * var(--u));
-  overflow: hidden;
+  overflow-y: auto;
 }
 
 .ssh-typed {
@@ -1780,7 +1861,6 @@ html:has(.landing) {
 }
 
 .ssh-typed[data-active] {
-  animation: landing-type 0.6s steps(var(--chars), end) both;
   opacity: 1;
 }
 
@@ -1797,16 +1877,13 @@ html:has(.landing) {
   background: var(--app-selected);
 }
 
-.ssh-demo[data-state='ssh'] .app-picker-row[data-active] {
-  animation: landing-rise 0.35s ease 0.6s both;
-}
 
 .ssh-demo .app-picker-input > .icon {
   opacity: 0;
 }
 
 .ssh-demo[data-state='ssh'] .app-picker-input > .icon {
-  animation: landing-in 0.2s ease 0.6s both;
+  opacity: 1;
 }
 
 /* Composer */
@@ -1823,9 +1900,6 @@ html:has(.landing) {
   display: none;
 }
 
-.composer-popups .app-popup[data-active] {
-  animation: landing-rise 0.25s ease 0.35s both;
-}
 
 .composer-queue-turn {
   display: grid;
@@ -1842,9 +1916,6 @@ html:has(.landing) {
   display: none;
 }
 
-.composer-demo .app-typed[data-active] {
-  animation: landing-type 0.35s steps(var(--chars), end) both;
-}
 
 .composer-shell-label {
   color: var(--app-muted);
@@ -1862,6 +1933,17 @@ html:has(.landing) {
 .composer-demo[data-state='files'] .app-send,
 .composer-demo[data-state='shell'] .app-send {
   background: var(--app-action);
+}
+
+.composer-demo[data-attached] .app-send {
+  background: var(--app-action);
+}
+
+.composer-demo[data-attached] .app-send .icon,
+.composer-demo[data-state='commands'] .app-send .icon,
+.composer-demo[data-state='files'] .app-send .icon,
+.composer-demo[data-state='shell'] .app-send .icon {
+  color: var(--app-text);
 }
 
 .composer-demo[data-state='queue'] .app-send {
@@ -1899,18 +1981,19 @@ html:has(.landing) {
 
 .app-attachments {
   display: flex;
-  padding: calc(16 * var(--u)) calc(8 * var(--u)) calc(3 * var(--u));
+  padding: calc(8 * var(--u)) calc(8 * var(--u)) calc(4 * var(--u));
 }
 
 .composer-demo:not([data-attached]) .app-attachments {
   display: none;
 }
 
-.composer-demo[data-attached] .app-attachments {
-  animation: landing-rise 0.25s ease both;
-}
 
 .app-attachment {
+  margin-top: calc(6 * var(--u));
+  margin-right: calc(6 * var(--u));
+  line-height: 1.25;
+  font-weight: 500;
   align-items: center;
   background: var(--app-bg);
   border: 1px solid var(--app-line);
@@ -1918,8 +2001,35 @@ html:has(.landing) {
   display: flex;
   gap: calc(10 * var(--u));
   height: calc(56 * var(--u));
-  padding: 0 calc(8 * var(--u));
+  padding: 0 calc(12 * var(--u)) 0 calc(8 * var(--u));
   width: calc(232 * var(--u));
+  font-size: calc(13 * var(--u));
+  position: relative;
+}
+
+.app-attachment-remove {
+  align-items: center;
+  background: var(--app-bg);
+  border: 1px solid var(--app-line);
+  border-radius: 50%;
+  display: flex;
+  height: calc(20 * var(--u));
+  justify-content: center;
+  position: absolute;
+  right: calc(-6 * var(--u));
+  top: calc(-6 * var(--u));
+  visibility: hidden;
+  width: calc(20 * var(--u));
+}
+
+.app-attachment:hover .app-attachment-remove {
+  visibility: visible;
+}
+
+.app-attachment-remove .icon {
+  color: var(--app-text);
+  height: calc(10 * var(--u));
+  width: calc(10 * var(--u));
 }
 
 .app-attachment-media {
@@ -1934,8 +2044,8 @@ html:has(.landing) {
 
 .app-attachment-media .icon {
   color: var(--app-text);
-  height: calc(16 * var(--u));
-  width: calc(16 * var(--u));
+  height: calc(20 * var(--u));
+  width: calc(20 * var(--u));
 }
 
 /* Remote Control */
@@ -1971,38 +2081,14 @@ html:has(.landing) {
   overflow: hidden;
 }
 
-.remote-desktop-bar {
-  align-items: center;
-  background: var(--app-surface);
-  border-bottom: 1px solid var(--app-line);
-  display: flex;
-  gap: 0.35rem;
-  height: 2.4rem;
-  padding: 0 0.9rem;
-}
 
-.remote-desktop-bar span {
-  background: var(--app-line);
-  border-radius: 50%;
-  height: 0.48rem;
-  width: 0.48rem;
-}
 
-.remote-desktop-bar span:first-child {
-  background: var(--app-accent);
-}
 
-.remote-desktop-bar em {
-  color: var(--app-muted);
-  font-family: var(--sl-font-mono);
-  font-size: 0.65rem;
-  font-style: normal;
-  margin-left: 0.5rem;
-}
 
 .remote-desktop-body {
+  container-type: size;
   display: grid;
-  height: calc(560 * var(--u));
+  height: calc(660 * var(--u));
   overflow: hidden;
 }
 
@@ -2012,6 +2098,8 @@ html:has(.landing) {
 
 .remote-connect {
   align-content: start;
+  min-height: 0;
+  overflow-y: auto;
   display: grid;
   gap: calc(16 * var(--u));
   justify-items: center;
@@ -2031,7 +2119,8 @@ html:has(.landing) {
 .remote-qr {
   display: grid;
   margin-bottom: calc(-4 * var(--u));
-  width: calc(330 * var(--u));
+  width: round(down, clamp(calc(80 * var(--u)), min(calc(100cqw - 70 * var(--u)), calc(100cqh - 230 * var(--u))), calc(640 * var(--u))), calc(57 * var(--u)));
+  flex: none;
 }
 
 .remote-qr svg {
@@ -2045,12 +2134,12 @@ html:has(.landing) {
   visibility: hidden;
 }
 
-.remote-demo[data-state='unlock'] .remote-qr svg:first-child {
-  animation: landing-hide 1.8s step-end both;
+.remote-demo[data-paired] .remote-qr svg:first-child {
+  visibility: hidden;
 }
 
-.remote-demo[data-state='unlock'] .remote-qr svg + svg {
-  animation: landing-unhide 1.8s step-end both;
+.remote-demo[data-paired] .remote-qr svg + svg {
+  visibility: visible;
 }
 
 .remote-buttons {
@@ -2114,7 +2203,15 @@ html:has(.landing) {
 }
 
 .remote-client[data-active] {
-  animation: landing-rise 0.4s ease 1.8s both;
+  display: none;
+}
+
+.remote-demo[data-paired] .remote-client[data-active] {
+  display: flex;
+}
+
+.remote-demo[data-state='unlock']:not([data-paired]) .remote-empty {
+  display: block;
 }
 
 .remote-connect,
@@ -2123,17 +2220,16 @@ html:has(.landing) {
 .phone-page,
 .phone-app {
   opacity: 0;
-  transition: opacity 0.4s ease;
   visibility: hidden;
 }
 
-.remote-connect {
-  transition: opacity 0.4s ease, transform 0.5s ease;
+
+.remote-demo[data-state='unlock']:not([data-paired]) .phone-app {
+  visibility: hidden;
 }
 
-.remote-demo[data-state='unlock'] .remote-connect {
-  transform: translateY(calc(-150 * var(--u)));
-  transition-delay: 0s, 1.8s;
+.remote-demo[data-paired] .phone-page {
+  visibility: hidden;
 }
 
 .remote-connect[data-active],
@@ -2162,7 +2258,7 @@ html:has(.landing) {
 }
 
 .remote-running {
-  opacity: 0;
+  visibility: hidden;
 }
 
 .app-tool-row .remote-running {
@@ -2170,15 +2266,15 @@ html:has(.landing) {
 }
 
 .remote-session[data-active] .remote-waiting {
-  animation: landing-out 0.2s ease 1.8s forwards;
+  animation: landing-hide 1.8s step-end forwards;
 }
 
 .remote-session[data-active] .remote-running {
-  animation: landing-in 0.2s ease 1.8s forwards;
+  animation: landing-unhide 1.8s step-end both;
 }
 
 .remote-session[data-active] .app-permission {
-  animation: landing-collapse 0.3s ease 1.8s forwards;
+  animation: landing-collapse 1.8s step-end forwards;
 }
 
 .remote-link {
@@ -2231,7 +2327,7 @@ html:has(.landing) {
   border-radius: 999px;
   color: var(--sl-color-gray-2);
   display: inline-flex;
-  font-family: var(--sl-font-mono);
+  font-family: monospace;
   font-size: 0.62rem;
   gap: 0.35rem;
   line-height: 1.3;
@@ -2256,9 +2352,9 @@ html:has(.landing) {
   border-radius: 1.8rem;
   box-shadow: 0 2rem 5rem rgb(0 0 0 / 0.3), inset 0 0 0 0.35rem #161d26;
   color: var(--app-text);
-  font-family: 'IBM Plex Sans', var(--sl-font);
+  font-family: 'Agentaps Mobile', sans-serif;
   font-size: calc(16 * var(--u));
-  line-height: 1.4;
+  line-height: 1.618;
   min-height: 0;
   padding: 0.5rem;
   position: relative;
@@ -2284,6 +2380,7 @@ html:has(.landing) {
 .remote-phone-screen {
   background: var(--app-bg);
   border-radius: 1.35rem;
+  border-top: calc(36 * var(--u)) solid var(--app-bg);
   display: grid;
   height: 100%;
   overflow: hidden;
@@ -2332,7 +2429,7 @@ html:has(.landing) {
   align-content: start;
   display: grid;
   gap: calc(16 * var(--u));
-  padding: calc(44 * var(--u)) calc(16 * var(--u)) calc(16 * var(--u));
+  padding: calc(16 * var(--u));
 }
 
 .phone-link {
@@ -2377,7 +2474,7 @@ html:has(.landing) {
 }
 
 .phone-page[data-active] .phone-unlock {
-  animation: landing-press 0.5s ease 0.5s both;
+  animation: landing-press 0.5s step-end 0.5s both;
 }
 
 .phone-input {
@@ -2392,7 +2489,6 @@ html:has(.landing) {
 .phone-app {
   display: grid;
   grid-template-rows: auto auto minmax(0, 1fr) auto;
-  padding-top: calc(36 * var(--u));
 }
 
 .phone-header {
@@ -2416,7 +2512,7 @@ html:has(.landing) {
   display: flex;
   gap: calc(8 * var(--u));
   overflow: hidden;
-  padding: 0 calc(12 * var(--u));
+  padding: calc(8 * var(--u)) calc(12 * var(--u));
   white-space: nowrap;
 }
 
@@ -2435,7 +2531,8 @@ html:has(.landing) {
 }
 
 .phone-messages {
-  align-content: end;
+  align-content: start;
+  overflow-y: auto;
   display: grid;
   gap: calc(12 * var(--u));
   min-height: 0;
@@ -2447,7 +2544,6 @@ html:has(.landing) {
   border-radius: calc(8 * var(--u));
   display: grid;
   font-size: calc(14 * var(--u));
-  gap: calc(8 * var(--u));
   padding: calc(8 * var(--u)) calc(12 * var(--u));
 }
 
@@ -2479,12 +2575,12 @@ html:has(.landing) {
   grid-area: 1 / 1;
 }
 
-.phone-app[data-active] .remote-waiting {
-  animation: landing-out 0.2s ease 1.8s forwards;
+.remote-demo[data-state='approve'] .phone-app[data-active] .remote-waiting {
+  animation: landing-hide 1.8s step-end forwards;
 }
 
-.phone-app[data-active] .remote-running {
-  animation: landing-in 0.2s ease 1.8s forwards;
+.remote-demo[data-state='approve'] .phone-app[data-active] .remote-running {
+  animation: landing-unhide 1.8s step-end both;
 }
 
 .phone-permission {
@@ -2507,12 +2603,12 @@ html:has(.landing) {
   padding: calc(8 * var(--u)) calc(12 * var(--u));
 }
 
-.phone-app[data-active] .phone-permission {
-  animation: landing-rise 0.4s ease 0.4s both, landing-collapse 0.3s ease 1.8s forwards;
+.remote-demo[data-state='approve'] .phone-app[data-active] .phone-permission {
+  animation: landing-collapse 1.8s step-end forwards;
 }
 
-.phone-app[data-active] .phone-approve {
-  animation: landing-press 0.5s ease 1.4s both;
+.remote-demo[data-state='approve'] .phone-app[data-active] .phone-approve {
+  animation: landing-press 0.4s step-end 1.4s both;
 }
 
 .phone-composer {
@@ -2639,7 +2735,7 @@ html:has(.landing) {
   border-bottom-width: 2px;
   border-radius: 0.3rem;
   color: var(--app-text);
-  font-family: var(--sl-font-mono);
+  font-family: monospace;
   font-size: 0.68rem;
   padding: 0.1rem 0.4rem;
 }
@@ -2663,7 +2759,7 @@ html:has(.landing) {
 
 .tile-drawer {
   align-self: stretch;
-  animation: landing-drawer 5s ease infinite;
+  animation: landing-drawer 5s step-end infinite;
   border-top: 1px solid var(--app-line);
   display: grid;
   grid-template-rows: auto 1fr;
@@ -2697,7 +2793,7 @@ html:has(.landing) {
 .tile-shell code {
   background: none;
   color: var(--app-text);
-  font-family: var(--sl-font-mono);
+  font-family: monospace;
   font-size: calc(13 * var(--u));
   padding: 0;
   white-space: pre-wrap;
@@ -2708,17 +2804,11 @@ html:has(.landing) {
   animation: landing-reveal 5s steps(1) infinite;
 }
 
-.tile-out.is-late {
-  animation-name: landing-reveal-late;
-}
 
 .tile-ok {
   color: var(--app-done);
 }
 
-.tile-ignored {
-  color: var(--app-working);
-}
 
 .tile-themes {
   align-content: start;
@@ -2771,7 +2861,7 @@ html:has(.landing) {
 }
 
 .tile-select-menu li:not(.is-selected) {
-  animation: landing-highlight 7.5s ease calc(var(--i) * 1.5s - 1.5s) infinite;
+  animation: landing-highlight 7.5s step-end calc(var(--i) * 1.5s - 1.5s) infinite;
 }
 
 .tile-select-menu li.is-selected {
@@ -2789,6 +2879,7 @@ html:has(.landing) {
 
 .tile-shortcuts-title {
   color: var(--app-muted);
+  font-weight: 600;
 }
 
 .tile-shortcuts-card {
@@ -2799,11 +2890,20 @@ html:has(.landing) {
 }
 
 .tile-shortcut {
-  animation: landing-highlight 7.5s ease calc(var(--i) * 1.5s) infinite;
+  animation: landing-highlight 7.5s step-end calc(var(--i) * 1.5s) infinite;
   display: flex;
   justify-content: space-between;
   margin: 0;
-  padding: calc(10 * var(--u)) calc(16 * var(--u));
+  padding: calc(12 * var(--u)) calc(16 * var(--u));
+}
+
+.tile-shortcut > span:last-child {
+  align-items: center;
+  display: inline-flex;
+  flex: none;
+  height: calc(32 * var(--u));
+  line-height: 1.25;
+  padding-inline: calc(10 * var(--u));
 }
 
 .tile-shortcut + .tile-shortcut {
@@ -2827,15 +2927,15 @@ html:has(.landing) {
   color: var(--app-muted);
   display: inline-flex;
   gap: calc(4 * var(--u));
-  padding: calc(2 * var(--u)) calc(4 * var(--u));
+  padding: calc(2 * var(--u)) calc(4 * var(--u)) calc(2 * var(--u)) 0;
 }
 
 .tile-fork-action {
-  animation: landing-fork-hover 5s ease infinite;
+  animation: landing-fork-hover 5s step-end infinite;
 }
 
 .tile-system {
-  animation: landing-fork-card 5s ease infinite;
+  animation: landing-fork-card 5s step-end infinite;
   background: var(--app-surface);
   border-radius: calc(6 * var(--u));
   display: flex;
@@ -2870,8 +2970,13 @@ html:has(.landing) {
   flex: 1;
 }
 
+.tile-spawn .app-session + .app-session,
+.tile-resume .app-session + .app-session {
+  margin-top: calc(-2 * var(--u));
+}
+
 .tile-spawn-new {
-  animation: landing-spawn 5s ease infinite;
+  animation: landing-spawn 5s step-end infinite;
 }
 
 .tile-spawn-new .app-dot {
@@ -2883,7 +2988,7 @@ html:has(.landing) {
 }
 
 .tile-attach .app-attachment {
-  animation: landing-drop 5s ease infinite;
+  animation: landing-drop 5s step-end infinite;
 }
 
 .tile-resume {
@@ -2892,12 +2997,9 @@ html:has(.landing) {
 }
 
 .tile-resume .app-dot {
-  animation: landing-connect 5s ease calc(var(--i) * 0.45s) infinite;
+  animation: landing-connect 5s step-end calc(var(--i) * 0.45s) infinite;
 }
 
-.tile-resume .app-session-title {
-  animation: landing-connected 5s ease calc(var(--i) * 0.45s) infinite;
-}
 
 /* Install */
 
@@ -3007,7 +3109,7 @@ html:has(.landing) {
 .terminal code {
   background: none;
   color: inherit;
-  font-family: var(--sl-font-mono);
+  font-family: monospace;
   padding: 0;
 }
 
@@ -3040,7 +3142,7 @@ html:has(.landing) {
   color: var(--sl-color-text-accent);
   content: counter(step);
   display: flex;
-  font-family: var(--sl-font-mono);
+  font-family: monospace;
   font-size: 0.75rem;
   height: 1.7rem;
   justify-content: center;
@@ -3103,38 +3205,18 @@ html:has(.landing) {
 
 /* Motion */
 
-@keyframes landing-type {
-  from { clip-path: inset(0 100% 0 0); }
-  to { clip-path: inset(0 0 0 0); }
-}
 
-@keyframes landing-out {
-  to { opacity: 0; }
-}
 
-@keyframes landing-in {
-  from { opacity: 0; }
-  to { opacity: 1; }
-}
 
-@keyframes landing-rise {
-  from { opacity: 0; transform: translateY(0.4rem); }
-  to { opacity: 1; transform: none; }
-}
 
 @keyframes landing-collapse {
-  from { max-height: 12rem; opacity: 1; }
-  to { border-width: 0; max-height: 0; opacity: 0; padding-block: 0; }
+  to { display: none; }
 }
 
 @keyframes landing-dash {
   to { stroke-dashoffset: -14; }
 }
 
-@keyframes landing-line {
-  from { opacity: 0; transform: translateX(-0.4rem); }
-  to { opacity: 1; transform: none; }
-}
 
 @keyframes landing-packet {
   from { opacity: 0; transform: none; }
@@ -3153,8 +3235,8 @@ html:has(.landing) {
 }
 
 @keyframes landing-press {
-  0%, 100% { transform: none; }
-  40% { box-shadow: 0 0 0 4px color-mix(in srgb, var(--app-accent) 35%, transparent); transform: scale(0.95); }
+  0%, 100% { background: var(--app-action); }
+  40% { background: var(--app-selected); }
 }
 
 @keyframes landing-keypress {
@@ -3172,10 +3254,6 @@ html:has(.landing) {
   31%, 100% { opacity: 1; }
 }
 
-@keyframes landing-reveal-late {
-  0%, 55% { opacity: 0; }
-  56%, 100% { opacity: 1; }
-}
 
 @keyframes landing-highlight {
   0%, 20%, 100% { background: transparent; }
@@ -3188,13 +3266,13 @@ html:has(.landing) {
 }
 
 @keyframes landing-fork-card {
-  0%, 38% { opacity: 0; transform: translateY(0.3rem); }
+  0%, 38% { opacity: 0; }
   46%, 92% { opacity: 1; transform: none; }
   100% { opacity: 0; }
 }
 
 @keyframes landing-spawn {
-  0%, 25% { opacity: 0; transform: translateY(-0.4rem); }
+  0%, 25% { opacity: 0; }
   35%, 90% { background: var(--app-selected); opacity: 1; transform: none; }
   100% { opacity: 0; }
 }
@@ -3205,7 +3283,7 @@ html:has(.landing) {
 }
 
 @keyframes landing-drop {
-  0%, 10% { opacity: 0; transform: translateY(-0.8rem) scale(0.9); }
+  0%, 10% { opacity: 0; }
   20%, 90% { opacity: 1; transform: none; }
   100% { opacity: 0; }
 }
@@ -3215,19 +3293,7 @@ html:has(.landing) {
   55%, 100% { opacity: 0; }
 }
 
-@keyframes landing-connected {
-  0%, 45% { transform: none; }
-  55%, 100% { transform: translateX(calc(-18 * var(--u))); }
-}
 
-@media (prefers-reduced-motion: reduce) {
-  .landing *,
-  .landing *::before,
-  .landing *::after {
-    animation-delay: 0s !important;
-    transition-delay: 0s !important;
-  }
-}
 
 /* Layout */
 
@@ -3322,70 +3388,7 @@ html:has(.landing) {
   }
 }
 
-@media (max-width: 34rem) {
-  .app-pane .app-header {
-    flex-wrap: wrap;
-    row-gap: calc(4 * var(--u));
-  }
-
-  .app-pane .app-header-end {
-    flex-basis: 100%;
-    margin-left: 0;
-  }
-
-  .app-pane .app-compact-hide,
-  .app-pane .app-context i {
-    display: none;
-  }
-
-  .landing-container {
-
-    padding-inline: 1rem;
-  }
-
-  .hero-copy h1 {
-    font-size: 2.85rem;
-  }
-
-  .hero-actions .csk-button {
-    width: 100%;
-  }
-
-  .hero-app .app-frame,
-  .panes-window,
-  .diff-window,
-  .composer-window {
-    --u: 0.7px;
-  }
-
-  .app {
-    height: calc(700 * var(--u));
-  }
-
-  .diff-text {
-    white-space: pre-wrap;
-  }
-
-  .remote-desktop-body {
-    height: calc(640 * var(--u));
-  }
-
-  .remote-demo[data-state='unlock'] .remote-connect {
-    transform: translateY(calc(-104 * var(--u)));
-  }
-
-  .panes-window .app {
-    height: calc(1000 * var(--u));
-  }
-
-  .agents-list {
-    grid-template-columns: 1fr;
-  }
-
-  .agent-card {
-    height: 3.4rem;
-  }
-
+@media (max-width: 36rem) {
   .panes,
   .panes-demo[data-state] .panes {
     grid-template-columns: minmax(0, 1fr);
@@ -3413,6 +3416,50 @@ html:has(.landing) {
     grid-area: 3 / 1 / 4 / 2;
   }
 
+  .panes-window .app {
+    height: calc(1000 * var(--u));
+  }
+}
+
+@media (max-width: 34rem) {
+  .landing-container {
+
+    padding-inline: 1rem;
+  }
+
+  .hero-copy h1 {
+    font-size: 2.85rem;
+  }
+
+  .hero-actions .csk-button {
+    width: 100%;
+  }
+
+  .hero-app .app-frame,
+  .panes-window,
+  .diff-window,
+  .composer-window {
+    --u: 0.7px;
+  }
+
+  .app {
+    height: calc(700 * var(--u));
+  }
+
+
+
+  .panes-window .app {
+    height: calc(1000 * var(--u));
+  }
+
+  .agents-list {
+    grid-template-columns: 1fr;
+  }
+
+  .agent-card {
+    height: 3.4rem;
+  }
+
   .remote-stage {
     grid-template-columns: 1fr;
     justify-items: stretch;
@@ -3438,5 +3485,18 @@ html:has(.landing) {
 
   .platform {
     align-items: flex-start;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html:has(.landing) {
+    scroll-behavior: auto;
+  }
+
+  .landing *,
+  .landing *::before,
+  .landing *::after {
+    animation: none !important;
+    transition: none !important;
   }
 }

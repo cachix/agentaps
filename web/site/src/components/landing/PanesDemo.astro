@@ -1,4 +1,5 @@
 ---
+import MockMessage from './MockMessage.astro';
 import TerminalFrame from '@cachix/site-kit/ui/TerminalFrame.astro';
 import MockComposer from './MockComposer.astro';
 import MockHeader from './MockHeader.astro';
@@ -26,7 +27,7 @@ const layouts = [
                   <MockTurn
                     prompt="Show how many sessions each project has next to its name"
                     steps={["Read file '/home/you/dev/agentaps/src/app/render/sidebar.rs'", "Search for 'session_count' in src", 'Editing files', 'Run tests', 'Check formatting']}
-                    reply="Project headers now show a session count after the folder name. Tests and formatting checks pass."
+                    reply="Added the session count after each project name."
                   />
                 </div>
               </div>
@@ -35,7 +36,7 @@ const layouts = [
           </section>
 
           <section class="pane" data-pane="b">
-            <div class="app-pane" data-compact>
+            <div class="app-pane">
               <MockHeader agent="claude" name="Claude" title="Fix the postgres service" path="/home/you/dev/devenv" diff={{ added: 1, removed: 1 }} />
               <div class="app-chat">
                 <div class="app-column">
@@ -46,20 +47,20 @@ const layouts = [
                   />
                 </div>
               </div>
-              <MockComposer agent="claude" context={9} />
+              <MockComposer agent="claude" context={9} mode="Accept edits" />
             </div>
           </section>
 
           <section class="pane" data-pane="c">
-            <div class="app-pane" data-compact>
+            <div class="app-pane">
               <MockHeader agent="gemini" name="Gemini CLI" title="Update agentaps to 0.7.0" path="/home/you/dev/nixpkgs" status="working" />
               <div class="app-chat">
                 <div class="app-column">
-                  <p class="app-user">Update agentaps to 0.7.0</p>
+                  <MockMessage role="user" text="Update agentaps to 0.7.0" />
                   <div class="app-tools">
-                    <p class="app-tools-head"><span class="app-mark is-running" />Working · nix-build -A agentaps<span class="app-caret">⌄</span></p>
-                    <p class="app-tool-row is-summary"><span class="app-mark is-done">✓</span>2 completed steps<span class="app-caret">›</span></p>
-                    <p class="app-tool-row is-running"><span class="app-mark is-running" />nix-build -A agentaps · running<span class="app-caret">›</span></p>
+                    <p class="app-tools-head"><span class="app-mark is-running" /><span class="app-tool-label">Working · nix-build -A agentaps</span><span class="app-caret">⌄</span></p>
+                    <p class="app-tool-row is-summary"><span class="app-mark is-done">✓</span><span class="app-tool-label">2 completed steps</span><span class="app-caret">›</span></p>
+                    <p class="app-tool-row is-running"><span class="app-mark is-running" /><span class="app-tool-label">nix-build -A agentaps · running</span><span class="app-caret">›</span></p>
                   </div>
                 </div>
               </div>

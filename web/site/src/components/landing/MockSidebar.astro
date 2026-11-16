@@ -50,6 +50,7 @@ const projects = [
           <span class="app-project-branch">{branch}</span>
           <Icon name="plus" />
         </p>
+        <div class="app-project-sessions">
         {sessions.map((session) => (
           <p
             class="app-session"
@@ -61,6 +62,7 @@ const projects = [
             <span class="app-session-title">{session.title}</span>
           </p>
         ))}
+        </div>
       </div>
     ))}
   </div>
