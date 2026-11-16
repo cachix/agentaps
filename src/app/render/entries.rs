@@ -7,6 +7,30 @@ struct CopyFeedback {
     copied: bool,
 }
 
+fn response_link_click(
+    url: &gpui_kit::SharedString,
+    event: &gpui_kit::ClickEvent,
+    window: &mut Window,
+    cx: &mut App,
+) {
+    use gpui_kit::component::{WindowExt as _, notification::Notification};
+
+    match event {
+        gpui_kit::ClickEvent::Mouse(click) if click.up.button == MouseButton::Right => {
+            cx.write_to_clipboard(gpui_kit::ClipboardItem::new_string(url.to_string()));
+            window.push_notification(Notification::success("Link copied"), cx);
+        }
+        gpui_kit::ClickEvent::Mouse(click)
+            if matches!(click.up.button, MouseButton::Left | MouseButton::Middle) =>
+        {
+            cx.open_url(url);
+        }
+        gpui_kit::ClickEvent::Keyboard(_) => cx.open_url(url),
+        gpui_kit::ClickEvent::Touch(click) if !click.long_press => cx.open_url(url),
+        _ => {}
+    }
+}
+
 // Message text is either replaced with a new String or changed in length when updated.
 // These signatures let scroll renders check for changed rows without hashing whole transcripts.
 fn text_signature(text: &str, hasher: &mut impl Hasher) {
@@ -373,6 +397,7 @@ impl Workspace {
                             TextView::markdown((text_id, index.to_string()), entry.text.clone())
                                 .style(self.chat_text_style(cx))
                                 .selectable(true)
+                                .on_link_click(response_link_click)
                                 .text_sm()
                                 .text_color(palette.color(TEXT)),
                         )
@@ -410,6 +435,7 @@ impl Workspace {
         let content = TextView::markdown((text_id, index.to_string()), display_text)
             .style(self.chat_text_style(cx))
             .selectable(true)
+            .on_link_click(response_link_click)
             .text_sm()
             .text_color(palette.color(TEXT));
         let images =
@@ -445,6 +471,7 @@ impl Workspace {
                                 IconName::Copy
                             })
                             .label(if copied { "Copied" } else { "Copy" })
+                            .tooltip("Copy message. Right-click a link to copy its address.")
                             .when(!copied, |button| {
                                 button.on_click(move |_, _, cx| {
                                     cx.write_to_clipboard(gpui_kit::ClipboardItem::new_string(

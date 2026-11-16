@@ -6,6 +6,8 @@ Notable changes to Agentaps are recorded here.
 
 ### Added
 
+- Right-click links in desktop conversations to copy their addresses, with a confirmation when copied.
+
 - Copy your own messages with the same hover button and copied confirmation as agent replies.
 
 ### Fixed
