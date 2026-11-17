@@ -1,0 +1,18 @@
+---
+import Icon from './Icon.astro';
+
+interface Props {
+  role: 'user' | 'agent';
+  text: string;
+}
+
+const { role, text } = Astro.props;
+---
+
+<div class="app-message" data-role={role}>
+  <p class={role === 'user' ? 'app-user' : 'app-reply'}>{text}</p>
+  <div class="app-message-actions">
+    <span class="app-ghost"><Icon name="copy" />Copy</span>
+    {role === 'agent' && <span class="app-ghost app-fork"><Icon name="network" />Fork from here</span>}
+  </div>
+</div>

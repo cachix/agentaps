@@ -1,0 +1,17 @@
+---
+import claude from '../../../../../assets/agents/claude.svg?raw';
+import codex from '../../../../../assets/agents/codex.svg?raw';
+import gemini from '../../../../../assets/agents/gemini.svg?raw';
+import opencode from '../../../../../assets/agents/opencode.svg?raw';
+
+const icons = { claude, codex, gemini, opencode };
+
+interface Props {
+  agent: keyof typeof icons;
+  class?: string;
+}
+
+const { agent, class: className } = Astro.props;
+---
+
+<span class:list={['agent-icon', className]} aria-hidden="true" set:html={icons[agent]} />

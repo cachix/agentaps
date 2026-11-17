@@ -69,7 +69,7 @@ jobs:
       - name: Build the website and Web Connect
         run: bash web/cloudflare-build.sh
       - name: Check website links
-        uses: cachix/site-kit/check-links@1e9bb1e181430d4a8d632bc8c1487e16de946091
+        uses: cachix/site-kit/check-links@f61f46c72b4e78d0a7d1e5858a4b973c896beb88
         with:
           working-directory: web/site
           output-directory: ../dist

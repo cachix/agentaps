@@ -1,0 +1,45 @@
+---
+import Icon from './Icon.astro';
+
+interface Folder {
+  name: string;
+  path: string;
+  selected?: boolean;
+  attributes?: Record<string, string | boolean | undefined>;
+}
+
+interface Props {
+  folders: Folder[];
+  returnable?: boolean;
+  class?: string;
+}
+
+const { folders, returnable = false, class: className } = Astro.props;
+---
+
+<div class:list={['app-picker', className]}>
+  <p class="app-picker-top">
+    <span class="app-kicker">NEW SESSION</span>
+    {returnable && <span class="app-picker-back">Close</span>}
+  </p>
+  <p class="app-picker-title">Choose a project</p>
+  <p class="app-picker-lead">Choose a local folder, select a recent project, or enter a local or SSH path.</p>
+  <div class="app-picker-search">
+    <p class="app-picker-input">
+      <slot><span class="app-placeholder">Search recent folders or enter a local or SSH path…</span></slot>
+    </p>
+  </div>
+  <p class="app-picker-card"><Icon name="folder" />Choose Folder…</p>
+  <p class="app-picker-card"><Icon name="folder" />Clone repository…</p>
+  <p class="app-picker-section"><span>RECENT FOLDERS</span></p>
+  <ul class="app-picker-rows">
+    {folders.map(({ name, path, selected, attributes }) => (
+      <li class:list={['app-picker-row', { 'is-selected': selected }]} {...attributes}>
+        <Icon name="folder" />
+        <span class="app-picker-text"><b>{name}</b><span>{path}</span></span>
+        <Icon name="chevron-right" />
+      </li>
+    ))}
+  </ul>
+  <p class="app-picker-footer">{returnable ? '↑ ↓ Navigate  ·  Enter Select  ·  Esc Back' : '↑ ↓ Navigate  ·  Enter Select'}</p>
+</div>

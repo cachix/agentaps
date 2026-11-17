@@ -12,6 +12,18 @@ Notable changes to Agentaps are recorded here.
 
 ### Fixed
 
+- Give website preview sidebar icons room at the left edge and make platform buttons jump to downloads.
+
+- Ease between website preview pane layouts while respecting reduced motion.
+
+- Match landing preview layouts, message actions, controls, and animation states to the current app.
+
+- Align website link checks with the shared site-kit version.
+
+- Keep website previews interactive after page navigation, stop background animation work, and support keyboard selection and reduced motion.
+
+- Clarify website claims about agent capabilities, SSH sessions, local diffs, and Linux themes without adding a disclaimer beneath the hero.
+
 - Keep the website hero on screen while the page loads instead of hiding and fading it back in, and switch between website pages without reloading the whole page.
 
 - Reset session titles along with context, preserving the previous titles on the archived conversation.
@@ -35,6 +47,8 @@ Notable changes to Agentaps are recorded here.
 - Make the README easier to navigate with a concise quick start, project links, and links to the website documentation.
 
 - Rebuild the website on the shared Cachix site kit, with light and dark themes in the Agentaps palette.
+
+- Show Agentaps features on the website home page with interactive previews of sessions, agents, split panes, diff review, SSH projects, the composer, and Remote Control.
 
 - Serve the website through a Cloudflare Worker that shows GitHub stars and the latest release in the navigation bar and answers Markdown requests from coding agents.
 

@@ -32,7 +32,7 @@ cargo install agentaps --locked --no-default-features
 The GPUI and theme libraries listed above are still required. To build and install from a checkout:
 
 ```sh
-git clone https://github.com/domenkozar/agentaps.git
+git clone https://github.com/cachix/agentaps.git
 cd agentaps
 cargo install --path . --locked
 ```
