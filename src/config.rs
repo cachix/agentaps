@@ -447,9 +447,27 @@ fn load_from_locations(base: &Path, legacy_bases: &[PathBuf]) -> Result<(Config,
                     agent.get("messages").is_some() || agent.get("prompt_history").is_some()
                 })
         });
-    let config =
+    let mut config: Config =
         serde_json::from_value(value).map_err(|error| format!("{}: {error}", path.display()))?;
-    Ok((config, needs_migration || has_local_history))
+    let mut migrated_commands = false;
+    for command in config
+        .projects
+        .iter_mut()
+        .flat_map(|project| &mut project.agents)
+        .map(|agent| &mut agent.command)
+        .chain(
+            config
+                .saved_agents
+                .iter_mut()
+                .map(|agent| &mut agent.command),
+        )
+    {
+        migrated_commands |= crate::discovery::migrate_npx_adapter_command(command);
+    }
+    Ok((
+        config,
+        needs_migration || has_local_history || migrated_commands,
+    ))
 }
 
 pub(crate) fn save_to(path: &Path, config: &Config) -> Result<(), String> {
@@ -500,6 +518,81 @@ mod tests {
     use super::*;
 
     use std::time::{SystemTime, UNIX_EPOCH};
+
+    #[test]
+    fn migrates_default_adapter_commands_without_changing_custom_commands_or_sessions() {
+        let directory = tempfile::tempdir().unwrap();
+        let path = directory.path().join("agentaps/config.json");
+        fs::create_dir_all(path.parent().unwrap()).unwrap();
+        let value = serde_json::json!({
+            "projects": [{
+                "path": "/project",
+                "agents": [
+                    {
+                        "id": 1,
+                        "session_id": "existing-session",
+                        "command": ["npx", "-y", "--prefer-offline", "@agentclientprotocol/codex-acp"]
+                    },
+                    {
+                        "id": 2,
+                        "command": ["npx", "-y", "--prefer-offline", "@agentclientprotocol/codex-acp@2.1.1"]
+                    },
+                    {
+                        "id": 3,
+                        "command": ["custom-wrapper", "-y", "--prefer-offline", "@agentclientprotocol/codex-acp"]
+                    },
+                    {
+                        "id": 4,
+                        "command": ["npx", "-y", "--prefer-offline", "@agentclientprotocol/codex-acp", "--custom"]
+                    },
+                    {
+                        "id": 5,
+                        "command": ["npx", "-y", "@agentclientprotocol/codex-acp"]
+                    }
+                ]
+            }],
+            "saved_agents": [{
+                "name": "Claude",
+                "command": ["/opt/bin/npx.cmd", "-y", "--prefer-offline", "@agentclientprotocol/claude-agent-acp"]
+            }]
+        });
+        fs::write(&path, serde_json::to_vec(&value).unwrap()).unwrap();
+
+        let (config, needs_migration) = load_from_base(directory.path()).unwrap();
+        assert!(needs_migration);
+        let agents = &config.projects[0].agents;
+        for index in [0, 4] {
+            assert_eq!(
+                agents[index].command,
+                [
+                    "npx",
+                    "-y",
+                    "--prefer-online",
+                    "@agentclientprotocol/codex-acp@latest"
+                ]
+            );
+        }
+        assert_eq!(agents[0].session_id.as_deref(), Some("existing-session"));
+        for index in [1, 2, 3] {
+            assert_eq!(
+                serde_json::to_value(&agents[index].command).unwrap(),
+                value["projects"][0]["agents"][index]["command"]
+            );
+        }
+        assert_eq!(
+            config.saved_agents[0].command,
+            [
+                "/opt/bin/npx.cmd",
+                "-y",
+                "--prefer-online",
+                "@agentclientprotocol/claude-agent-acp@latest"
+            ]
+        );
+
+        save_to(&path, &config).unwrap();
+        let (_, needs_migration) = load_from_base(directory.path()).unwrap();
+        assert!(!needs_migration);
+    }
 
     #[test]
     fn migrates_old_platform_location_without_overriding_native_config() {

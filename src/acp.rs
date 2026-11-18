@@ -109,6 +109,14 @@ impl Connection {
         } else {
             None
         };
+        if ssh_host.is_none() && uses_codex_acp(command) {
+            let codex = std::env::var_os("CODEX_PATH")
+                .map(std::path::PathBuf::from)
+                .or_else(|| find_executable("codex"));
+            if let Some(codex) = codex {
+                process.env("CODEX_PATH", codex);
+            }
+        }
         if ssh_host.is_none() && uses_claude_agent_acp(command) {
             let claude = std::env::var_os("CLAUDE_CODE_EXECUTABLE")
                 .map(std::path::PathBuf::from)
@@ -229,6 +237,10 @@ impl Drop for Connection {
         let _ = self.child.kill();
         let _ = self.child.wait();
     }
+}
+
+fn uses_codex_acp(command: &[String]) -> bool {
+    command.iter().any(|part| part.contains("codex-acp"))
 }
 
 fn uses_claude_agent_acp(command: &[String]) -> bool {
@@ -356,6 +368,105 @@ mod tests {
             }
             Event::Disconnected { reason, .. } => panic!("Disconnected before reply: {reason}"),
             Event::NewSession { .. } => panic!("Unexpected new session request"),
+        }
+    }
+
+    #[test]
+    fn detects_codex_acp_wrappers() {
+        for command in [
+            vec!["codex-acp".into()],
+            vec!["/opt/bin/codex-acp".into()],
+            vec![
+                "npx".into(),
+                "-y".into(),
+                "--prefer-offline".into(),
+                "@agentclientprotocol/codex-acp".into(),
+            ],
+        ] {
+            assert!(uses_codex_acp(&command));
+        }
+        assert!(!uses_codex_acp(&["codex".into()]));
+        assert!(!uses_codex_acp(&["claude-agent-acp".into()]));
+    }
+
+    #[test]
+    #[cfg(unix)]
+    fn codex_adapter_uses_installed_cli_before_its_bundled_cli() {
+        use std::os::unix::fs::PermissionsExt;
+
+        const CHILD: &str = "AGENTAPS_CODEX_EXECUTABLE_TEST_ROOT";
+        const EXPECTED: &str = "AGENTAPS_CODEX_EXECUTABLE_TEST_EXPECTED";
+        if let Some(root) = std::env::var_os(CHILD) {
+            let root = std::path::PathBuf::from(root);
+            let command = vec![
+                root.join("codex-acp").to_string_lossy().into_owned(),
+                root.join("bundled").to_string_lossy().into_owned(),
+            ];
+            let (events_tx, events_rx) = mpsc::channel();
+            let _connection = Connection::spawn(7, &command, &root, None, None, events_tx).unwrap();
+            let Event::Message { value, .. } =
+                events_rx.recv_timeout(Duration::from_secs(3)).unwrap()
+            else {
+                panic!("adapter did not report its Codex executable");
+            };
+            assert_eq!(value["codex"], std::env::var(EXPECTED).unwrap());
+            return;
+        }
+
+        let directory = tempfile::tempdir().unwrap();
+        let root = directory.path();
+        let shell = find_executable("sh").unwrap();
+        for name in ["installed", "bundled", "override"] {
+            let bin = root.join(name);
+            std::fs::create_dir(&bin).unwrap();
+            let executable = bin.join("codex");
+            std::fs::write(
+                &executable,
+                format!(
+                    "#!{}\nprintf '%s\\n' '{{\"codex\":\"{name}\"}}'\n",
+                    shell.display()
+                ),
+            )
+            .unwrap();
+            std::fs::set_permissions(&executable, std::fs::Permissions::from_mode(0o755)).unwrap();
+        }
+        let adapter = root.join("codex-acp");
+        std::fs::write(
+            &adapter,
+            format!(
+                "#!{}\nPATH=\"$1\"\nif test -n \"$CODEX_PATH\"; then exec \"$CODEX_PATH\" app-server; else exec codex app-server; fi\n",
+                shell.display()
+            ),
+        )
+        .unwrap();
+        std::fs::set_permissions(&adapter, std::fs::Permissions::from_mode(0o755)).unwrap();
+
+        for (path, codex_override, expected) in [
+            ("installed", None, "installed"),
+            ("installed", Some("override"), "override"),
+            ("missing", None, "bundled"),
+        ] {
+            let mut process = Command::new(std::env::current_exe().unwrap());
+            process
+                .args([
+                    "--exact",
+                    "acp::tests::codex_adapter_uses_installed_cli_before_its_bundled_cli",
+                    "--nocapture",
+                ])
+                .env(CHILD, root)
+                .env(EXPECTED, expected)
+                .env("PATH", root.join(path))
+                .env_remove("CODEX_PATH");
+            if let Some(name) = codex_override {
+                process.env("CODEX_PATH", root.join(name).join("codex"));
+            }
+            let result = process.output().unwrap();
+            assert!(
+                result.status.success(),
+                "{expected}: {}\n{}",
+                String::from_utf8_lossy(&result.stdout),
+                String::from_utf8_lossy(&result.stderr)
+            );
         }
     }
 

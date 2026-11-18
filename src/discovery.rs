@@ -110,29 +110,62 @@ pub fn installed_agents(executables: &BTreeMap<KnownAgent, String>) -> Vec<Agent
         if executable("codex") && !agents.iter().any(|agent| agent.name == "Codex") {
             agents.push(AgentChoice {
                 name: "Codex".into(),
-                detail: "Installed CLI · adapter downloaded with npx on first launch".into(),
+                detail: "Installed CLI · adapter updated with npx on launch".into(),
                 command: vec![
                     npx.clone(),
                     "-y".into(),
-                    "--prefer-offline".into(),
-                    "@agentclientprotocol/codex-acp".into(),
+                    "--prefer-online".into(),
+                    "@agentclientprotocol/codex-acp@latest".into(),
                 ],
             });
         }
         if executable("claude") && !agents.iter().any(|agent| agent.name == "Claude") {
             agents.push(AgentChoice {
                 name: "Claude".into(),
-                detail: "Installed CLI · adapter downloaded with npx on first launch".into(),
+                detail: "Installed CLI · adapter updated with npx on launch".into(),
                 command: vec![
                     npx,
                     "-y".into(),
-                    "--prefer-offline".into(),
-                    "@agentclientprotocol/claude-agent-acp".into(),
+                    "--prefer-online".into(),
+                    "@agentclientprotocol/claude-agent-acp@latest".into(),
                 ],
             });
         }
     }
     agents
+}
+
+pub(crate) fn migrate_npx_adapter_command(command: &mut Vec<String>) -> bool {
+    let Some((program, args)) = command.split_first() else {
+        return false;
+    };
+    let Some(program) = Path::new(program)
+        .file_name()
+        .and_then(|name| name.to_str())
+    else {
+        return false;
+    };
+    if !["npx", "npx.cmd", "npx.exe", "npx.bat"]
+        .iter()
+        .any(|name| program.eq_ignore_ascii_case(name))
+    {
+        return false;
+    }
+    let package = match args {
+        [yes, package] if yes == "-y" => package,
+        [yes, preference, package] if yes == "-y" && preference == "--prefer-offline" => package,
+        _ => return false,
+    };
+    if !matches!(
+        package.as_str(),
+        "@agentclientprotocol/codex-acp" | "@agentclientprotocol/claude-agent-acp"
+    ) {
+        return false;
+    }
+    let package = format!("{package}@latest");
+    command.truncate(1);
+    command.extend(["-y".into(), "--prefer-online".into(), package]);
+    true
 }
 
 pub fn known_agent(command: &[String]) -> Option<KnownAgent> {
