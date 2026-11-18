@@ -12,9 +12,7 @@ Notable changes to Agentaps are recorded here.
 
 ### Fixed
 
-- Check for the latest Codex and Claude ACP adapters on every default npx launch, including existing sessions and saved agents that used the previous cached defaults.
-
-- Use the installed Codex CLI for local ACP sessions so CLI updates take effect even when the adapter is cached, while respecting `CODEX_PATH` overrides.
+- Use npm's default cache behavior when launching Codex and Claude ACP adapters, including previously saved default commands.
 
 - Give website preview sidebar icons room at the left edge and make platform buttons jump to downloads.
 

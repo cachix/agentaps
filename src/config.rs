@@ -547,7 +547,7 @@ mod tests {
                     },
                     {
                         "id": 5,
-                        "command": ["npx", "-y", "@agentclientprotocol/codex-acp"]
+                        "command": ["npx", "-y", "--prefer-online", "@agentclientprotocol/codex-acp@latest"]
                     }
                 ]
             }],
@@ -564,12 +564,7 @@ mod tests {
         for index in [0, 4] {
             assert_eq!(
                 agents[index].command,
-                [
-                    "npx",
-                    "-y",
-                    "--prefer-online",
-                    "@agentclientprotocol/codex-acp@latest"
-                ]
+                ["npx", "-y", "@agentclientprotocol/codex-acp"]
             );
         }
         assert_eq!(agents[0].session_id.as_deref(), Some("existing-session"));
@@ -584,8 +579,7 @@ mod tests {
             [
                 "/opt/bin/npx.cmd",
                 "-y",
-                "--prefer-online",
-                "@agentclientprotocol/claude-agent-acp@latest"
+                "@agentclientprotocol/claude-agent-acp"
             ]
         );
 

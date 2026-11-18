@@ -9,6 +9,4 @@ description: Download Agentaps, connect an ACP agent, and start your first sessi
 
 Cloning uses your installed Git and configured credentials.
 
-If Codex or Claude is installed without its ACP adapter, Agentaps can offer to start the adapter through `npx`. The default commands request the latest adapter release and check for updates on every launch. Existing sessions using the old default commands upgrade automatically. Agentaps supports ACP v1 and v2 agents.
-
-For local Codex sessions, Agentaps uses the `codex` executable on your PATH instead of the adapter's bundled CLI. Set `CODEX_PATH` before starting Agentaps to choose a specific executable. If neither is available, the adapter uses its bundled CLI.
+If Codex or Claude is installed without its ACP adapter, Agentaps can offer to start the adapter through `npx`. The first run may download it. Agentaps supports ACP v1 and v2 agents.

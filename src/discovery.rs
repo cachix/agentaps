@@ -110,24 +110,22 @@ pub fn installed_agents(executables: &BTreeMap<KnownAgent, String>) -> Vec<Agent
         if executable("codex") && !agents.iter().any(|agent| agent.name == "Codex") {
             agents.push(AgentChoice {
                 name: "Codex".into(),
-                detail: "Installed CLI · adapter updated with npx on launch".into(),
+                detail: "Installed CLI · adapter launched with npx".into(),
                 command: vec![
                     npx.clone(),
                     "-y".into(),
-                    "--prefer-online".into(),
-                    "@agentclientprotocol/codex-acp@latest".into(),
+                    "@agentclientprotocol/codex-acp".into(),
                 ],
             });
         }
         if executable("claude") && !agents.iter().any(|agent| agent.name == "Claude") {
             agents.push(AgentChoice {
                 name: "Claude".into(),
-                detail: "Installed CLI · adapter updated with npx on launch".into(),
+                detail: "Installed CLI · adapter launched with npx".into(),
                 command: vec![
                     npx,
                     "-y".into(),
-                    "--prefer-online".into(),
-                    "@agentclientprotocol/claude-agent-acp@latest".into(),
+                    "@agentclientprotocol/claude-agent-acp".into(),
                 ],
             });
         }
@@ -152,19 +150,26 @@ pub(crate) fn migrate_npx_adapter_command(command: &mut Vec<String>) -> bool {
         return false;
     }
     let package = match args {
-        [yes, package] if yes == "-y" => package,
-        [yes, preference, package] if yes == "-y" && preference == "--prefer-offline" => package,
+        [yes, preference, package] if yes == "-y" && preference == "--prefer-offline" => {
+            package.as_str()
+        }
+        [yes, preference, package] if yes == "-y" && preference == "--prefer-online" => {
+            let Some(package) = package.strip_suffix("@latest") else {
+                return false;
+            };
+            package
+        }
         _ => return false,
     };
     if !matches!(
-        package.as_str(),
+        package,
         "@agentclientprotocol/codex-acp" | "@agentclientprotocol/claude-agent-acp"
     ) {
         return false;
     }
-    let package = format!("{package}@latest");
-    command.truncate(1);
-    command.extend(["-y".into(), "--prefer-online".into(), package]);
+    let package = package.to_owned();
+    command.truncate(2);
+    command.push(package);
     true
 }
 

@@ -34,9 +34,7 @@ Agentaps is built in Rust and speaks the [Agent Client Protocol (ACP)](https://a
 
 Use **Clone repository…** to start from a Git URL using your installed Git and configured credentials. For a remote project, enter `ssh://user@host/absolute/path`; install the agent and adapter on that host and verify that you can connect with SSH first.
 
-If Codex or Claude Code is installed without its ACP adapter, Agentaps can offer to run the adapter through `npx`. The default commands request the latest adapter release and check for updates on every launch. Existing sessions using the old default commands upgrade automatically. Agentaps supports ACP v1 and v2 agents.
-
-For local Codex sessions, Agentaps uses the `codex` executable on your PATH instead of the adapter's bundled CLI. Set `CODEX_PATH` before starting Agentaps to choose a specific executable. If neither is available, the adapter uses its bundled CLI.
+If Codex or Claude Code is installed without its ACP adapter, Agentaps can offer to run the adapter through `npx`. The first run may download it. Agentaps supports ACP v1 and v2 agents.
 
 See the [usage guide](https://agentaps.dev/using-agentaps/) for sessions, split panes, themes, attachments, voice input, and keyboard shortcuts.
 
