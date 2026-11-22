@@ -1,3 +1,4 @@
+use super::links::{link_previews, response_link_click};
 use super::*;
 use std::hash::{Hash, Hasher};
 use std::ops::Range;
@@ -5,30 +6,6 @@ use std::ops::Range;
 #[derive(Default)]
 struct CopyFeedback {
     copied: bool,
-}
-
-fn response_link_click(
-    url: &gpui_kit::SharedString,
-    event: &gpui_kit::ClickEvent,
-    window: &mut Window,
-    cx: &mut App,
-) {
-    use gpui_kit::component::{WindowExt as _, notification::Notification};
-
-    match event {
-        gpui_kit::ClickEvent::Mouse(click) if click.up.button == MouseButton::Right => {
-            cx.write_to_clipboard(gpui_kit::ClipboardItem::new_string(url.to_string()));
-            window.push_notification(Notification::success("Link copied"), cx);
-        }
-        gpui_kit::ClickEvent::Mouse(click)
-            if matches!(click.up.button, MouseButton::Left | MouseButton::Middle) =>
-        {
-            cx.open_url(url);
-        }
-        gpui_kit::ClickEvent::Keyboard(_) => cx.open_url(url),
-        gpui_kit::ClickEvent::Touch(click) if !click.long_press => cx.open_url(url),
-        _ => {}
-    }
 }
 
 // Message text is either replaced with a new String or changed in length when updated.
@@ -397,6 +374,7 @@ impl Workspace {
                             TextView::markdown((text_id, index.to_string()), entry.text.clone())
                                 .style(self.chat_text_style(cx))
                                 .selectable(true)
+                                .markdown_extensions(link_previews())
                                 .on_link_click(response_link_click)
                                 .text_sm()
                                 .text_color(palette.color(TEXT)),
@@ -435,6 +413,7 @@ impl Workspace {
         let content = TextView::markdown((text_id, index.to_string()), display_text)
             .style(self.chat_text_style(cx))
             .selectable(true)
+            .markdown_extensions(link_previews())
             .on_link_click(response_link_click)
             .text_sm()
             .text_color(palette.color(TEXT));

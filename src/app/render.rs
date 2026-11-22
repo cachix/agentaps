@@ -7,6 +7,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 mod conversation;
 mod diff;
 mod entries;
+mod links;
 mod panes;
 mod picker;
 mod sidebar;

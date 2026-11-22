@@ -188,6 +188,7 @@ dependencies = [
  "hex",
  "iroh",
  "libc",
+ "markdown",
  "native-theme-gpui",
  "native-theme-gtk",
  "native-theme-qt",
