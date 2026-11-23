@@ -16,6 +16,7 @@ pub enum Event {
     NewSession {
         agent_id: u64,
         connection_id: u64,
+        open: bool,
         reply: Sender<Result<u64, String>>,
     },
     Message {

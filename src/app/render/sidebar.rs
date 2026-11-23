@@ -1,4 +1,7 @@
 use super::*;
+#[cfg(test)]
+use gpui_kit::base::TestSupportExt as _;
+use gpui_kit::component::menu::ContextMenuExt;
 
 fn sidebar_row() -> Div {
     div()
@@ -141,6 +144,7 @@ impl Workspace {
         let palette = theme::palette(cx);
         let nested_sidebar = self.nested_sidebar;
         let session_query = self.sidebar_search.read(cx).value().trim().to_owned();
+        let searching = self.sidebar_search_origin.is_some();
         let archive_view = matches!(self.view, WorkspaceView::Archive { .. });
         let active_only = !archive_view && self.sidebar_active_only;
         let new_session_view = matches!(
@@ -180,10 +184,10 @@ impl Workspace {
             let open_pane = self.session_pane(location);
             let active = open_pane == Some(self.pane_layout.focused);
             let open = open_pane.is_some();
-            let selected = if session_query.is_empty() {
-                active && self.view.highlighted_session() == Some(location)
-            } else {
+            let selected = if searching {
                 index == self.sidebar_selection
+            } else {
+                active && self.view.highlighted_session() == Some(location)
             };
             let row_color = if selected {
                 SELECTED
@@ -304,8 +308,8 @@ impl Workspace {
                         )
                     },
                 )
-                .child(
-                    div()
+                .child({
+                    let title = div()
                         .when(nested_sidebar, |title| title.flex_1())
                         .when(!nested_sidebar, |title| {
                             title.flex_shrink_0().max_w(relative(0.55))
@@ -315,8 +319,11 @@ impl Workspace {
                         .whitespace_nowrap()
                         .text_size(rems(0.8125))
                         .text_color(palette.color(TEXT))
-                        .child(name),
-                )
+                        .child(name);
+                    #[cfg(test)]
+                    let title = title.id(("agent-title", agent_id)).test_support();
+                    title
+                })
                 .when(!nested_sidebar, |row| {
                     let tooltip = format!("{} · {}", project.display_path(), project.branch);
                     row.child(
@@ -417,6 +424,20 @@ impl Workspace {
                                 })),
                         ),
                 );
+            let view = cx.entity().clone();
+            let row = row.context_menu(move |menu, _, cx| {
+                let target = view.read(cx).pane_layout.focused;
+                let view = view.clone();
+                menu.item(
+                    PopupMenuItem::new("Open to the Side").on_click(move |_, window, cx| {
+                        view.update(cx, |this, cx| {
+                            if let Some(location) = this.agent_location(agent_id) {
+                                this.open_session_to_side(location, target, window, cx);
+                            }
+                        });
+                    }),
+                )
+            });
             if nested_sidebar {
                 session_rows
                     .entry(project_index)
@@ -434,8 +455,9 @@ impl Workspace {
             if !nested_sidebar && has_sessions {
                 continue;
             }
-            let collapsed =
-                session_query.is_empty() && self.collapsed_projects.contains(&project_index);
+            let collapsed = !searching
+                && session_query.is_empty()
+                && self.collapsed_projects.contains(&project_index);
             if !has_sessions
                 && ((session_query.is_empty() && (archive_view || active_only))
                     || !project.agents.is_empty())
@@ -768,6 +790,20 @@ impl Workspace {
                             }),
                     ),
             )
+            .when(searching && visible_sessions > 0, |sidebar| {
+                sidebar.child(
+                    div()
+                        .px_3()
+                        .pb_2()
+                        .text_xs()
+                        .text_color(palette.color(MUTED))
+                        .child(if cfg!(target_os = "macos") {
+                            "Enter to open · Option+Enter to split"
+                        } else {
+                            "Enter to open · Alt+Enter to split"
+                        }),
+                )
+            })
             .child(
                 div()
                     .id("sidebar-scroll")

@@ -544,6 +544,7 @@ struct Workspace {
     sidebar_selection: usize,
     sidebar_active_only: bool,
     sidebar_search: Entity<InputState>,
+    sidebar_search_origin: Option<u64>,
     mobile_access: MobileState,
     diff: DiffState,
     sync: SyncState,
@@ -918,7 +919,14 @@ impl Workspace {
                 |this, _, event: &InputEvent, window, cx| match event {
                     InputEvent::Change => {
                         this.sidebar_selection = 0;
-                        this.select_sidebar_session(window, cx);
+                        cx.notify();
+                    }
+                    InputEvent::Focus => {
+                        this.sidebar_search_origin = Some(this.pane_layout.focused);
+                        cx.notify();
+                    }
+                    InputEvent::Blur => {
+                        this.sidebar_search_origin = None;
                         cx.notify();
                     }
                     InputEvent::PressEnter {
@@ -1084,6 +1092,7 @@ impl Workspace {
             sidebar_selection: 0,
             sidebar_active_only: false,
             sidebar_search,
+            sidebar_search_origin: None,
             mobile_access: MobileState {
                 provider_input: mobile_provider_input,
                 server: None,
@@ -1558,15 +1567,7 @@ impl Workspace {
     }
 
     fn confirm_sidebar_session(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        let query = self.sidebar_search.read(cx).value().trim().to_owned();
-        if query.is_empty() {
-            return;
-        }
-        let Some(location) = self
-            .sidebar_results(&query)
-            .get(self.sidebar_selection)
-            .copied()
-        else {
+        let Some(location) = self.highlighted_sidebar_result(cx) else {
             return;
         };
         if self.projects[location.project_index].agents[location.agent_index]
@@ -1581,32 +1582,15 @@ impl Workspace {
                 cx,
             );
         } else {
-            self.set_view(WorkspaceView::Conversation(location), window, cx);
-            self.conversation
-                .composer
-                .update(cx, |input, cx| input.focus(window, cx));
-            cx.notify();
+            self.show_session(location, window, cx);
         }
     }
 
-    fn select_sidebar_session(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        let query = self.sidebar_search.read(cx).value().trim().to_owned();
-        if query.is_empty() {
-            return;
-        }
-        let Some(location) = self
-            .sidebar_results(&query)
+    fn highlighted_sidebar_result(&self, cx: &App) -> Option<SessionLocation> {
+        let query = self.sidebar_search.read(cx).value();
+        self.sidebar_results(query.trim())
             .get(self.sidebar_selection)
             .copied()
-        else {
-            return;
-        };
-        if !self.projects[location.project_index].agents[location.agent_index]
-            .config
-            .archived
-        {
-            self.set_view(WorkspaceView::Conversation(location), window, cx);
-        }
     }
 
     fn terminal_picker_available(&self, cx: &Context<Self>) -> bool {
@@ -1734,8 +1718,8 @@ impl Workspace {
         name: Option<String>,
         window: &mut Window,
         cx: &mut Context<Self>,
-    ) {
-        let (_, agent_index) = self.create_agent_for_project(project_index, command, name, cx);
+    ) -> u64 {
+        let (id, agent_index) = self.create_agent_for_project(project_index, command, name, cx);
         self.set_view(
             WorkspaceView::Conversation(SessionLocation {
                 project_index,
@@ -1748,6 +1732,7 @@ impl Workspace {
             .composer
             .update(cx, |input, cx| input.focus(window, cx));
         cx.notify();
+        id
     }
 
     fn create_agent_for_project(
@@ -2043,6 +2028,7 @@ impl Workspace {
         if self.settings.is_some() {
             self.close_settings(window, cx);
         }
+        self.activate_keyboard_pane(window, cx);
         self.sidebar_hidden = false;
         self.sidebar_search
             .update(cx, |input, cx| input.focus(window, cx));
@@ -2233,33 +2219,59 @@ impl Workspace {
             .focus_handle(cx)
             .is_focused(window)
         {
-            let value = self.sidebar_search.read(cx).value().to_string();
-            if logical_key.unwrap_or_else(|| self.navigation_key(&event.keystroke.key)) == "escape"
-                && !value.is_empty()
-            {
-                self.sidebar_search
-                    .update(cx, |input, cx| input.set_value("", window, cx));
+            if logical_key.is_none() && is_alt_enter(&event.keystroke) {
                 cx.stop_propagation();
+                if let Some(location) = self.highlighted_sidebar_result(cx) {
+                    let target = self
+                        .sidebar_search_origin
+                        .unwrap_or(self.pane_layout.focused);
+                    self.open_session_to_side(location, target, window, cx);
+                }
                 return;
             }
-            let query = value.trim();
-            if !query.is_empty() {
-                let count = self.sidebar_results(query).len();
-                match logical_key.unwrap_or_else(|| self.navigation_key(&event.keystroke.key)) {
-                    "down" if count > 0 => {
-                        self.sidebar_selection = (self.sidebar_selection + 1) % count;
-                        self.select_sidebar_session(window, cx);
-                        cx.stop_propagation();
-                        cx.notify();
+            let value = self.sidebar_search.read(cx).value().to_string();
+            match logical_key.unwrap_or_else(|| self.navigation_key(&event.keystroke.key)) {
+                "escape" => {
+                    if value.is_empty() {
+                        if let Some(origin) = self.sidebar_search_origin {
+                            self.activate_pane(origin, cx);
+                        }
+                        match self.view {
+                            WorkspaceView::NewSession {
+                                step: PickerStep::CloneRepository,
+                                ..
+                            } => {
+                                self.picker
+                                    .clone
+                                    .name
+                                    .update(cx, |input, cx| input.focus(window, cx));
+                            }
+                            WorkspaceView::NewSession { .. } => {
+                                self.picker
+                                    .input
+                                    .update(cx, |input, cx| input.focus(window, cx));
+                            }
+                            WorkspaceView::Empty | WorkspaceView::Archive { return_to: None } => {
+                                self.pane_focus.focus(window, cx);
+                            }
+                            _ => self.focus_session_input(window, cx),
+                        }
+                    } else {
+                        self.sidebar_search
+                            .update(cx, |input, cx| input.set_value("", window, cx));
                     }
-                    "up" if count > 0 => {
-                        self.sidebar_selection = (self.sidebar_selection + count - 1) % count;
-                        self.select_sidebar_session(window, cx);
-                        cx.stop_propagation();
-                        cx.notify();
-                    }
-                    _ => {}
+                    cx.stop_propagation();
                 }
+                key @ ("up" | "down") => {
+                    let count = self.sidebar_results(value.trim()).len();
+                    if count > 0 {
+                        let step = if key == "down" { 1 } else { count - 1 };
+                        self.sidebar_selection = (self.sidebar_selection + step) % count;
+                        cx.stop_propagation();
+                        cx.notify();
+                    }
+                }
+                _ => {}
             }
             return;
         }

@@ -28,7 +28,7 @@ mod system_notifications;
 mod theme;
 mod theming;
 
-fn main() {
+fn main() -> std::process::ExitCode {
     #[cfg(all(target_os = "linux", target_env = "gnu"))]
     memory::configure_allocator();
 
@@ -36,18 +36,7 @@ fn main() {
         .nth(1)
         .is_some_and(|arg| arg == "new-session")
     {
-        if std::env::args_os().nth(2).is_some() {
-            eprintln!("Usage: agentaps new-session");
-            std::process::exit(2);
-        }
-        match cli::new_session() {
-            Ok(message) => println!("{message}"),
-            Err(error) => {
-                eprintln!("{error}");
-                std::process::exit(1);
-            }
-        }
-        return;
+        return cli::run_new_session(std::env::args_os().skip(2));
     }
 
     #[cfg(target_os = "linux")]
@@ -62,10 +51,11 @@ fn main() {
         .is_some_and(|arg| arg == "--version")
     {
         println!("agentaps {}", env!("CARGO_PKG_VERSION"));
-        return;
+        return std::process::ExitCode::SUCCESS;
     }
 
     #[cfg(unix)]
     shell_env::import_login_path();
     app::run();
+    std::process::ExitCode::SUCCESS
 }

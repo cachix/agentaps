@@ -1,8 +1,9 @@
 use crate::acp::Event;
 use std::{
+    ffi::OsString,
     io::{BufRead, BufReader, Read, Write},
     net::{SocketAddr, TcpListener, TcpStream},
-    process::Command,
+    process::{Command, ExitCode},
     sync::{
         Arc,
         atomic::{AtomicBool, Ordering},
@@ -17,6 +18,7 @@ const TOKEN_ENV: &str = "AGENTAPS_CONTROL_AUTH";
 const TIMEOUT: Duration = Duration::from_secs(10);
 const SESSION_SKILL: &str = include_str!("../skills/agentaps/SKILL.md");
 const SESSION_SKILL_URI: &str = "agentaps://skills/agentaps/SKILL.md";
+const NEW_SESSION_HELP: &str = "Usage: agentaps new-session [--no-open] [--json]\n\n  --no-open  Create the session without opening a desktop pane\n  --json     Print the Agentaps session ID as JSON\n  -h, --help Show this help";
 
 pub(crate) fn skill_context(embed: bool) -> serde_json::Value {
     if embed {
@@ -33,15 +35,53 @@ pub(crate) fn is_skill_context(block: &serde_json::Value) -> bool {
         || (block["type"] == "text" && block["text"] == SESSION_SKILL)
 }
 
-pub fn new_session() -> Result<String, String> {
+pub fn run_new_session(args: impl Iterator<Item = OsString>) -> ExitCode {
+    let mut open = true;
+    let mut json = false;
+    for arg in args {
+        match arg.to_str() {
+            Some("--no-open") => open = false,
+            Some("--json") => json = true,
+            Some("-h" | "--help") => {
+                println!("{NEW_SESSION_HELP}");
+                return ExitCode::SUCCESS;
+            }
+            _ => {
+                eprintln!(
+                    "Unrecognized option {}\n{NEW_SESSION_HELP}",
+                    arg.to_string_lossy()
+                );
+                return ExitCode::from(2);
+            }
+        }
+    }
+    match new_session(open) {
+        Ok(id) => {
+            if json {
+                println!("{}", serde_json::json!({"session_id": id}));
+            } else if open {
+                println!("Opened session {id}");
+            } else {
+                println!("Created session {id}");
+            }
+            ExitCode::SUCCESS
+        }
+        Err(error) => {
+            eprintln!("{error}");
+            ExitCode::FAILURE
+        }
+    }
+}
+
+fn new_session(open: bool) -> Result<u64, String> {
     let address = std::env::var(ADDRESS_ENV)
         .map_err(|_| "Run agentaps new-session from a local Agentaps agent session".to_owned())?;
     let token = std::env::var(TOKEN_ENV)
         .map_err(|_| "Agentaps session control token is missing".to_owned())?;
-    request(&address, &token).map_err(|error| format!("Could not open a new session: {error}"))
+    request(&address, &token, open).map_err(|error| format!("Could not create a session: {error}"))
 }
 
-fn request(address: &str, token: &str) -> Result<String, String> {
+fn request(address: &str, token: &str, open: bool) -> Result<u64, String> {
     let address: SocketAddr = address.parse().map_err(|_| "Invalid control address")?;
     if !address.ip().is_loopback() {
         return Err("Control address must be on localhost".into());
@@ -50,22 +90,28 @@ fn request(address: &str, token: &str) -> Result<String, String> {
         let mut stream = TcpStream::connect_timeout(&address, TIMEOUT)?;
         stream.set_read_timeout(Some(TIMEOUT))?;
         stream.set_write_timeout(Some(TIMEOUT))?;
-        writeln!(stream, "{token} new-session")?;
+        let command = if open {
+            "new-session"
+        } else {
+            "new-session --no-open"
+        };
+        writeln!(stream, "{token} {command}")?;
         let mut response = String::new();
         BufReader::new(stream).take(512).read_line(&mut response)?;
         Ok(response.trim().to_owned())
     };
     let response = exchange().map_err(|error| error.to_string())?;
-    response
-        .strip_prefix("ok ")
-        .map(str::to_owned)
-        .ok_or_else(|| {
-            if response.is_empty() {
-                "Session control connection closed".into()
-            } else {
-                response
-            }
-        })
+    let prefix = if open { "ok Opened session " } else { "ok " };
+    if let Some(id) = response.strip_prefix(prefix) {
+        return id
+            .parse()
+            .map_err(|_| "Invalid session ID in response".into());
+    }
+    Err(if response.is_empty() {
+        "Session control connection closed".into()
+    } else {
+        response
+    })
 }
 
 /// A control endpoint whose lifetime and credentials belong to one agent connection.
@@ -84,7 +130,8 @@ impl Server {
         let listener = TcpListener::bind((std::net::Ipv4Addr::LOCALHOST, 0))?;
         let address = listener.local_addr()?;
         let token = hex::encode(iroh::SecretKey::generate().to_bytes());
-        let expected = format!("{token} new-session\n");
+        let open_request = format!("{token} new-session\n");
+        let create_request = format!("{token} new-session --no-open\n");
         let stopped = Arc::new(AtomicBool::new(false));
         let thread_stopped = stopped.clone();
         std::thread::spawn(move || {
@@ -98,14 +145,19 @@ impl Server {
                     stream.set_write_timeout(Some(Duration::from_secs(2)))?;
                     let mut line = String::new();
                     BufReader::new(&stream).take(512).read_line(&mut line)?;
-                    if line != expected {
+                    let open = if line == open_request {
+                        true
+                    } else if line == create_request {
+                        false
+                    } else {
                         return writeln!(stream, "Invalid session control request");
-                    }
+                    };
                     let (reply, result) = mpsc::channel();
                     if events
                         .send(Event::NewSession {
                             agent_id,
                             connection_id,
+                            open,
                             reply,
                         })
                         .is_err()
@@ -113,7 +165,9 @@ impl Server {
                         return writeln!(stream, "Agentaps workspace is closed");
                     }
                     match result.recv_timeout(TIMEOUT) {
-                        Ok(Ok(id)) => writeln!(stream, "ok Opened session {id}"),
+                        // Keep the original wire reply for the foreground command.
+                        Ok(Ok(id)) if open => writeln!(stream, "ok Opened session {id}"),
+                        Ok(Ok(id)) => writeln!(stream, "ok {id}"),
                         Ok(Err(error)) => writeln!(stream, "{error}"),
                         Err(_) => writeln!(stream, "Agentaps session is no longer available"),
                     }
@@ -163,23 +217,31 @@ mod tests {
     fn new_session_reaches_the_calling_connection_and_waits_for_creation() {
         let (events, incoming) = mpsc::channel();
         let server = Server::start(7, 42, events).unwrap();
-        let address = server.address.to_string();
-        let token = server.token.clone();
-        let client = std::thread::spawn(move || request(&address, &token));
-        let event = incoming.recv_timeout(TIMEOUT).unwrap();
-        assert_eq!(event.source(), (7, 42));
-        let Event::NewSession { reply, .. } = event else {
-            panic!("Expected new session request")
-        };
-        reply.send(Ok(8)).unwrap();
-        assert_eq!(client.join().unwrap().unwrap(), "Opened session 8");
+        for open in [true, false] {
+            let address = server.address.to_string();
+            let token = server.token.clone();
+            let client = std::thread::spawn(move || request(&address, &token, open));
+            let event = incoming.recv_timeout(TIMEOUT).unwrap();
+            assert_eq!(event.source(), (7, 42));
+            let Event::NewSession {
+                reply,
+                open: requested_open,
+                ..
+            } = event
+            else {
+                panic!("Expected new session request")
+            };
+            assert_eq!(requested_open, open);
+            reply.send(Ok(8)).unwrap();
+            assert_eq!(client.join().unwrap().unwrap(), 8);
+        }
     }
 
     #[test]
     fn rejects_invalid_credentials_without_creating_a_session() {
         let (events, incoming) = mpsc::channel();
         let server = Server::start(7, 42, events).unwrap();
-        assert!(request(&server.address.to_string(), "wrong").is_err());
+        assert!(request(&server.address.to_string(), "wrong", false).is_err());
         assert!(incoming.try_recv().is_err());
     }
 
@@ -200,12 +262,12 @@ mod tests {
         let mut lines = environment.lines();
         let address = lines.next().unwrap().to_owned();
         let token = lines.next().unwrap().to_owned();
-        let client = std::thread::spawn(move || request(&address, &token));
+        let client = std::thread::spawn(move || request(&address, &token, true));
         let Event::NewSession { reply, .. } = incoming.recv_timeout(TIMEOUT).unwrap() else {
             panic!("Expected new session request")
         };
         reply.send(Ok(8)).unwrap();
-        assert_eq!(client.join().unwrap().unwrap(), "Opened session 8");
+        assert_eq!(client.join().unwrap().unwrap(), 8);
     }
 
     #[test]
@@ -214,7 +276,7 @@ mod tests {
         let server = Server::start(7, 42, events).unwrap();
         let address = server.address.to_string();
         let token = server.token.clone();
-        let client = std::thread::spawn(move || request(&address, &token));
+        let client = std::thread::spawn(move || request(&address, &token, true));
         let Event::NewSession { reply, .. } = incoming.recv_timeout(TIMEOUT).unwrap() else {
             panic!("Expected new session request")
         };

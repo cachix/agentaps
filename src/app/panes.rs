@@ -292,26 +292,78 @@ impl Workspace {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        if !self.can_split(direction) {
-            return;
+        if self.split_pane_at(self.pane_id, direction, window, cx) {
+            self.open_picker(PickerStep::Folders, window, cx);
+            self.persist();
+            cx.notify();
         }
-        let split_id = self.next_pane_id;
-        let pane_id = split_id + 1;
-        self.next_pane_id += 2;
-        self.add_pane_state(pane_id, window, cx);
-        self.pane_layout.root = self.saved_pane_layout().root;
-        self.pane_layout
-            .split(self.pane_id, direction, split_id, pane_id);
-        // activate_pane must observe the focus change to refresh the shared diff.
-        self.pane_layout.focused = self.pane_id;
-        self.activate_pane(pane_id, cx);
-        self.open_picker(PickerStep::Folders, window, cx);
-        self.persist();
-        cx.notify();
     }
 
-    pub(super) fn can_split(&self, direction: Direction) -> bool {
-        self.can_split_pane(self.pane_id, direction)
+    fn split_pane_at(
+        &mut self,
+        target: u64,
+        direction: Direction,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> bool {
+        if !self.can_split_pane(target, direction) {
+            return false;
+        }
+        let mut layout = self.saved_pane_layout();
+        let split_id = self.next_pane_id;
+        let pane_id = split_id + 1;
+        if !layout.split(target, direction, split_id, pane_id) {
+            return false;
+        }
+        // activate_pane must observe the focus change to refresh the shared diff.
+        layout.focused = self.pane_layout.focused;
+        self.next_pane_id += 2;
+        self.add_pane_state(pane_id, window, cx);
+        self.pane_layout = layout;
+        self.activate_pane(pane_id, cx);
+        true
+    }
+
+    pub(super) fn open_session_to_side(
+        &mut self,
+        location: SessionLocation,
+        target: u64,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let config = &self.projects[location.project_index].agents[location.agent_index].config;
+        let archived = config.archived;
+        let id = config.id;
+        if !archived
+            && self
+                .pane_layout
+                .root
+                .panes()
+                .into_iter()
+                .any(|(_, session)| session == Some(id))
+        {
+            self.show_session(location, window, cx);
+            return;
+        }
+        if !self.split_pane_at(target, Direction::Right, window, cx) {
+            self.notice = Some(Notice::Info(
+                "A wider pane is needed to open to the side".into(),
+            ));
+            cx.notify();
+            return;
+        }
+        if archived {
+            self.set_archived(
+                location.project_index,
+                location.agent_index,
+                false,
+                window,
+                cx,
+            );
+        } else {
+            self.show_session(location, window, cx);
+            self.persist();
+        }
     }
 
     pub(super) fn can_split_pane(&self, pane_id: u64, direction: Direction) -> bool {

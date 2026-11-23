@@ -6,6 +6,10 @@ Notable changes to Agentaps are recorded here.
 
 ### Added
 
+- Open an existing session in a right-hand split from its sidebar menu or with Alt+Enter in desktop session search.
+
+- Create a local agent session without changing desktop focus using `agentaps new-session --no-open`, and get its session ID with `--json`.
+
 - Hover over Markdown links in desktop conversations to see their full destinations.
 
 - Right-click links in desktop conversations to copy their addresses, with a confirmation when copied.
@@ -45,6 +49,8 @@ Notable changes to Agentaps are recorded here.
 - Run the Linux notification test without a host D-Bus session configuration, removing the need for a nixpkgs source substitution.
 
 ### Changed
+
+- Keep the current pane visible while typing or moving through desktop session search results. Press Enter to open a result.
 
 - Align sidebar session status dots at the end of each row with the project new-session button.
 

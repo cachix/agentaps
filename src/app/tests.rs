@@ -658,6 +658,8 @@ fn verify_cli_new_session(
     path: &Path,
     cx: &mut gpui_kit::VisualTestContext,
 ) {
+    use gpui_kit::test::TestWindowExt as _;
+
     cx.update(|window, cx| {
         workspace.update(cx, |this, cx| {
             let command = if cfg!(windows) {
@@ -669,6 +671,7 @@ fn verify_cli_new_session(
             source.config.session_id = Some("session-1".into());
             source.config.command = command.clone();
             source.config.display_name = Some("Calling agent".into());
+            source.config.custom_title = Some("Pane alpha".into());
             source.connection = Some(
                 Connection::spawn(1, &command, path, None, None, this.events_tx.clone()).unwrap(),
             );
@@ -699,6 +702,7 @@ fn verify_cli_new_session(
                 .send(Event::NewSession {
                     agent_id: 1,
                     connection_id,
+                    open: true,
                     reply,
                 })
                 .unwrap();
@@ -726,14 +730,120 @@ fn verify_cli_new_session(
                 .send(Event::NewSession {
                     agent_id: 1,
                     connection_id: connection_id + 1000,
+                    open: true,
                     reply,
                 })
                 .unwrap();
             this.poll_events(window, cx);
             assert!(result.try_recv().is_err());
             assert_eq!(this.projects[0].agents.len(), 2);
+
+            this.projects[0].agents[1].config.custom_title = Some("Pane bravo".into());
+            this.show_session(
+                SessionLocation {
+                    project_index: 0,
+                    agent_index: 0,
+                },
+                window,
+                cx,
+            );
+            this.sidebar_hidden = true;
+            this.close_diff();
         });
     });
+
+    let original_size = cx.update(|window, _| window.viewport_size());
+    cx.simulate_resize(size(px(1200.), px(900.)));
+    let primary = if cfg!(target_os = "macos") {
+        "cmd"
+    } else {
+        "ctrl"
+    };
+    cx.simulate_keystrokes(&format!("{primary}-k"));
+    cx.simulate_input("pane");
+    cx.simulate_keystrokes("down");
+    let origin = cx.update(|_, cx| {
+        let this = workspace.read(cx);
+        assert_eq!(this.pane_layout.root.panes(), [(this.pane_id, Some(1))]);
+        assert_eq!(this.sidebar_search_origin, Some(this.pane_id));
+        assert_eq!(this.highlighted_sidebar_result(cx).unwrap().agent_index, 1);
+        this.pane_id
+    });
+    cx.simulate_keystrokes("alt-enter");
+    cx.update(|window, cx| {
+        workspace.update(cx, |this, cx| {
+            let new_pane = this.pane_id;
+            let layout = this.pane_layout.clone();
+            assert_eq!(
+                layout.root.panes(),
+                [(origin, Some(1)), (new_pane, Some(200))]
+            );
+            assert_ne!(new_pane, origin);
+            let composer = this.conversation.composer.clone();
+            composer.update(cx, |input, cx| {
+                input.set_value("Draft in the right pane", window, cx)
+            });
+            assert!(composer.read(cx).focus_handle(cx).is_focused(window));
+
+            let (reply, result) = mpsc::channel();
+            let connection_id = this.projects[0].agents[0].connection.as_ref().unwrap().id;
+            this.events_tx
+                .send(Event::NewSession {
+                    agent_id: 1,
+                    connection_id,
+                    open: false,
+                    reply,
+                })
+                .unwrap();
+            this.poll_events(window, cx);
+
+            assert_eq!(result.try_recv().unwrap(), Ok(201));
+            assert_eq!(this.sidebar_order, [1, 200, 201]);
+            assert_eq!(
+                this.projects[0].agents[2].config.command,
+                this.projects[0].agents[0].config.command
+            );
+            assert_eq!(this.pane_layout, layout);
+            assert_eq!(this.pane_id, new_pane);
+            assert!(composer.read(cx).focus_handle(cx).is_focused(window));
+            assert_eq!(
+                composer.read(cx).value().as_ref(),
+                "Draft in the right pane"
+            );
+        });
+    });
+    cx.simulate_keystrokes(&format!("{primary}-k up enter"));
+    cx.update(|window, cx| {
+        workspace.update(cx, |this, cx| {
+            assert_eq!(this.pane_id, origin);
+            assert_eq!(this.pane_layout.root.panes().len(), 2);
+            let right = this.pane_layout.root.panes()[1].0;
+            this.activate_pane(right, cx);
+            this.close_pane(window, cx);
+            this.sidebar_search
+                .update(cx, |input, cx| input.set_value("", window, cx));
+        });
+    });
+    cx.update(|window, cx| {
+        window.render_frame(cx);
+        window.right_click(("agent-title", 200u64), cx);
+    });
+    cx.run_until_parked();
+    cx.update(|window, cx| {
+        window.render_frame(cx);
+        assert_eq!(window.find("popup-menu").focused(), Some(true));
+    });
+    cx.simulate_keystrokes("down enter");
+    cx.update(|window, cx| {
+        workspace.update(cx, |this, cx| {
+            assert_eq!(
+                this.pane_layout.root.panes(),
+                [(origin, Some(1)), (this.pane_id, Some(200))]
+            );
+            this.close_pane(window, cx);
+        });
+    });
+    cx.simulate_resize(original_size);
 }
 
 fn verify_resets_and_folder_moves_preserve_harness_references(

@@ -807,7 +807,10 @@ impl Workspace {
             changed = true;
             match event {
                 Event::NewSession {
-                    agent_id, reply, ..
+                    agent_id,
+                    open,
+                    reply,
+                    ..
                 } => {
                     let source = self
                         .projects
@@ -828,9 +831,21 @@ impl Workspace {
                                 })
                         });
                     if let Some((project_index, command, name)) = source {
-                        self.start_agent_for_project(project_index, command, name, window, cx);
-                        window.activate_window();
-                        let _ = reply.send(Ok(self.next_agent_id - 1));
+                        let id = if open {
+                            let id = self.start_agent_for_project(
+                                project_index,
+                                command,
+                                name,
+                                window,
+                                cx,
+                            );
+                            window.activate_window();
+                            id
+                        } else {
+                            self.create_agent_for_project(project_index, command, name, cx)
+                                .0
+                        };
+                        let _ = reply.send(Ok(id));
                     } else {
                         let _ =
                             reply.send(Err("Calling session is archived or unavailable".into()));
