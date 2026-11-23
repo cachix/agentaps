@@ -1,5 +1,7 @@
 use serde::{Deserialize, Serialize};
 
+pub mod sidebar;
+
 pub const ALPN: &[u8] = b"agentaps/control/0";
 pub const MAX_REQUEST_BYTES: usize = 64 * 1024;
 pub const MAX_RESPONSE_BYTES: usize = 16 * 1024 * 1024;
@@ -17,6 +19,9 @@ pub struct Request {
 pub enum Command {
     Pair,
     Snapshot,
+    ReopenSession {
+        agent_id: u64,
+    },
     Prompt {
         agent_id: u64,
         text: String,
@@ -46,6 +51,8 @@ pub enum Response {
         projects: Vec<Project>,
         #[serde(default)]
         agent_options: Vec<AgentOption>,
+        #[serde(default)]
+        flat_sidebar: bool,
     },
     SessionCreated {
         agent_id: u64,
@@ -60,6 +67,12 @@ pub enum Response {
 pub struct Project {
     pub path: String,
     pub agents: Vec<Agent>,
+    #[serde(default)]
+    pub name: String,
+    #[serde(default)]
+    pub branch: String,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub archived_agents: Vec<Agent>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -72,6 +85,14 @@ pub struct AgentOption {
 pub struct Agent {
     pub id: u64,
     pub name: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub title: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub sidebar_order: Option<usize>,
+    #[serde(default)]
+    pub terminal: bool,
+    #[serde(default)]
+    pub needs_attention: bool,
     pub status: String,
     pub active: bool,
     pub has_older_messages: bool,

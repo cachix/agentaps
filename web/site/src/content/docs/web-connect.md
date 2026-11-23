@@ -25,6 +25,8 @@ The unlock method protects the saved token if someone gets your phone. It does n
 
 ## Browser capabilities and limits
 
-The browser can read active conversations, start a local or SSH session, send prompts, stop turns, and answer ACP permission requests. **Other project** accepts a local absolute path or `ssh://host/absolute/path`; **Custom ACP command** accepts an executable and arguments. It shows the latest 100 messages per session and shortens long messages. Diff review and ACP form questions are not yet available in the browser.
+After unlocking, Web Connect shows the desktop's projects and sessions. Use **Current**, **Active**, or **Archived** to browse, or search across all three by project, branch, agent, or session title. Select a session to open its conversation. Selecting an archived session reopens it on the desktop. Use **Sessions** in the conversation header to return to the list with your search and filter still in place.
+
+The browser can start a local or SSH session, send prompts, stop turns, and answer ACP permission requests. **Other project** accepts a local absolute path or `ssh://host/absolute/path`; **Custom ACP command** accepts an executable and arguments. It shows the latest 100 messages per session and shortens long messages. Diff review and ACP form questions are not yet available in the browser.
 
 Both devices need network access to a compatible Iroh relay. The browser uses WebGPU when available and falls back to WebGL2 if WebGPU cannot initialize.

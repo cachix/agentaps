@@ -1,4 +1,5 @@
 use crate::config::KnownAgent;
+pub use agentaps_control_protocol::sidebar::score;
 use std::{
     collections::BTreeMap,
     env, fs,
@@ -204,35 +205,6 @@ fn agent_args(agent: KnownAgent) -> &'static [&'static str] {
         KnownAgent::GeminiCli => &["--acp"],
         KnownAgent::OpenCode => &["acp"],
     }
-}
-
-pub fn score(query: &str, candidate: &str) -> Option<i32> {
-    let query = query.to_lowercase();
-    let candidate = candidate.to_lowercase();
-    if query.is_empty() {
-        return Some(0);
-    }
-    let mut chars = candidate.char_indices();
-    let mut last = None;
-    let mut score = 0;
-    for needle in query.chars() {
-        let (offset, _) = chars.find(|(_, character)| *character == needle)?;
-        score += if offset == 0
-            || candidate[..offset]
-                .chars()
-                .last()
-                .is_some_and(|character| matches!(character, '/' | '_' | '-' | ' '))
-        {
-            12
-        } else {
-            2
-        };
-        if last.is_some_and(|previous| previous + 1 == offset) {
-            score += 5;
-        }
-        last = Some(offset);
-    }
-    Some(score - (candidate.len() as i32 / 8))
 }
 
 #[cfg(test)]

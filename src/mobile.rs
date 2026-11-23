@@ -376,6 +376,7 @@ pub fn start_with_provider(provider: Option<&str>) -> Result<Server, String> {
     let snapshot = Arc::new(Mutex::new(Response::Snapshot {
         projects: Vec::new(),
         agent_options: Vec::new(),
+        flat_sidebar: false,
     }));
     let shared_snapshot = snapshot.clone();
     let clients = Arc::new(Mutex::new(credentials));

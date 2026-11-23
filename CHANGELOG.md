@@ -46,6 +46,8 @@ Notable changes to Agentaps are recorded here.
 
 ### Changed
 
+- Open Web Connect to the desktop's session list with search and Current, Active, and Archived filters. Selecting a session opens its conversation, with a way back to the same list.
+
 - Align sidebar session status dots at the end of each row with the project new-session button.
 
 - Make the README easier to navigate with a concise quick start, project links, and links to the website documentation.

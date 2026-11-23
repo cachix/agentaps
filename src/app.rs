@@ -182,18 +182,14 @@ fn session_search_score(
         .file_name()
         .map(|name| name.to_string_lossy().into_owned())
         .unwrap_or_else(|| path.display().to_string());
-    [
-        score(query, &name).map(|rank| rank + 30),
-        score(query, agent).map(|rank| rank + 30),
-        title
-            .and_then(|title| score(query, title))
-            .map(|rank| rank + 30),
-        score(query, &path.to_string_lossy()),
-        score(query, branch),
-    ]
-    .into_iter()
-    .flatten()
-    .max()
+    agentaps_control_protocol::sidebar::session_search_score(
+        query,
+        &name,
+        &path.to_string_lossy(),
+        branch,
+        agent,
+        title,
+    )
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -1857,7 +1853,6 @@ impl Workspace {
         if agent.config.archived == archived {
             return;
         }
-        agent.config.archived = archived;
         if archived {
             let agent_id = agent.config.id;
             agent.controller.archive();
@@ -1890,12 +1885,7 @@ impl Workspace {
                 self.set_view(self.view.session_archived(location, next), window, cx);
             }
         } else {
-            if self.projects[project_index].agents[agent_index]
-                .connection
-                .is_none()
-            {
-                self.connect(project_index, agent_index);
-            }
+            self.reopen_session(project_index, agent_index);
             self.set_view(
                 WorkspaceView::Conversation(SessionLocation {
                     project_index,
@@ -1910,6 +1900,14 @@ impl Workspace {
         }
         self.persist();
         cx.notify();
+    }
+
+    fn reopen_session(&mut self, project_index: usize, agent_index: usize) {
+        let agent = &mut self.projects[project_index].agents[agent_index];
+        agent.config.archived = false;
+        if agent.connection.is_none() {
+            self.connect(project_index, agent_index);
+        }
     }
 
     fn confirm_picker(&mut self, window: &mut Window, cx: &mut Context<Self>) {

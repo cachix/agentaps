@@ -1,7 +1,7 @@
 use super::*;
 
 impl Render for MobileView {
-    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+    fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         if !self.connected {
             let mut saved_list = div()
                 .id("saved-desktops")
@@ -305,40 +305,58 @@ impl Render for MobileView {
                 .child(choices)
                 .into_any_element();
         }
-        let narrow = f32::from(window.viewport_size().width) < 600.;
-        let mut sessions = div()
-            .id("sessions")
+        if self.selected.is_some() {
+            self.render_conversation(cx).into_any_element()
+        } else {
+            self.render_sidebar(cx).into_any_element()
+        }
+    }
+}
+
+impl MobileView {
+    fn render_conversation(&self, cx: &mut Context<Self>) -> impl IntoElement {
+        let session = self.selected_session();
+        let mut header = div()
             .flex()
             .flex_shrink_0()
-            .gap_2()
-            .overflow_x_scroll()
+            .items_center()
+            .gap_3()
+            .border_b_1()
+            .border_color(rgb(SURFACE))
             .px_3()
-            .py_2();
-        for project in &self.projects {
-            for agent in &project.agents {
-                let id = agent.id;
-                let selected = self.selected == Some(id);
-                let folder = project.path.rsplit('/').next().unwrap_or(&project.path);
-                sessions = sessions.child(
-                    div()
-                        .id(("session", id))
-                        .flex_shrink_0()
-                        .max_w(px(if narrow { 200. } else { 260. }))
-                        .rounded_md()
-                        .px_3()
-                        .py_2()
-                        .bg(rgb(if selected { 0x30485f } else { SURFACE }))
-                        .text_color(rgb(TEXT))
-                        .cursor_pointer()
-                        .child(div().truncate().child(format!("{folder} · {}", agent.name)))
-                        .on_click(cx.listener(move |this, _, _, cx| {
-                            this.selected = Some(id);
-                            this.pending_new_agent = None;
-                            this.conversation_scroll.scroll_to_bottom();
-                            cx.notify();
-                        })),
-                );
-            }
+            .py_2()
+            .child(
+                div()
+                    .id("back-to-sessions")
+                    .h(px(44.))
+                    .flex()
+                    .flex_shrink_0()
+                    .items_center()
+                    .gap_1()
+                    .pr_2()
+                    .text_sm()
+                    .text_color(rgb(ACCENT))
+                    .cursor_pointer()
+                    .child(Icon::new(IconName::ArrowLeft).size(px(16.)))
+                    .child("Sessions")
+                    .on_click(cx.listener(|this, _, window, cx| {
+                        this.change_selection(None, window, cx);
+                    })),
+            );
+        if let Some((project, agent)) = session {
+            header = header.child(
+                div()
+                    .flex_1()
+                    .min_w(px(0.))
+                    .child(div().truncate().child(session_title(agent)))
+                    .child(
+                        div()
+                            .truncate()
+                            .text_xs()
+                            .text_color(rgb(MUTED))
+                            .child(project.path.clone()),
+                    ),
+            );
         }
         let mut conversation = div()
             .id("conversation")
@@ -352,7 +370,7 @@ impl Render for MobileView {
             .gap_3()
             .px_3()
             .py_4();
-        if let Some(agent) = self.selected_agent() {
+        if let Some((_, agent)) = session {
             if agent.has_older_messages {
                 conversation = conversation.child(
                     div()
@@ -474,65 +492,14 @@ impl Render for MobileView {
             }
         } else {
             conversation =
-                conversation.child(div().text_color(rgb(MUTED)).child("No sessions yet"));
+                conversation.child(div().text_color(rgb(MUTED)).child("Opening session…"));
         }
-        let active = self.selected_agent().is_some_and(|agent| agent.active);
-        let selected = self.selected;
         let outbound = self.outbound.clone();
-        div()
-            .size_full()
-            .min_w(px(0.))
-            .flex()
-            .flex_col()
-            .bg(rgb(BG))
-            .text_color(rgb(TEXT))
-            .child(
-                div()
-                    .flex()
-                    .flex_shrink_0()
-                    .items_center()
-                    .justify_between()
-                    .px_3()
-                    .py_2()
-                    .child(div().text_lg().child("Agentaps"))
-                    .child(
-                        div()
-                            .id("new-session")
-                            .rounded_md()
-                            .px_3()
-                            .py_2()
-                            .text_sm()
-                            .text_color(rgb(ACCENT))
-                            .cursor_pointer()
-                            .child("New")
-                            .on_click(cx.listener(|this, _, _, cx| this.open_new_session(cx))),
-                    ),
-            )
-            .when(
-                self.connection_status != "Connected" && !self.connection_status.is_empty(),
-                |element| {
-                    element.child(
-                        div()
-                            .px_4()
-                            .text_sm()
-                            .text_color(rgb(MUTED))
-                            .child(self.connection_status.clone()),
-                    )
-                },
-            )
-            .when_some(self.action_error.as_ref(), |element, error| {
-                element.child(
-                    div()
-                        .px_4()
-                        .py_1()
-                        .text_sm()
-                        .text_color(rgb(0xe99191))
-                        .child(error.clone()),
-                )
-            })
-            .child(sessions)
-            .child(conversation)
-            .child(
+        let mut page = self.connected_page().child(header);
+        page = self.with_status(page).child(conversation);
+        if let Some((_, agent)) = session {
+            let agent_id = agent.id;
+            page = page.child(
                 div()
                     .flex_shrink_0()
                     .p_3()
@@ -554,7 +521,7 @@ impl Render for MobileView {
                             .py_2()
                             .bg(rgb(0x304b60))
                             .cursor_pointer()
-                            .child(if self.prompt_queued {
+                            .child(if self.pending_prompts.contains(&agent_id) {
                                 "Sending"
                             } else {
                                 "Send"
@@ -563,7 +530,7 @@ impl Render for MobileView {
                                 cx.listener(|this, _, window, cx| this.send_prompt(window, cx)),
                             ),
                     )
-                    .when(active, |element| {
+                    .when(agent.active, |element| {
                         element.child(
                             div()
                                 .id("stop")
@@ -574,13 +541,48 @@ impl Render for MobileView {
                                 .cursor_pointer()
                                 .child("Stop")
                                 .on_click(move |_, _, _| {
-                                    if let Some(agent_id) = selected {
-                                        let _ = outbound.try_send(Command::Cancel { agent_id });
-                                    }
+                                    let _ = outbound.try_send(Command::Cancel { agent_id });
                                 }),
                         )
                     }),
+            );
+        }
+        page
+    }
+
+    pub(super) fn connected_page(&self) -> gpui_kit::Div {
+        div()
+            .size_full()
+            .min_w(px(0.))
+            .flex()
+            .flex_col()
+            .bg(rgb(BG))
+            .text_color(rgb(TEXT))
+    }
+
+    pub(super) fn with_status(&self, page: gpui_kit::Div) -> gpui_kit::Div {
+        page.when(
+            self.connection_status != "Connected" && !self.connection_status.is_empty(),
+            |element| {
+                element.child(
+                    div()
+                        .px_4()
+                        .py_1()
+                        .text_sm()
+                        .text_color(rgb(MUTED))
+                        .child(self.connection_status.clone()),
+                )
+            },
+        )
+        .when_some(self.action_error.as_ref(), |element, error| {
+            element.child(
+                div()
+                    .px_4()
+                    .py_1()
+                    .text_sm()
+                    .text_color(rgb(0xe99191))
+                    .child(error.clone()),
             )
-            .into_any_element()
+        })
     }
 }
