@@ -21,8 +21,14 @@ agentaps new-session
 The new session uses this session's project and agent command. Agentaps selects
 and focuses it. Your current session keeps its context and continues running.
 The new session starts empty: the command does not transfer conversation history,
-send a prompt, or start work there. It accepts no arguments.
+send a prompt, or start work there.
 
 On success, the command prints `Opened session <id>`. Tell the user it opened.
+
+When the user asks to create a session without opening it, use
+`agentaps new-session --no-open`. The session appears in the sidebar and desktop
+focus stays where it is. On success, the command prints `Created session <id>`.
+Add `--json` to either mode to get `{"session_id":123}` instead of the status text.
+
 If it fails, report the error rather than claiming a session was created. A
 timeout can leave the result uncertain; check before repeating the command.
