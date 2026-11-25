@@ -282,7 +282,7 @@ impl Workspace {
             .collect();
         Response::Snapshot {
             agent_options,
-            flat_sidebar: !self.nested_sidebar,
+            flat_sidebar: Some(!self.nested_sidebar),
             projects: self
                 .sidebar_projects()
                 .into_iter()
@@ -658,8 +658,8 @@ pub(super) fn verify_session_switching_and_mobile_routing(
 
 #[cfg(test)]
 #[test]
-fn mobile_snapshot_decodes_without_sidebar_fields() {
-    let value = json!({
+fn mobile_snapshot_distinguishes_grouped_sidebar_from_older_desktops() {
+    let mut value = json!({
         "type": "snapshot",
         "projects": [{
             "path": "/work/project",
@@ -678,11 +678,21 @@ fn mobile_snapshot_decodes_without_sidebar_fields() {
         projects,
         flat_sidebar,
         ..
-    } = serde_json::from_value(value).unwrap()
+    } = serde_json::from_value(value.clone()).unwrap()
     else {
         panic!("expected snapshot");
     };
-    assert!(!flat_sidebar);
+    assert_eq!(flat_sidebar, None);
     assert!(projects[0].archived_agents.is_empty());
     assert!(projects[0].agents[0].title.is_none());
+
+    value["flat_sidebar"] = json!(false);
+    let response: Response = serde_json::from_value(value).unwrap();
+    assert!(matches!(
+        response,
+        Response::Snapshot {
+            flat_sidebar: Some(false),
+            ..
+        }
+    ));
 }

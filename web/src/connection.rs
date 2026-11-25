@@ -138,7 +138,7 @@ pub(super) enum ClientEvent {
     Snapshot {
         projects: Vec<Project>,
         agent_options: Vec<AgentOption>,
-        flat_sidebar: bool,
+        flat_sidebar: Option<bool>,
     },
     Command {
         prompt: Option<(u64, String)>,

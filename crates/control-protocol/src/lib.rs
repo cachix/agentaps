@@ -51,8 +51,9 @@ pub enum Response {
         projects: Vec<Project>,
         #[serde(default)]
         agent_options: Vec<AgentOption>,
-        #[serde(default)]
-        flat_sidebar: bool,
+        /// The desktop's sidebar layout. Older desktops omit sidebar metadata.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        flat_sidebar: Option<bool>,
     },
     SessionCreated {
         agent_id: u64,

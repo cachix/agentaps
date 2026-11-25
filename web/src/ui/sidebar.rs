@@ -54,6 +54,9 @@ impl MobileView {
         let search = self.session_search.read(cx).value();
         let query = search.trim();
         let searching = !query.is_empty();
+        let flat_sidebar = self.flat_sidebar.unwrap_or(false);
+        let connected = self.connection_status == "Connected";
+        let desktop_update_needed = connected && self.flat_sidebar.is_none();
         let filters = div()
             .flex()
             .gap_1()
@@ -135,7 +138,10 @@ impl MobileView {
                 })
                 .collect::<Vec<_>>();
             if sessions.is_empty() {
-                let empty_project = project.agents.is_empty() && project.archived_agents.is_empty();
+                // Older desktops omit archived sessions, so an empty list may be an archive.
+                let empty_project = self.flat_sidebar.is_some()
+                    && project.agents.is_empty()
+                    && project.archived_agents.is_empty();
                 let show_empty_project = if searching {
                     [project_name(project), &project.path, &project.branch]
                         .iter()
@@ -146,7 +152,7 @@ impl MobileView {
                 if !(empty_project && show_empty_project) {
                     continue;
                 }
-            } else if self.flat_sidebar {
+            } else if flat_sidebar {
                 flat_sessions.extend(
                     sessions.into_iter().map(|(rank, order, agent, archived)| {
                         (rank, order, project, agent, archived)
@@ -159,7 +165,7 @@ impl MobileView {
             groups.push(self.render_project_group(project, collapsed, searching, sessions, cx));
         }
         let has_results = !flat_sessions.is_empty() || !groups.is_empty();
-        if self.flat_sidebar && !flat_sessions.is_empty() {
+        if !flat_sessions.is_empty() {
             flat_sessions.sort_by_key(|&(rank, order, _, _, _)| (rank, order));
             list =
                 list.child(
@@ -175,7 +181,9 @@ impl MobileView {
                 );
         }
         list = list.children(groups);
-        if !has_results && self.connection_status == "Connected" {
+        let browsing_unavailable_archive =
+            desktop_update_needed && !searching && self.session_filter == SessionFilter::Archived;
+        if !has_results && connected && !browsing_unavailable_archive {
             list = list.child(div().px_2().py_3().text_sm().text_color(rgb(MUTED)).child(
                 if searching {
                     "No matching projects or sessions"
@@ -240,7 +248,13 @@ impl MobileView {
                     )
                 }),
         );
-        self.with_status(page).child(list)
+        self.with_status(page)
+            .when(desktop_update_needed, |page| {
+                page.child(div().px_4().pb_3().text_sm().text_color(rgb(MUTED)).child(
+                    "Update Agentaps on the desktop to see session titles and archived sessions.",
+                ))
+            })
+            .child(list)
     }
 
     fn render_project_group(

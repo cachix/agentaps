@@ -23,7 +23,7 @@ pub(super) struct MobileView {
     agent_options: Vec<AgentOption>,
     selected: Option<u64>,
     pending_session: Option<u64>,
-    flat_sidebar: bool,
+    flat_sidebar: Option<bool>,
     session_filter: SessionFilter,
     session_search: Entity<InputState>,
     sessions_scroll: ScrollHandle,
@@ -116,7 +116,7 @@ impl MobileView {
             agent_options: Vec::new(),
             selected: None,
             pending_session: None,
-            flat_sidebar: false,
+            flat_sidebar: None,
             session_filter: SessionFilter::Current,
             session_search,
             sessions_scroll: ScrollHandle::new(),
@@ -391,7 +391,7 @@ impl MobileView {
         self.agent_options.clear();
         self.selected = None;
         self.pending_session = None;
-        self.flat_sidebar = false;
+        self.flat_sidebar = None;
         self.session_filter = SessionFilter::Current;
         self.session_search
             .update(cx, |input, cx| input.set_value("", window, cx));
