@@ -225,11 +225,8 @@ html:has(.landing) {
   flex-wrap: nowrap;
 }
 
-.hero-remote-control {
-  flex: none;
-  font-size: 1.25rem;
-  padding: 0;
-  width: 2.75rem;
+.hero-remote-control .icon {
+  font-size: 1.125rem;
 }
 
 .hero-demo {
@@ -3449,8 +3446,16 @@ html:has(.landing) {
     width: 100%;
   }
 
+  .hero-download-actions {
+    --csk-button-gap: 0.4rem;
+    --csk-button-padding-inline: 0.65rem;
+  }
+
   .hero-download-actions > .csk-button:first-child {
     flex: 1;
+    line-height: 1.2;
+    min-width: 0;
+    white-space: normal;
   }
 
   .hero-app .app-frame,
