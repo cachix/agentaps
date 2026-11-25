@@ -3,5 +3,7 @@ import Navbar from '@cachix/site-kit/starlight/Navbar.astro';
 ---
 
 <Navbar blog={false}>
-  <a slot="before" class="csk-navbar-link" href="/connect/" data-astro-reload>Remote Control</a>
+  {Astro.url.pathname !== '/' && (
+    <a slot="before" class="csk-navbar-link" href="/connect/" data-astro-reload>Remote Control</a>
+  )}
 </Navbar>

@@ -219,6 +219,19 @@ html:has(.landing) {
   margin-top: 2rem;
 }
 
+.hero-download-actions {
+  --csk-button-group-gap: 0.5rem;
+  align-items: stretch;
+  flex-wrap: nowrap;
+}
+
+.hero-remote-control {
+  flex: none;
+  font-size: 1.25rem;
+  padding: 0;
+  width: 2.75rem;
+}
+
 .hero-demo {
   display: grid;
   justify-items: stretch;
@@ -3431,8 +3444,13 @@ html:has(.landing) {
     font-size: 2.85rem;
   }
 
-  .hero-actions .csk-button {
+  .hero-actions > .csk-button,
+  .hero-download-actions {
     width: 100%;
+  }
+
+  .hero-download-actions > .csk-button:first-child {
+    flex: 1;
   }
 
   .hero-app .app-frame,

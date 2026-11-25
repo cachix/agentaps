@@ -9,6 +9,7 @@ import ComposerDemo from '../components/landing/ComposerDemo.astro';
 import DiffDemo from '../components/landing/DiffDemo.astro';
 import FeatureGrid from '../components/landing/FeatureGrid.astro';
 import HeroApp from '../components/landing/HeroApp.astro';
+import Icon from '../components/landing/Icon.astro';
 import PanesDemo from '../components/landing/PanesDemo.astro';
 import RemoteDemo from '../components/landing/RemoteDemo.astro';
 import SshDemo from '../components/landing/SshDemo.astro';
@@ -111,7 +112,12 @@ const showcases = [
           <h1>A universal GUI<br /> <span>for coding harnesses.</span></h1>
           <p class="hero-lead">Run agents locally or over SSH. Connect your phone’s browser directly to your desktop over an encrypted peer-to-peer connection via Iroh.</p>
           <ButtonGroup class="hero-actions">
-            <Button href="#downloads" arrow><span data-release-label>Get Agentaps {version}</span></Button>
+            <ButtonGroup class="hero-download-actions">
+              <Button href="#downloads" arrow><span data-release-label>Get Agentaps {version}</span></Button>
+              <Button href="/connect/" variant="secondary" class="hero-remote-control" aria-label="Remote Control" title="Remote Control" data-astro-reload>
+                <Icon name="phone" />
+              </Button>
+            </ButtonGroup>
             <Button href={repository} variant="secondary" arrow>View on GitHub</Button>
           </ButtonGroup>
         </div>

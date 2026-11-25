@@ -54,6 +54,8 @@ Notable changes to Agentaps are recorded here.
 
 - Describe Agentaps on the landing page as a universal GUI for coding harnesses and highlight direct phone connections via Iroh.
 
+- Put a Remote Control phone icon beside the download button on the landing page.
+
 - Align sidebar session status dots at the end of each row with the project new-session button.
 
 - Make the README easier to navigate with a concise quick start, project links, and links to the website documentation.
