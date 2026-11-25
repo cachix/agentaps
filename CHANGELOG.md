@@ -16,6 +16,8 @@ Notable changes to Agentaps are recorded here.
 
 - Hide projects with no visible sessions when Web Connect is paired with an older desktop and explain how to enable session titles and archives.
 
+- Improve text contrast in bundled desktop themes, including sidebar labels, selected rows, and inline code in conversations.
+
 - Use npm's default cache behavior when launching Codex and Claude ACP adapters, including previously saved default commands.
 
 - Give website preview sidebar icons room at the left edge and make platform buttons jump to downloads.
@@ -49,6 +51,8 @@ Notable changes to Agentaps are recorded here.
 ### Changed
 
 - Open Web Connect to the desktop's session list with search and Current, Active, and Archived filters. Selecting a session opens its conversation, with a way back to the same list.
+
+- Describe Agentaps on the landing page as a universal GUI for coding harnesses and highlight direct phone connections via Iroh.
 
 - Align sidebar session status dots at the end of each row with the project new-session button.
 
