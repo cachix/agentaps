@@ -14,6 +14,8 @@ Notable changes to Agentaps are recorded here.
 
 ### Fixed
 
+- Improve text contrast in bundled desktop themes, including sidebar labels, selected rows, and inline code in conversations.
+
 - Use npm's default cache behavior when launching Codex and Claude ACP adapters, including previously saved default commands.
 
 - Give website preview sidebar icons room at the left edge and make platform buttons jump to downloads.

@@ -6,7 +6,7 @@ use anyhow::Result;
 use gpui_kit::component::theme::Theme;
 #[cfg(test)]
 use gpui_kit::component::theme::ThemeMode;
-use gpui_kit::{App, Global, Hsla, SharedString};
+use gpui_kit::{App, Global, Hsla, Rgba, SharedString};
 use native_theme_gpui::{AccessibilityPreferences, ColorMode};
 
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq, serde::Serialize, serde::Deserialize)]
@@ -101,6 +101,75 @@ struct Preferences {
 
 impl Global for Preferences {}
 
+const MIN_TEXT_CONTRAST: f32 = 4.5;
+
+fn contrast_ratio(foreground: Hsla, background: Hsla) -> f32 {
+    fn luminance(color: Hsla) -> f32 {
+        let Rgba { r, g, b, .. } = color.into();
+        let linear = |channel: f32| {
+            if channel <= 0.04045 {
+                channel / 12.92
+            } else {
+                ((channel + 0.055) / 1.055).powf(2.4)
+            }
+        };
+        0.2126 * linear(r) + 0.7152 * linear(g) + 0.0722 * linear(b)
+    }
+
+    let text = luminance(background.blend(foreground));
+    let background = luminance(background);
+    (text.max(background) + 0.05) / (text.min(background) + 0.05)
+}
+
+fn readable_text(color: Hsla, endpoint: Hsla, backgrounds: &[Hsla]) -> Hsla {
+    (0..16)
+        .map(|step| color.blend(endpoint.opacity(step as f32 / 16.)))
+        .find(|&candidate| {
+            backgrounds
+                .iter()
+                .all(|&bg| contrast_ratio(candidate, bg) >= MIN_TEXT_CONTRAST)
+        })
+        .unwrap_or(endpoint)
+}
+
+fn improve_preset_contrast(theme: &mut Theme, input: Hsla) {
+    // List rows and inline code keep their text colors on these fills.
+    // Tint the underlying surface so body, muted, and link text can share it.
+    theme.list_active = theme.list_active.opacity(0.25);
+    theme.accent = theme.accent.opacity(0.25);
+
+    let backgrounds: Vec<_> = [
+        theme.background,
+        theme.sidebar,
+        theme.muted,
+        theme.popover,
+        input,
+    ]
+    .map(|surface| theme.background.blend(surface))
+    .into_iter()
+    .flat_map(|surface| {
+        [
+            surface,
+            surface.blend(theme.list_hover),
+            surface.blend(theme.list_active),
+            surface.blend(theme.accent),
+        ]
+    })
+    .collect();
+    let endpoint = if theme.mode.is_dark() {
+        gpui_kit::white()
+    } else {
+        gpui_kit::black()
+    };
+    let readable = |color| readable_text(color, endpoint, &backgrounds);
+    theme.foreground = readable(theme.foreground);
+    theme.muted_foreground = readable(theme.muted_foreground);
+    theme.link = readable(theme.link);
+    theme.link_hover = readable(theme.link_hover);
+    theme.link_active = readable(theme.link_active);
+    theme.accent_foreground = theme.foreground;
+}
+
 fn resolve(choice: Choice, system: &Theme, system_input: Hsla) -> Result<(Theme, Hsla)> {
     let mut theme = system.clone();
     let input = if let Some((preset, mode)) = choice.preset() {
@@ -113,9 +182,11 @@ fn resolve(choice: Choice, system: &Theme, system_input: Hsla) -> Result<(Theme,
         theme.font_family = system.font_family.clone();
         theme.font_size = system.font_size;
         let color = resolved.input.background_color;
-        crate::theming::hsla(gpui_kit::rgba(u32::from_be_bytes([
+        let input = crate::theming::hsla(gpui_kit::rgba(u32::from_be_bytes([
             color.r, color.g, color.b, color.a,
-        ])))
+        ])));
+        improve_preset_contrast(&mut theme, input);
+        input
     } else if choice == Choice::Agentaps {
         let mode = system.mode;
         let config = if mode.is_dark() {
@@ -342,6 +413,50 @@ mod tests {
                 "{preset}"
             );
         }
+    }
+
+    #[gpui_kit::test]
+    fn bundled_themes_keep_desktop_text_readable(cx: &mut gpui_kit::TestAppContext) {
+        use crate::theme::{ACCENT, AGENT_BUBBLE, BG, HOVER, MUTED, SELECTED, SIDEBAR, TEXT};
+
+        cx.update(|cx| {
+            gpui_kit::init(cx);
+            initialize(cx);
+            for choice in Choice::all().filter(|choice| choice.preset().is_some()) {
+                select(choice, 1., cx).unwrap();
+                let theme = Theme::global(cx);
+                let palette = crate::theme::palette(cx);
+                let background = palette.color(BG);
+                let sidebar = background.blend(palette.color(SIDEBAR));
+                let selected = sidebar.blend(palette.color(SELECTED));
+                let hovered = sidebar.blend(palette.color(HOVER));
+                let conversation = background.blend(palette.color(AGENT_BUBBLE));
+                let inline_code = conversation.blend(theme.accent);
+                for (label, text, surface) in [
+                    ("sidebar label", palette.color(MUTED), sidebar),
+                    ("hovered label", palette.color(MUTED), hovered),
+                    ("selected label", palette.color(TEXT), selected),
+                    ("selected row detail", palette.color(MUTED), selected),
+                    ("reply text", theme.foreground, conversation),
+                    ("inline code", theme.foreground, inline_code),
+                    ("linked inline code", theme.link, inline_code),
+                    ("selected row link", palette.color(ACCENT), selected),
+                    (
+                        "composer placeholder",
+                        theme.muted_foreground,
+                        background.blend(palette.input),
+                    ),
+                    (
+                        "menu label",
+                        theme.accent_foreground,
+                        background.blend(theme.popover).blend(theme.accent),
+                    ),
+                ] {
+                    let ratio = contrast_ratio(text, surface);
+                    assert!(ratio >= 4.5, "{choice:?} {label}: {ratio:.2}:1");
+                }
+            }
+        });
     }
 
     #[test]
