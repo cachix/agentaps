@@ -1,7 +1,7 @@
 use agentaps_control_protocol::{Agent, AgentOption, Command, Project};
 use async_channel::{Receiver, Sender};
 use gpui_kit::component::{
-    ActiveTheme, Root,
+    ActiveTheme, Root, Theme, ThemeMode,
     input::{Input, InputEvent, InputState, Textarea, TextareaState},
     text::{TextView, TextViewStyle},
 };
@@ -149,6 +149,7 @@ pub fn start() {
     APPLICATION.with(|application| {
         *application.borrow_mut() = Some(app.run_embedded(|cx: &mut App| {
             gpui_kit::init(cx);
+            Theme::change(ThemeMode::Dark, None, cx);
             cx.text_system()
                 .add_fonts(vec![Cow::Borrowed(include_bytes!(
                     "../fonts/IBMPlexSans-Regular.ttf"

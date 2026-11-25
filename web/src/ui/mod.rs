@@ -1,12 +1,33 @@
 use super::*;
+use gpui_kit::component::{Icon, IconName};
+use std::collections::{HashMap, HashSet};
+
 mod render;
+mod sidebar;
+
+fn session_title(agent: &Agent) -> String {
+    agent.title.as_ref().unwrap_or(&agent.name).clone()
+}
+
+#[derive(Clone, Copy, Default, PartialEq, Eq)]
+enum SessionFilter {
+    #[default]
+    Current,
+    Active,
+    Archived,
+}
 
 pub(super) struct MobileView {
     client_cancel: Option<Sender<()>>,
     projects: Vec<Project>,
     agent_options: Vec<AgentOption>,
     selected: Option<u64>,
-    pending_new_agent: Option<u64>,
+    pending_session: Option<u64>,
+    flat_sidebar: Option<bool>,
+    session_filter: SessionFilter,
+    session_search: Entity<InputState>,
+    sessions_scroll: ScrollHandle,
+    collapsed_projects: HashSet<String>,
     new_session: bool,
     new_project: Option<String>,
     creating_session: bool,
@@ -15,6 +36,7 @@ pub(super) struct MobileView {
     show_unlock: bool,
     conversation_scroll: ScrollHandle,
     composer: Entity<TextareaState>,
+    drafts: HashMap<u64, String>,
     passphrase: Entity<InputState>,
     outbound: Sender<Command>,
     incoming: Receiver<Command>,
@@ -27,7 +49,7 @@ pub(super) struct MobileView {
     generation: u64,
     connection_status: String,
     action_error: Option<String>,
-    prompt_queued: bool,
+    pending_prompts: HashSet<u64>,
     _subscriptions: Vec<gpui_kit::Subscription>,
 }
 
@@ -38,6 +60,14 @@ impl MobileView {
         remote: Option<(EndpointId, String)>,
     ) -> Self {
         let composer = cx.new(|cx| TextareaState::new(window, cx).placeholder("Ask your agent…"));
+        let session_search =
+            cx.new(|cx| InputState::new(window, cx).placeholder("Search projects and sessions"));
+        let search_subscription = cx.subscribe(&session_search, |this, _, event, cx| {
+            if matches!(event, InputEvent::Change) {
+                this.sessions_scroll.set_offset(Default::default());
+                cx.notify();
+            }
+        });
         let passphrase = cx.new(|cx| {
             InputState::new(window, cx)
                 .placeholder(if remote.is_some() {
@@ -85,7 +115,12 @@ impl MobileView {
             projects: Vec::new(),
             agent_options: Vec::new(),
             selected: None,
-            pending_new_agent: None,
+            pending_session: None,
+            flat_sidebar: None,
+            session_filter: SessionFilter::Current,
+            session_search,
+            sessions_scroll: ScrollHandle::new(),
+            collapsed_projects: HashSet::new(),
             new_session: false,
             new_project: None,
             creating_session: false,
@@ -94,6 +129,7 @@ impl MobileView {
             show_unlock: false,
             conversation_scroll: ScrollHandle::new(),
             composer,
+            drafts: HashMap::new(),
             passphrase,
             outbound,
             incoming,
@@ -106,8 +142,8 @@ impl MobileView {
             generation: 0,
             connection_status: String::new(),
             action_error: None,
-            prompt_queued: false,
-            _subscriptions: vec![subscription, passphrase_subscription],
+            pending_prompts: HashSet::new(),
+            _subscriptions: vec![subscription, passphrase_subscription, search_subscription],
         }
     }
 
@@ -345,7 +381,7 @@ impl MobileView {
         cx.notify();
     }
 
-    fn lock(&mut self, cx: &mut Context<Self>) {
+    fn lock(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         self.client_cancel.take();
         self.generation += 1;
         self.connected = false;
@@ -354,11 +390,20 @@ impl MobileView {
         self.projects.clear();
         self.agent_options.clear();
         self.selected = None;
-        self.pending_new_agent = None;
+        self.pending_session = None;
+        self.flat_sidebar = None;
+        self.session_filter = SessionFilter::Current;
+        self.session_search
+            .update(cx, |input, cx| input.set_value("", window, cx));
+        self.sessions_scroll = ScrollHandle::new();
+        self.collapsed_projects.clear();
         self.new_session = false;
         self.new_project = None;
         self.creating_session = false;
-        self.prompt_queued = false;
+        self.composer
+            .update(cx, |input, cx| input.set_value("", window, cx));
+        self.drafts.clear();
+        self.pending_prompts.clear();
         while self.incoming.try_recv().is_ok() {}
         self.connection_status.clear();
         cx.notify();
@@ -390,38 +435,43 @@ impl MobileView {
                             return;
                         }
                         match event {
-                            crate::connection::ClientEvent::Hidden => view.lock(cx),
+                            crate::connection::ClientEvent::Hidden => view.lock(window, cx),
                             crate::connection::ClientEvent::Error(message) => {
                                 view.connection_status = message;
                                 cx.notify();
                             }
                             crate::connection::ClientEvent::Command {
                                 prompt,
+                                reopening,
                                 creating,
                                 created,
                                 error,
                             } => {
-                                if view.generation != generation {
-                                    return;
+                                if let Some((id, text)) = prompt {
+                                    view.pending_prompts.remove(&id);
+                                    if error.is_none() {
+                                        view.clear_sent_draft(id, &text, window, cx);
+                                    }
+                                    if view.selected != Some(id) {
+                                        cx.notify();
+                                        return;
+                                    }
                                 }
-                                if let Some(prompt) = prompt {
-                                    view.prompt_queued = false;
-                                    if error.is_none()
-                                        && view.composer.read(cx).value().as_ref() == prompt
-                                    {
-                                        view.composer.update(cx, |input, cx| {
-                                            input.set_value("", window, cx)
-                                        });
+                                if let Some(id) = reopening {
+                                    if view.pending_session != Some(id) {
+                                        return;
+                                    }
+                                    if error.is_some() {
+                                        view.change_selection(None, window, cx);
                                     }
                                 }
                                 if creating {
                                     view.creating_session = false;
                                     if let Some(agent_id) = created {
-                                        view.selected = Some(agent_id);
-                                        view.pending_new_agent = Some(agent_id);
+                                        view.change_selection(Some(agent_id), window, cx);
+                                        view.pending_session = Some(agent_id);
                                         view.new_session = false;
                                         view.new_project = None;
-                                        view.conversation_scroll.scroll_to_bottom();
                                     }
                                 }
                                 view.action_error = error;
@@ -430,50 +480,26 @@ impl MobileView {
                             crate::connection::ClientEvent::Snapshot {
                                 projects,
                                 agent_options,
+                                flat_sidebar,
                             } => {
-                                let previous_selected = view.selected;
-                                let previous_message = view.selected_agent().and_then(|agent| {
-                                    agent
-                                        .messages
-                                        .last()
-                                        .map(|message| (agent.messages.len(), message.text.len()))
-                                });
+                                let previous_message = view.conversation_tail();
                                 let near_bottom = view.conversation_scroll.max_offset().y
                                     + view.conversation_scroll.offset().y
                                     < px(80.);
                                 view.projects = projects;
                                 view.agent_options = agent_options;
-                                if view.pending_new_agent.is_some_and(|id| {
-                                    view.projects.iter().any(|project| {
-                                        project.agents.iter().any(|agent| agent.id == id)
-                                    })
-                                }) {
-                                    view.pending_new_agent = None;
-                                }
-                                if view.pending_new_agent.is_none()
-                                    && view.selected.is_none_or(|id| {
-                                        !view.projects.iter().any(|project| {
-                                            project.agents.iter().any(|agent| agent.id == id)
-                                        })
-                                    })
+                                view.flat_sidebar = flat_sidebar;
+                                if view.selected_session().is_some() {
+                                    if view.pending_session.take().is_some()
+                                        || (near_bottom
+                                            && previous_message != view.conversation_tail())
+                                    {
+                                        view.conversation_scroll.scroll_to_bottom();
+                                    }
+                                } else if view.selected.is_some() && view.pending_session.is_none()
                                 {
-                                    view.selected = view
-                                        .projects
-                                        .iter()
-                                        .flat_map(|project| &project.agents)
-                                        .next()
-                                        .map(|agent| agent.id);
-                                }
-                                let current_message = view.selected_agent().and_then(|agent| {
-                                    agent
-                                        .messages
-                                        .last()
-                                        .map(|message| (agent.messages.len(), message.text.len()))
-                                });
-                                if previous_selected != view.selected
-                                    || (near_bottom && previous_message != current_message)
-                                {
-                                    view.conversation_scroll.scroll_to_bottom();
+                                    view.change_selection(None, window, cx);
+                                    view.action_error = Some("Session is no longer current".into());
                                 }
                                 view.connection_status = "Connected".into();
                                 cx.notify();
@@ -489,9 +515,15 @@ impl MobileView {
         .detach();
     }
 
-    fn open_new_session(&mut self, cx: &mut Context<Self>) {
+    fn open_new_session(
+        &mut self,
+        project: Option<String>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        window.blur(cx);
         self.new_session = true;
-        self.new_project = None;
+        self.new_project = project;
         self.action_error = None;
         cx.notify();
     }
@@ -564,12 +596,13 @@ impl MobileView {
     }
 
     fn send_prompt(&mut self, _window: &mut Window, cx: &mut Context<Self>) {
-        if self.prompt_queued {
-            return;
-        }
-        let Some(agent_id) = self.selected else {
+        let Some((_, agent)) = self.selected_session() else {
             return;
         };
+        let agent_id = agent.id;
+        if self.pending_prompts.contains(&agent_id) {
+            return;
+        }
         let text = self.composer.read(cx).value().to_string();
         let text = text.strip_suffix('\n').unwrap_or(&text).to_owned();
         if text.trim().is_empty() {
@@ -580,7 +613,7 @@ impl MobileView {
             .try_send(Command::Prompt { agent_id, text })
             .is_ok()
         {
-            self.prompt_queued = true;
+            self.pending_prompts.insert(agent_id);
             self.action_error = None;
             cx.notify();
         } else {
@@ -589,11 +622,97 @@ impl MobileView {
         }
     }
 
-    fn selected_agent(&self) -> Option<&Agent> {
+    fn change_selection(
+        &mut self,
+        selected: Option<u64>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        if self.selected == selected {
+            return;
+        }
+        if let Some(id) = self.selected {
+            let draft = self.composer.read(cx).value().to_string();
+            if !draft.is_empty() {
+                self.drafts.insert(id, draft);
+            }
+        }
+        self.selected = selected;
+        self.pending_session = None;
+        self.action_error = None;
+        window.blur(cx);
+        let draft = selected.and_then(|id| self.drafts.remove(&id));
+        self.composer.update(cx, |input, cx| {
+            input.set_value(draft.unwrap_or_default(), window, cx);
+        });
+        self.conversation_scroll = ScrollHandle::new();
+        if selected.is_some() {
+            self.conversation_scroll.scroll_to_bottom();
+        }
+        cx.notify();
+    }
+
+    fn open_session(
+        &mut self,
+        id: u64,
+        archived: bool,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        if archived
+            && self
+                .outbound
+                .try_send(Command::ReopenSession { agent_id: id })
+                .is_err()
+        {
+            self.action_error = Some("Could not reopen session".into());
+            cx.notify();
+            return;
+        }
+        self.change_selection(Some(id), window, cx);
+        if archived {
+            self.pending_session = Some(id);
+        }
+    }
+
+    fn clear_sent_draft(
+        &mut self,
+        id: u64,
+        text: &str,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let matches_sent = |value: &str| value.strip_suffix('\n').unwrap_or(value) == text;
+        if self.selected == Some(id) {
+            if matches_sent(self.composer.read(cx).value().as_ref()) {
+                self.composer
+                    .update(cx, |input, cx| input.set_value("", window, cx));
+            }
+        } else if self
+            .drafts
+            .get(&id)
+            .is_some_and(|draft| matches_sent(draft))
+        {
+            self.drafts.remove(&id);
+        }
+    }
+
+    fn selected_session(&self) -> Option<(&Project, &Agent)> {
         let id = self.selected?;
-        self.projects
-            .iter()
-            .flat_map(|project| &project.agents)
-            .find(|agent| agent.id == id)
+        self.projects.iter().find_map(|project| {
+            project
+                .agents
+                .iter()
+                .find(|agent| agent.id == id)
+                .map(|agent| (project, agent))
+        })
+    }
+
+    fn conversation_tail(&self) -> Option<(usize, usize)> {
+        let (_, agent) = self.selected_session()?;
+        agent
+            .messages
+            .last()
+            .map(|message| (agent.messages.len(), message.text.len()))
     }
 }

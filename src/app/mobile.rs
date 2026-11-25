@@ -13,6 +13,55 @@ fn mobile_text(text: &str) -> String {
     format!("{}\n[Message shortened on mobile]", &text[..end])
 }
 
+fn mobile_agent(agent: &AgentView, sidebar_order: Option<usize>) -> RemoteAgent {
+    let archived = agent.config.archived;
+    RemoteAgent {
+        id: agent.config.id,
+        name: agent.name.clone(),
+        title: agent.config.session_title().map(str::to_owned),
+        sidebar_order,
+        terminal: agent.config.terminal,
+        needs_attention: agent.has_sidebar_status(),
+        status: agent.status.label().into(),
+        active: agent.active_work,
+        has_older_messages: !archived && agent.messages.len() > 100,
+        messages: if archived {
+            Vec::new()
+        } else {
+            agent
+                .messages
+                .iter()
+                .skip(agent.messages.len().saturating_sub(100))
+                .map(|message| RemoteMessage {
+                    role: format!("{:?}", message.role).to_lowercase(),
+                    text: mobile_text(&message.transcript_text()),
+                })
+                .collect()
+        },
+        permissions: if archived {
+            Vec::new()
+        } else {
+            agent
+                .permissions
+                .iter()
+                .map(|permission| RemotePermission {
+                    request_id: permission.request_id.to_string(),
+                    title: permission.title.clone(),
+                    description: permission.description.clone(),
+                    options: permission
+                        .options
+                        .iter()
+                        .map(|(id, label)| PermissionOption {
+                            id: id.clone(),
+                            label: label.clone(),
+                        })
+                        .collect(),
+                })
+                .collect()
+        },
+    }
+}
+
 impl Workspace {
     pub(super) fn mobile_link(&self) -> Option<String> {
         self.mobile_access.link(self.web_connect_url.as_deref())
@@ -225,51 +274,46 @@ impl Workspace {
                 });
             }
         }
+        let sidebar_order: HashMap<_, _> = self
+            .sidebar_order
+            .iter()
+            .enumerate()
+            .map(|(index, &id)| (id, index))
+            .collect();
         Response::Snapshot {
             agent_options,
+            flat_sidebar: Some(!self.nested_sidebar),
             projects: self
-                .projects
-                .iter()
-                .map(|project| RemoteProject {
-                    path: project.display_path(),
-                    agents: project
+                .sidebar_projects()
+                .into_iter()
+                .map(|index| {
+                    let project = &self.projects[index];
+                    let (archived_agents, agents) = project
                         .agents
                         .iter()
-                        .filter(|agent| !agent.config.archived)
-                        .map(|agent| RemoteAgent {
-                            id: agent.config.id,
-                            name: agent.name.clone(),
-                            status: agent.status.label().into(),
-                            active: agent.active_work,
-                            has_older_messages: agent.messages.len() > 100,
-                            messages: agent
-                                .messages
-                                .iter()
-                                .skip(agent.messages.len().saturating_sub(100))
-                                .map(|message| RemoteMessage {
-                                    role: format!("{:?}", message.role).to_lowercase(),
-                                    text: mobile_text(&message.transcript_text()),
-                                })
-                                .collect(),
-                            permissions: agent
-                                .permissions
-                                .iter()
-                                .map(|permission| RemotePermission {
-                                    request_id: permission.request_id.to_string(),
-                                    title: permission.title.clone(),
-                                    description: permission.description.clone(),
-                                    options: permission
-                                        .options
-                                        .iter()
-                                        .map(|(id, label)| PermissionOption {
-                                            id: id.clone(),
-                                            label: label.clone(),
-                                        })
-                                        .collect(),
-                                })
-                                .collect(),
-                        })
-                        .collect(),
+                        .partition::<Vec<_>, _>(|agent| agent.config.archived);
+                    let project_agents = |agents: Vec<&AgentView>| {
+                        let mut agents = agents
+                            .into_iter()
+                            .map(|agent| {
+                                mobile_agent(agent, sidebar_order.get(&agent.config.id).copied())
+                            })
+                            .collect::<Vec<_>>();
+                        agents.sort_by_key(|agent| agent.sidebar_order.unwrap_or(usize::MAX));
+                        agents
+                    };
+                    RemoteProject {
+                        path: project.display_path(),
+                        name: project
+                            .path
+                            .file_name()
+                            .unwrap_or(project.path.as_os_str())
+                            .to_string_lossy()
+                            .into_owned(),
+                        branch: project.branch.clone(),
+                        agents: project_agents(agents),
+                        archived_agents: project_agents(archived_agents),
+                    }
                 })
                 .collect(),
         }
@@ -289,6 +333,28 @@ impl Workspace {
     ) -> Result<Response, String> {
         match command {
             RemoteCommand::Pair | RemoteCommand::Snapshot => {}
+            RemoteCommand::ReopenSession { agent_id } => {
+                let (project_index, agent_index) = self
+                    .projects
+                    .iter()
+                    .enumerate()
+                    .find_map(|(project_index, project)| {
+                        project
+                            .agents
+                            .iter()
+                            .position(|agent| agent.config.id == agent_id)
+                            .map(|agent_index| (project_index, agent_index))
+                    })
+                    .ok_or_else(|| "Session not found".to_owned())?;
+                if self.projects[project_index].agents[agent_index]
+                    .config
+                    .archived
+                {
+                    self.reopen_session(project_index, agent_index);
+                    self.persist();
+                    cx.notify();
+                }
+            }
             RemoteCommand::NewSession {
                 project,
                 command,
@@ -448,12 +514,13 @@ pub(super) fn verify_session_switching_and_mobile_routing(
         workspace.update(cx, |this, cx| {
             let mut first_agent = test_agent(ProtocolVersion::V1);
             first_agent.config.id = 101;
+            first_agent.config.title = Some("First conversation".into());
             let mut second_agent = test_agent(ProtocolVersion::V2);
             second_agent.config.id = 102;
             this.projects = vec![ProjectView {
                 path: root.to_owned(),
                 ssh_host: None,
-                branch: String::new(),
+                branch: "main".into(),
                 sync_counts: None,
                 agents: vec![
                     AgentView {
@@ -563,10 +630,69 @@ pub(super) fn verify_session_switching_and_mobile_routing(
             };
             assert_eq!(projects[0].agents.len(), 1);
             assert_eq!(projects[0].agents[0].id, 101);
+            assert_eq!(
+                projects[0].agents[0].title.as_deref(),
+                Some("First conversation")
+            );
+            assert_eq!(projects[0].branch, "main");
+            assert_eq!(projects[0].archived_agents[0].id, 102);
+            assert!(projects[0].archived_agents[0].messages.is_empty());
+
+            // Reopening through Web Connect leaves the desktop pane alone.
+            this.projects[0].agents[1].config.terminal = true;
+            for _ in 0..2 {
+                let response = this
+                    .apply_mobile_command(Command::ReopenSession { agent_id: 102 }, cx)
+                    .unwrap();
+                assert!(matches!(response, Response::Accepted));
+            }
+            assert!(!this.projects[0].agents[1].config.archived);
+            assert_eq!(this.view, WorkspaceView::Conversation(first));
             // Keep these disconnected fixtures out of the zoom test's saved configuration.
             this.projects.clear();
             this.view = WorkspaceView::Empty;
             this.persistence.dirty = false;
         })
     });
+}
+
+#[cfg(test)]
+#[test]
+fn mobile_snapshot_distinguishes_grouped_sidebar_from_older_desktops() {
+    let mut value = json!({
+        "type": "snapshot",
+        "projects": [{
+            "path": "/work/project",
+            "agents": [{
+                "id": 1,
+                "name": "Codex",
+                "status": "idle",
+                "active": false,
+                "has_older_messages": false,
+                "messages": [],
+                "permissions": []
+            }]
+        }]
+    });
+    let Response::Snapshot {
+        projects,
+        flat_sidebar,
+        ..
+    } = serde_json::from_value(value.clone()).unwrap()
+    else {
+        panic!("expected snapshot");
+    };
+    assert_eq!(flat_sidebar, None);
+    assert!(projects[0].archived_agents.is_empty());
+    assert!(projects[0].agents[0].title.is_none());
+
+    value["flat_sidebar"] = json!(false);
+    let response: Response = serde_json::from_value(value).unwrap();
+    assert!(matches!(
+        response,
+        Response::Snapshot {
+            flat_sidebar: Some(false),
+            ..
+        }
+    ));
 }

@@ -32,7 +32,7 @@ installer-icon = "assets/packaging/icon.ico"
 [dependencies]
 anyhow = "1"
 native-theme-gpui = { version = "=0.6.1", default-features = false }
-agentaps-control-protocol = { version = "0.1.0", path = "crates/control-protocol" }
+agentaps-control-protocol = { version = "0.2.0", path = "crates/control-protocol" }
 agent-client-protocol-schema = { version = "1.9.1", default-features = false, features = ["unstable_protocol_v2"] }
 base64 = "0.22"
 cpal = "0.17"

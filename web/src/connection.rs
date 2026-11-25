@@ -138,9 +138,11 @@ pub(super) enum ClientEvent {
     Snapshot {
         projects: Vec<Project>,
         agent_options: Vec<AgentOption>,
+        flat_sidebar: Option<bool>,
     },
     Command {
-        prompt: Option<String>,
+        prompt: Option<(u64, String)>,
+        reopening: Option<u64>,
         creating: bool,
         created: Option<u64>,
         error: Option<String>,
@@ -180,7 +182,11 @@ pub(super) async fn run(
             }
             while let Ok(command) = commands.try_recv() {
                 let prompt = match &command {
-                    Command::Prompt { text, .. } => Some(text.clone()),
+                    Command::Prompt { agent_id, text } => Some((*agent_id, text.clone())),
+                    _ => None,
+                };
+                let reopening = match &command {
+                    Command::ReopenSession { agent_id } => Some(*agent_id),
                     _ => None,
                 };
                 let creating = matches!(&command, Command::NewSession { .. });
@@ -196,6 +202,7 @@ pub(super) async fn run(
                 if events
                     .send(ClientEvent::Command {
                         prompt,
+                        reopening,
                         creating,
                         created,
                         error,
@@ -210,9 +217,11 @@ pub(super) async fn run(
                 Ok(Response::Snapshot {
                     projects,
                     agent_options,
+                    flat_sidebar,
                 }) => Some(ClientEvent::Snapshot {
                     projects,
                     agent_options,
+                    flat_sidebar,
                 }),
                 Ok(Response::Error { message }) | Err(message) => Some(ClientEvent::Error(message)),
                 _ => None,
