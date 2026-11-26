@@ -1,6 +1,7 @@
 use super::*;
 use crate::diff_view::{self, Presentation};
-use gpui_kit::component::{Sizable, spinner::Spinner};
+use gpui_kit::component::{Sizable, diff::DiffAnnotation, spinner::Spinner};
+use gpui_kit::{ElementId, WeakEntity};
 
 impl Workspace {
     pub(in crate::app) fn render_diff(&self, panel: Div, cx: &mut Context<Self>) -> Div {
@@ -94,6 +95,14 @@ impl Workspace {
                     })),
             );
         let panel = panel.child(toolbar);
+        let agent = self.diff_review_session().map(|(_, agent)| agent);
+        let agent_id = agent.map(|agent| agent.config.id);
+        let comments = agent_id
+            .and_then(|id| self.diff.comments.get(&id))
+            .map(Vec::as_slice)
+            .unwrap_or_default();
+        let (inline, detached): (Vec<_>, Vec<_>) =
+            comments.iter().partition(|comment| comment.attached);
         let body = if let Some(error) = &self.diff.error {
             div()
                 .flex_1()
@@ -121,9 +130,111 @@ impl Workspace {
                         .map(|note| (file.path.clone(), note.clone()))
                 })
                 .collect();
-            checkout_diff(&self.diff.viewer, self.diff.presentation, notes).into_any_element()
+            checkout_diff(&self.diff.viewer, self.diff.presentation, notes)
+                .when_some(agent_id, |viewer, agent_id| {
+                    let cards: HashMap<_, _> = inline
+                        .iter()
+                        .map(|comment| {
+                            (
+                                ElementId::from(("diff-comment", comment.id())),
+                                (comment.location(), comment.input.clone()),
+                            )
+                        })
+                        .collect();
+                    let panel_width = self.pane_area_bounds.get().size.width / 2.;
+                    let unified = self.diff.presentation == Presentation::Unified;
+                    let workspace = cx.entity().downgrade();
+                    viewer
+                        .on_add_annotation(cx.listener(move |this, range, window, cx| {
+                            this.add_diff_comment(agent_id, range, window, cx);
+                        }))
+                        .annotations(inline.iter().map(|comment| {
+                            DiffAnnotation::line(("diff-comment", comment.id()), comment.position())
+                        }))
+                        .render_annotation(move |annotation, window, cx| {
+                            let (location, input) = &cards[annotation.id()];
+                            comment_card(&workspace, agent_id, location, input, cx).when(
+                                unified && panel_width > px(0.),
+                                |card| {
+                                    // The unified diff can be wider than its scroll viewport.
+                                    card.max_w((panel_width - window.rem_size() * 2.).max(px(0.)))
+                                },
+                            )
+                        })
+                })
+                .into_any_element()
         };
-        panel.child(body)
+        // Reserve the footer before the first comment so adding one keeps the
+        // diff viewport the same size and does not request another layout.
+        panel.child(body).when_some(
+            agent_id.filter(|_| !self.diff.files.is_empty() || !comments.is_empty()),
+            |panel, agent_id| {
+                let workspace = cx.entity().downgrade();
+                let count = comments
+                    .iter()
+                    .filter(|comment| !comment.input.read(cx).value().trim().is_empty())
+                    .count();
+                panel
+                    .when(!detached.is_empty(), |panel| {
+                        panel.child(
+                            div()
+                                .id("diff-detached-comments")
+                                .max_h(relative(0.35))
+                                .overflow_y_scroll()
+                                .border_t_1()
+                                .border_color(palette.color(BORDER))
+                                .p_3()
+                                .flex()
+                                .flex_col()
+                                .gap_2()
+                                .child(
+                                    div()
+                                        .text_xs()
+                                        .text_color(palette.color(MUTED))
+                                        .child("Comments on earlier diff lines"),
+                                )
+                                .children(detached.iter().map(|comment| {
+                                    comment_card(
+                                        &workspace,
+                                        agent_id,
+                                        &comment.location(),
+                                        &comment.input,
+                                        cx,
+                                    )
+                                })),
+                        )
+                    })
+                    .child(
+                        div()
+                            .px_4()
+                            .py_2()
+                            .flex()
+                            .flex_shrink_0()
+                            .justify_end()
+                            .border_t_1()
+                            .border_color(palette.color(BORDER))
+                            .child(
+                                Button::new("send-diff-comments")
+                                    .primary()
+                                    .compact()
+                                    .label(match count {
+                                        0 => "Send to agent".into(),
+                                        1 => "Send 1 comment to agent".into(),
+                                        _ => format!("Send {count} comments to agent"),
+                                    })
+                                    .disabled(
+                                        count == 0
+                                            || agent.is_some_and(|agent| {
+                                                agent.auth_required || agent.login.is_some()
+                                            }),
+                                    )
+                                    .on_click(cx.listener(move |this, _, _, cx| {
+                                        this.send_diff_comments(agent_id, cx);
+                                    })),
+                            ),
+                    )
+            },
+        )
     }
 
     fn presentation_button(
@@ -147,6 +258,57 @@ impl Workspace {
                 this.set_diff_presentation(presentation, cx);
             }))
     }
+}
+
+fn comment_card(
+    workspace: &WeakEntity<Workspace>,
+    agent_id: u64,
+    location: &str,
+    input: &Entity<TextareaState>,
+    cx: &App,
+) -> gpui_kit::Stateful<Div> {
+    let palette = theme::palette(cx);
+    let id = input.entity_id().as_u64();
+    let workspace = workspace.clone();
+    div()
+        .id(("diff-comment-card", id))
+        .w_full()
+        .min_w(px(0.))
+        .flex()
+        .flex_col()
+        .gap_1()
+        .child(
+            div()
+                .flex()
+                .items_center()
+                .gap_2()
+                .child(
+                    div()
+                        .flex_1()
+                        .min_w(px(0.))
+                        .truncate()
+                        .text_xs()
+                        .text_color(palette.color(MUTED))
+                        .child(location.to_owned()),
+                )
+                .child(
+                    Button::new("remove-diff-comment")
+                        .ghost()
+                        .compact()
+                        .label("Remove")
+                        .on_click(move |_, _, cx| {
+                            workspace
+                                .update(cx, |this, cx| this.remove_diff_comment(agent_id, id, cx))
+                                .ok();
+                        }),
+                ),
+        )
+        .child(
+            Textarea::new(input)
+                .w_full()
+                .small()
+                .aria_label(format!("Comment on {location}")),
+        )
 }
 
 fn checkout_diff(

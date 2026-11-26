@@ -68,6 +68,7 @@ impl PaneDiffCounts {
 pub(super) struct DiffState {
     pub(super) pane_counts: PaneDiffCounts,
     pub(super) visible: bool,
+    pub(super) comments: HashMap<u64, Vec<super::diff_review::DiffComment>>,
     pub(super) presentation: DiffPresentation,
     pub(super) viewer: Entity<gpui_kit::component::diff::DiffState>,
     pub(super) tx: Sender<(u64, DiffLoadResult)>,
@@ -158,6 +159,13 @@ pub(super) struct MobileState {
 }
 
 impl DiffState {
+    pub(super) fn set_source_files(&mut self, files: Vec<DiffFile>) {
+        for comment in self.comments.values_mut().flatten() {
+            comment.update_attachment(&files);
+        }
+        self.files = files;
+    }
+
     pub(super) fn poll_results(&mut self, cx: &mut App) -> bool {
         let mut changed = false;
         while let Ok((request_id, result)) = self.rx.try_recv() {
@@ -184,13 +192,13 @@ impl DiffState {
                                 state.set_file_collapsed(&path, true, cx);
                             }
                         });
+                        self.set_source_files(files);
                     }
                     self.counts = (!stats.is_empty()).then(|| {
                         stats.iter().copied().fold((0, 0), |total, count| {
                             (total.0 + count.0, total.1 + count.1)
                         })
                     });
-                    self.files = files;
                     self.file_stats = stats;
                     self.error = None;
                 }
@@ -200,7 +208,7 @@ impl DiffState {
                 }
                 Err(error) => {
                     self.counts = None;
-                    self.files.clear();
+                    self.set_source_files(Vec::new());
                     self.file_stats.clear();
                     self.error = Some(error);
                 }

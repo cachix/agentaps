@@ -41,6 +41,7 @@ use std::{
 mod agent;
 mod attachments;
 mod clone;
+mod diff_review;
 mod panes;
 mod state;
 use state::*;
@@ -771,7 +772,7 @@ impl Workspace {
             self.diff.request_id += 1;
             self.diff.loading = false;
             self.diff.counts = None;
-            self.diff.files.clear();
+            self.diff.set_source_files(Vec::new());
             self.diff.file_stats.clear();
             self.diff.error = None;
             self.diff
@@ -827,7 +828,7 @@ impl Workspace {
             return;
         }
         self.diff.visible = true;
-        self.diff.files.clear();
+        self.diff.set_source_files(Vec::new());
         self.diff.file_stats.clear();
         self.diff
             .viewer
@@ -1096,6 +1097,7 @@ impl Workspace {
             diff: DiffState {
                 pane_counts: Default::default(),
                 visible: false,
+                comments: HashMap::new(),
                 presentation: config.diff_layout,
                 viewer: cx.new(|cx| {
                     gpui_kit::component::diff::DiffState::new([], cx)
