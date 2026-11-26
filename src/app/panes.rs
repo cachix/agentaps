@@ -95,7 +95,7 @@ impl Workspace {
                 self.diff.request_id += 1;
                 self.diff.loading = false;
                 self.diff.counts = None;
-                self.diff.files.clear();
+                self.diff.set_source_files(Vec::new());
                 self.diff.file_stats.clear();
                 self.diff.error = None;
                 self.diff

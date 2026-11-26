@@ -614,6 +614,7 @@ fn zoom_shortcuts_and_menu_actions_change_the_font_scale(cx: &mut gpui_kit::Test
     verify_archiving_releases_and_reconnects_agents(&restored, temp.path(), cx);
     verify_project_archiving(&restored, cx);
     verify_pane_resize_grab_areas(&restored, cx);
+    verify_diff_review(&restored, temp.path(), cx);
     // SAFETY: restore the process environment modified for this test.
     unsafe {
         if let Some(original) = original_config_home {
@@ -622,6 +623,182 @@ fn zoom_shortcuts_and_menu_actions_change_the_font_scale(cx: &mut gpui_kit::Test
             std::env::remove_var(config_env);
         }
     }
+}
+
+fn verify_diff_review(
+    workspace: &Entity<Workspace>,
+    path: &Path,
+    cx: &mut gpui_kit::VisualTestContext,
+) {
+    use crate::diff_view::{Hunk, Line, Mark, Side};
+    use gpui_kit::component::diff::{DiffLineRange, DiffSide};
+    use gpui_kit::test::TestWindowExt as _;
+
+    let first = SessionLocation {
+        project_index: 0,
+        agent_index: 0,
+    };
+    let other = SessionLocation {
+        agent_index: 1,
+        ..first
+    };
+    let file = "src/settings.rs";
+    let load_diff = |this: &mut Workspace, cx: &mut Context<Workspace>| {
+        this.diff.set_source_files(vec![DiffFile {
+            path: file.into(),
+            hunks: vec![Hunk {
+                header: "@@ -10,1 +11,50 @@".into(),
+                lines: vec![
+                    Line {
+                        old: Some(Side {
+                            number: 10,
+                            text: "before".into(),
+                            mark: Mark::Removed,
+                        }),
+                        new: Some(Side {
+                            number: 11,
+                            text: "after".into(),
+                            mark: Mark::Added,
+                        }),
+                    },
+                    Line {
+                        old: None,
+                        new: Some(Side {
+                            number: 12,
+                            text: "also added".into(),
+                            mark: Mark::Added,
+                        }),
+                    },
+                ]
+                .into_iter()
+                .chain((13..61).map(|number| Line {
+                    old: None,
+                    new: Some(Side {
+                        number,
+                        text: format!("Added line {number}"),
+                        mark: Mark::Added,
+                    }),
+                }))
+                .collect(),
+            }],
+            note: None,
+        }]);
+        let documents = crate::diff_view::component_files(&this.diff.files).unwrap();
+        this.diff
+            .viewer
+            .update(cx, |state, cx| state.set_files(documents, cx));
+    };
+    cx.simulate_resize(size(px(1200.), px(900.)));
+    cx.update(|window, cx| {
+        workspace.update(cx, |this, cx| {
+            this.deferred_connections.clear();
+            this.projects = vec![ProjectView {
+                path: path.join("review"),
+                ssh_host: None,
+                branch: "main".into(),
+                sync_counts: None,
+                agents: [901, 902]
+                    .into_iter()
+                    .map(|id| {
+                        let mut agent = test_agent(ProtocolVersion::V2);
+                        agent.config.id = id;
+                        agent.config.command.clear();
+                        agent.status = Status::Error;
+                        AgentView {
+                            controller: agent,
+                            elicitations: Vec::new(),
+                        }
+                    })
+                    .collect(),
+            }];
+            this.set_view(WorkspaceView::Conversation(first), window, cx);
+            this.sidebar_hidden = true;
+            this.diff.visible = true;
+            this.diff.error = None;
+            this.set_diff_presentation(DiffPresentation::Split, cx);
+            load_diff(this, cx);
+            this.conversation.composer.update(cx, |input, cx| {
+                input.set_value("Unrelated conversation draft", window, cx);
+                input.focus(window, cx);
+            });
+        });
+    });
+    cx.update(|window, cx| {
+        window.render_frame(cx);
+        let focused = window.focused(cx);
+        let viewport = window.find("diff-body").bounds().size;
+        assert!(window.find("send-diff-comments").visible());
+        let source_top = window.within(("old", 0usize)).find("source").bounds().top();
+        window.within(("old", 0usize)).hover("source", cx);
+        window
+            .within(("old", 0usize))
+            .click(("add-annotation", 0usize), cx);
+        assert_eq!(
+            window.find("diff-body").bounds().size,
+            viewport,
+            "adding the first comment preserves the diff viewport",
+        );
+        assert_eq!(
+            window.focused(cx),
+            focused,
+            "adding a comment preserves focus"
+        );
+        assert_eq!(
+            window.within(("old", 0usize)).find("source").bounds().top(),
+            source_top,
+            "adding a comment preserves the scroll position",
+        );
+        let input = workspace.read(cx).diff.comments[&901][0].input.entity_id();
+        window.click(("input", input), cx);
+    });
+    cx.simulate_input("Restore the previous default.");
+    cx.update(|window, cx| {
+        workspace.update(cx, |this, cx| {
+            this.set_diff_presentation(DiffPresentation::Unified, cx);
+            this.diff.viewer.update(cx, |state, cx| {
+                state.set_selected_lines(
+                    Some(DiffLineRange::new(file, DiffSide::Modified, 11, 12)),
+                    cx,
+                );
+            });
+        });
+        window.render_frame(cx);
+        window
+            .within(("new", 1usize))
+            .click(("add-annotation", 1usize), cx);
+        let input = workspace.read(cx).diff.comments[&901][1].input.entity_id();
+        window.click(("input", input), cx);
+    });
+    cx.simulate_input("Keep these settings together.");
+    cx.simulate_keystrokes("enter");
+    cx.simulate_input("Check the fallback too.");
+    cx.update(|window, cx| {
+        window.render_frame(cx);
+        window.click("send-diff-comments", cx);
+        workspace.update(cx, |this, cx| {
+            assert!(this.projects[0].agents[0].config.pending_prompts.is_empty());
+            assert_eq!(this.diff.comments[&901].len(), 2);
+            assert_eq!(this.notice, Some(Notice::Error("Agent is not connected".into())));
+            this.set_view(WorkspaceView::Conversation(other), window, cx);
+            this.send_diff_comments(901, cx);
+            assert!(this.projects[0].agents[1].config.pending_prompts.is_empty());
+            this.set_view(WorkspaceView::Conversation(first), window, cx);
+            this.projects[0].agents[0].status = Status::Connecting;
+            this.diff.set_source_files(Vec::new());
+            cx.notify();
+        });
+        window.render_frame(cx);
+        window.click("send-diff-comments", cx);
+        workspace.update(cx, |this, cx| {
+            let prompts = &this.projects[0].agents[0].config.pending_prompts;
+            assert_eq!(prompts.len(), 1);
+            assert!(prompts[0].text.contains("src/settings.rs:10 (HEAD)\n  Reviewed start line was \"before\"\n  Restore the previous default."));
+            assert!(prompts[0].text.contains("src/settings.rs:11-12 (checkout)"));
+            assert!(prompts[0].text.contains("Keep these settings together.\n  Check the fallback too."));
+            assert!(!this.diff.comments.contains_key(&901));
+            assert_eq!(this.conversation.composer.read(cx).value().as_ref(), "Unrelated conversation draft");
+        });
+    });
 }
 
 #[test]
@@ -2109,11 +2286,11 @@ fn verify_split_panes(
             // its viewer state, without needing a filesystem event.
             this.diff.visible = true;
             this.diff.loading = false;
-            this.diff.files = vec![DiffFile {
+            this.diff.set_source_files(vec![DiffFile {
                 path: "changed.txt".into(),
                 hunks: Vec::new(),
                 note: None,
-            }];
+            }]);
             this.diff.file_stats = vec![(1, 0)];
             let documents = crate::diff_view::component_files(&this.diff.files).unwrap();
             this.diff

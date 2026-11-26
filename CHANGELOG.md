@@ -6,6 +6,8 @@ Notable changes to Agentaps are recorded here.
 
 ### Added
 
+- Leave inline comments on lines or ranges in the desktop diff and send them to the selected agent in one prompt with file paths and line numbers.
+
 - Hover over Markdown links in desktop conversations to see their full destinations.
 
 - Right-click links in desktop conversations to copy their addresses, with a confirmation when copied.

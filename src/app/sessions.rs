@@ -457,42 +457,40 @@ impl Workspace {
         cx.notify();
     }
 
-    pub(super) fn send_prompt(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        if self.voice_recording.as_ref().is_some_and(|recording| {
-            self.view.displayed_session().is_some_and(|location| {
-                self.projects[location.project_index].agents[location.agent_index]
-                    .config
-                    .id
-                    == recording.agent_id
-            })
-        }) {
+    pub(super) fn recording_blocks_send(&mut self, agent_id: u64, cx: &mut Context<Self>) -> bool {
+        if self
+            .voice_recording
+            .as_ref()
+            .is_some_and(|recording| recording.agent_id == agent_id)
+        {
             self.notice = Some(Notice::Error(
                 "Stop the voice recording before sending.".into(),
             ));
             cx.notify();
-            return;
+            return true;
         }
-        let Some(SessionLocation {
-            project_index,
-            agent_index,
-        }) = self.view.displayed_session()
-        else {
+        false
+    }
+
+    pub(super) fn send_prompt(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let Some(session) = self.view.displayed_session() else {
             return;
         };
-        let agent = &mut self.projects[project_index].agents[agent_index];
+        let agent_id = self.projects[session.project_index].agents[session.agent_index]
+            .config
+            .id;
+        if self.recording_blocks_send(agent_id, cx) {
+            return;
+        }
         let value = self.conversation.composer.read(cx).value().to_string();
         let prompt = Prompt {
             text: submitted_prompt(&value),
             images: self
                 .draft_images
-                .get(&agent.config.id)
+                .get(&agent_id)
                 .cloned()
                 .unwrap_or_default(),
-            files: self
-                .draft_files
-                .get(&agent.config.id)
-                .cloned()
-                .unwrap_or_default(),
+            files: self.draft_files.get(&agent_id).cloned().unwrap_or_default(),
         };
         if prompt.images.is_empty()
             && prompt.files.is_empty()
@@ -504,10 +502,26 @@ impl Workspace {
                 .update(cx, |input, cx| input.set_value("", window, cx));
             return;
         }
+        if self.submit_prompt(session, prompt, cx) {
+            self.draft_images.remove(&agent_id);
+            self.draft_files.remove(&agent_id);
+            self.conversation
+                .composer
+                .update(cx, |input, cx| input.set_value("", window, cx));
+        }
+    }
+
+    pub(super) fn submit_prompt(
+        &mut self,
+        session: SessionLocation,
+        prompt: Prompt,
+        cx: &mut Context<Self>,
+    ) -> bool {
+        let agent = &mut self.projects[session.project_index].agents[session.agent_index];
         if agent.status == Status::Error {
             self.notice = Some(Notice::Error("Agent is not connected".into()));
             cx.notify();
-            return;
+            return false;
         }
         let queue = agent.status == Status::Connecting
             || agent.active_work
@@ -515,7 +529,7 @@ impl Workspace {
         if !queue && agent.session_id.is_none() {
             self.notice = Some(Notice::Error("Agent is not connected".into()));
             cx.notify();
-            return;
+            return false;
         }
         let text = prompt.text.clone();
         if queue {
@@ -525,7 +539,7 @@ impl Workspace {
                 agent.status = Status::Error;
                 agent.log(Role::System, error);
                 cx.notify();
-                return;
+                return false;
             }
             self.conversation.chat_list.scroll_to(gpui_kit::ListOffset {
                 item_ix: self.conversation.chat_list.item_count(),
@@ -533,15 +547,11 @@ impl Workspace {
             });
         }
         agent.config.prompt_history.push(text);
-        self.draft_images.remove(&agent.config.id);
-        self.draft_files.remove(&agent.config.id);
         self.persistence.dirty = true;
         self.conversation.prompt_recall = None;
-        self.conversation
-            .composer
-            .update(cx, |input, cx| input.set_value("", window, cx));
         self.notice = None;
         cx.notify();
+        true
     }
 
     pub(super) fn cancel_prompt(&mut self, cx: &mut Context<Self>) {
