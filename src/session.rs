@@ -24,7 +24,7 @@ pub(crate) use prompt::{file_context_preview, shell_command, shell_command_in_me
 pub(crate) use protocol::initialize_params;
 use protocol::{
     ImageData, SessionUpdate, accepts_audio, accepts_embedded_context, accepts_images,
-    decode_update,
+    decode_update, parse_available_commands,
 };
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -1152,10 +1152,13 @@ fn update_config_options(agent: &mut SessionController, options: &Value) {
     agent.collaboration_option = collaboration_option(options);
 }
 
-/// Applies the config options and session modes from a session response.
+/// Applies the settings and commands from a session setup response.
 fn update_session_settings(agent: &mut SessionController, result: &Value) {
     update_config_options(agent, &result["configOptions"]);
     update_session_modes(agent, &result["modes"]);
+    if agent.protocol == Some(ProtocolVersion::V2) && result["availableCommands"].is_array() {
+        agent.config.available_commands = parse_available_commands(result, true);
+    }
 }
 
 /// Only form construction and cancellation need a UI host.
@@ -1607,11 +1610,13 @@ impl SessionController {
                 }) {
                     return;
                 }
-                self.finish_turn(if self.active_work {
-                    Status::Done
-                } else {
-                    Status::Idle
-                });
+                if !self.active_work {
+                    if self.status == Status::Connecting {
+                        self.status = Status::Idle;
+                    }
+                    return;
+                }
+                self.finish_turn(Status::Done);
                 if let Some(reason) = reason
                     && reason != "end_turn"
                 {

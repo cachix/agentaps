@@ -325,6 +325,21 @@ fn slash_commands_follow_agent_snapshots_and_complete_with_input_hint() {
         }}}),
     );
     assert_eq!(v2_agent.config.available_commands[0].name, "plan");
+
+    SessionController::handle_update(
+        &mut v2_agent,
+        &json!({"params":{"sessionId":"session-1","update":{
+            "sessionUpdate":"available_commands_update","availableCommands":[
+                {"type":"command","name":"review","description":"Review changes","input":{"type":"text","hint":"files"}},
+                {"type":"skill","name":"plan-work","description":"Plan work"}
+            ]
+        }}}),
+    );
+    assert_eq!(v2_agent.config.available_commands.len(), 1);
+    assert_eq!(
+        completed_slash_text(&v2_agent.config.available_commands[0]),
+        "/review "
+    );
 }
 
 #[test]
