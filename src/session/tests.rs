@@ -325,6 +325,42 @@ fn v2_prompt_acknowledgement_is_not_completion() {
 }
 
 #[test]
+fn v2_idle_snapshots_preserve_completion_without_repeating_the_stop_reason() {
+    let mut agent = agent(ProtocolVersion::V2);
+    let idle = json!({"params":{"sessionId":"session-1","update":{
+        "sessionUpdate":"state_update","state":"idle","stopReason":"cancelled","background":[]
+    }}});
+    agent.handle_update(&idle);
+    agent.handle_update(&idle);
+
+    assert_eq!(agent.status, Status::Done);
+    assert_eq!(agent.messages.len(), 1);
+    assert_eq!(agent.messages[0].text, "Stopped: cancelled");
+}
+
+#[test]
+fn v2_session_setup_applies_slash_commands() {
+    let mut agent = agent(ProtocolVersion::V2);
+    let path = Path::new("/");
+    let new_session = v2::NewSessionResponse::new("session-1").available_commands(vec![
+        v2::AvailableCommand::Command(v2::Command::new("review", "Review changes")),
+    ]);
+    agent.handle_message(path, &json!({"id":2,"result":new_session}));
+    assert_eq!(agent.config.available_commands[0].name, "review");
+
+    agent.restoring = Some(RestoreMode::Resume);
+    let command = v2::AvailableCommand::Command(v2::Command::new("plan", "Plan work"));
+    let resumed_session = v2::ResumeSessionResponse::new().available_commands(vec![command]);
+    agent.handle_message(path, &json!({"id":2,"result":resumed_session}));
+    assert_eq!(agent.config.available_commands.len(), 1);
+    assert_eq!(agent.config.available_commands[0].name, "plan");
+
+    agent.restoring = Some(RestoreMode::Resume);
+    agent.handle_message(path, &json!({"id":2,"result":{"availableCommands":[]}}));
+    assert!(agent.config.available_commands.is_empty());
+}
+
+#[test]
 fn v1_prompt_response_still_completes_turn() {
     let mut agent = agent(ProtocolVersion::V1);
     agent.handle_prompt_response(&json!({"stopReason":"end_turn"}));

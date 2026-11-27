@@ -1,11 +1,15 @@
 use super::*;
 
-pub(crate) fn parse_available_commands(update: &Value) -> Vec<SlashCommand> {
+pub(super) fn parse_available_commands(update: &Value, v2: bool) -> Vec<SlashCommand> {
     update["availableCommands"]
         .as_array()
         .into_iter()
         .flatten()
         .filter_map(|command| {
+            // Earlier v2 drafts sent slash commands without a type.
+            if v2 && command.get("type").is_some_and(|kind| kind != "command") {
+                return None;
+            }
             let name = command["name"].as_str()?.trim().trim_start_matches('/');
             if name.is_empty() || name.chars().any(char::is_whitespace) {
                 return None;
@@ -159,9 +163,9 @@ pub(super) fn decode_update(
         Some("current_mode_update") => update["currentModeId"]
             .as_str()
             .map(|mode| SessionUpdate::Mode(mode.into())),
-        Some("available_commands_update") => {
-            Some(SessionUpdate::Commands(parse_available_commands(update)))
-        }
+        Some("available_commands_update") => Some(SessionUpdate::Commands(
+            parse_available_commands(update, v2),
+        )),
         Some("state_update") if v2 => match update["state"].as_str() {
             Some("running" | "requires_action") => Some(SessionUpdate::Running),
             Some("idle") => Some(SessionUpdate::Idle(
